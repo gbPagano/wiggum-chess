@@ -55,6 +55,10 @@ struct MatchArgs {
     /// Optional path to CSV file for appending match results
     #[arg(long)]
     output: Option<String>,
+
+    /// Print board diagram and move details for every move (default: quiet mode)
+    #[arg(long)]
+    verbose: bool,
 }
 
 #[derive(Parser)]
@@ -65,28 +69,35 @@ struct ReportArgs {
 }
 
 /// Observer that prints moves and game-over events to stdout.
+/// In verbose mode, prints board diagram and move details on every move.
+/// In quiet mode, suppresses per-move output (caller prints the one-line summary).
 struct PrintObserver {
     game_number: usize,
+    verbose: bool,
 }
 
 impl MatchObserver for PrintObserver {
     fn on_move(&mut self, game: &Game, chess_move: ChessMove, engine_name: &str) {
-        println!(
-            "  Game {} move {}: {} plays {}",
-            self.game_number,
-            game.moves().len(),
-            engine_name,
-            chess_move.to_uci()
-        );
-        println!("{:?}", game.board());
+        if self.verbose {
+            println!(
+                "  Game {} move {}: {} plays {}",
+                self.game_number,
+                game.moves().len(),
+                engine_name,
+                chess_move.to_uci()
+            );
+            println!("{:?}", game.board());
+        }
     }
 
     fn on_game_over(&mut self, result: &GameResult) {
-        println!(
-            "  Game {} result: {}",
-            self.game_number,
-            format_result(result)
-        );
+        if self.verbose {
+            println!(
+                "  Game {} result: {}",
+                self.game_number,
+                format_result(result)
+            );
+        }
     }
 }
 
@@ -408,10 +419,12 @@ async fn run_match(args: MatchArgs) -> Result<()> {
             (args.engine2.as_str(), args.engine1.as_str())
         };
 
-        println!(
-            "=== Game {}/{}: {} (white) vs {} (black) ===",
-            game_number, args.games, white_path, black_path
-        );
+        if args.verbose {
+            println!(
+                "=== Game {}/{}: {} (white) vs {} (black) ===",
+                game_number, args.games, white_path, black_path
+            );
+        }
 
         let white_engine = Box::new(
             UciEngine::new(white_path, args.timeout)
@@ -430,7 +443,10 @@ async fn run_match(args: MatchArgs) -> Result<()> {
         };
 
         let clock = Clock::new(args.time, args.inc);
-        let observer = Box::new(PrintObserver { game_number });
+        let observer = Box::new(PrintObserver {
+            game_number,
+            verbose: args.verbose,
+        });
 
         let mut chess_match = Match::new(white_engine, black_engine)
             .with_game(game)
@@ -465,7 +481,19 @@ async fn run_match(args: MatchArgs) -> Result<()> {
             }
         }
 
-        println!();
+        if !args.verbose {
+            println!(
+                "Game {}/{}: {} | Score: {}-{}-{}",
+                game_number,
+                args.games,
+                format_result(&result),
+                engine1_wins,
+                engine2_wins,
+                draws
+            );
+        } else {
+            println!();
+        }
     }
 
     println!("=== Match Complete ===");
