@@ -106,3 +106,19 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - 75-move check must come BEFORE 50-move check in detect_result (since 150 > 100, both would trigger at clock=150)
   - `MoveGen::new_legal(board).find(|lm| *lm == m).is_some()` validates individual move legality
 ---
+
+## 2026-04-05 - US-007
+- Added `chesslib/src/clock.rs` with `Clock` struct: `white_ms`, `black_ms`, `increment_ms`, `moves_to_go: Option<u32>`, `turn_start: Instant`
+- `Clock::new(time_ms, increment_ms)` sets equal time for both players; `Clock::with_moves_to_go(...)` supports classical time controls
+- `Clock::record_move(color)` uses `std::time::Instant` to measure elapsed time, subtracts it, adds increment, decrements `moves_to_go`; returns `true` if flagged
+- `Clock::record_move_with_elapsed(color, elapsed_ms)` is `pub(crate)` for deterministic testing
+- Added `Game::new_with_clock()`, `Game::from_fen_with_clock()`, `Game::clock() -> Option<&Clock>`
+- `make_move()` saves `moving_side` before applying the move, then calls `clock.record_move(moving_side)` — flag → BlackWins if White flagged, WhiteWins if Black flagged
+- Files changed: `chesslib/src/clock.rs` (new), `chesslib/src/lib.rs` (pub mod clock), `chesslib/src/game.rs`
+- Tests added: 8 clock unit tests in `clock.rs` + 4 game integration tests; 94 total (81 prior + 13 new)
+- **Learnings for future iterations:**
+  - `std::time::Instant` implements `Clone`, so `Clock` can derive `Clone` (needed since `Game` derives `Clone`)
+  - `moving_side` must be captured BEFORE `self.board = self.board.make_move(m)` since `make_move()` switches side-to-move
+  - `pub(crate)` on `record_move_with_elapsed` makes it accessible from sibling module tests (all in the same crate)
+  - Flag tests with real Instant need a sleep; 5ms sleep with 1ms budget is reliable enough for CI
+---
