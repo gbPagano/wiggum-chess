@@ -311,6 +311,68 @@ impl Board {
     pub fn is_stalemate(&self) -> bool {
         self.checkers_bitboard.is_empty() && MoveGen::new_legal(self).len() == 0
     }
+
+    /// Returns true if the position is a draw by insufficient material.
+    ///
+    /// Covers: K vs K, K+N vs K, K+B vs K, K+B vs K+B (bishops on same color square).
+    pub fn is_insufficient_material(&self) -> bool {
+        // Any pawns, rooks, or queens → sufficient material
+        if !self.get_piece_bitboard(Piece::Pawn).is_empty()
+            || !self.get_piece_bitboard(Piece::Rook).is_empty()
+            || !self.get_piece_bitboard(Piece::Queen).is_empty()
+        {
+            return false;
+        }
+
+        let white_bishops =
+            self.get_piece_bitboard(Piece::Bishop) & self.get_color_bitboard(Color::White);
+        let black_bishops =
+            self.get_piece_bitboard(Piece::Bishop) & self.get_color_bitboard(Color::Black);
+        let white_knights =
+            self.get_piece_bitboard(Piece::Knight) & self.get_color_bitboard(Color::White);
+        let black_knights =
+            self.get_piece_bitboard(Piece::Knight) & self.get_color_bitboard(Color::Black);
+
+        let white_minor = white_bishops.0.count_ones() + white_knights.0.count_ones();
+        let black_minor = black_bishops.0.count_ones() + black_knights.0.count_ones();
+
+        // K vs K
+        if white_minor == 0 && black_minor == 0 {
+            return true;
+        }
+
+        // K+N vs K or K vs K+N
+        if (white_minor == 1 && white_knights.0.count_ones() == 1 && black_minor == 0)
+            || (black_minor == 1 && black_knights.0.count_ones() == 1 && white_minor == 0)
+        {
+            return true;
+        }
+
+        // K+B vs K or K vs K+B
+        if (white_minor == 1 && white_bishops.0.count_ones() == 1 && black_minor == 0)
+            || (black_minor == 1 && black_bishops.0.count_ones() == 1 && white_minor == 0)
+        {
+            return true;
+        }
+
+        // K+B vs K+B with bishops on same color square
+        if white_minor == 1
+            && black_minor == 1
+            && white_bishops.0.count_ones() == 1
+            && black_bishops.0.count_ones() == 1
+        {
+            let wb_idx = white_bishops.to_square().to_index();
+            let bb_idx = black_bishops.to_square().to_index();
+            // Square color: (file + rank) % 2; index = rank*8 + file
+            let wb_light = (wb_idx % 8 + wb_idx / 8) % 2 == 0;
+            let bb_light = (bb_idx % 8 + bb_idx / 8) % 2 == 0;
+            if wb_light == bb_light {
+                return true;
+            }
+        }
+
+        false
+    }
 }
 
 impl Default for Board {
@@ -537,5 +599,66 @@ mod tests {
         let board: Board = "1k6/1P6/1K6/8/8/8/8/8 b - - 0 1".parse().unwrap();
         assert!(board.is_stalemate());
         assert!(!board.is_checkmate());
+    }
+
+    #[test]
+    fn test_insufficient_material_k_vs_k() {
+        let board: Board = "8/8/4k3/8/8/3K4/8/8 w - - 0 1".parse().unwrap();
+        assert!(board.is_insufficient_material());
+    }
+
+    #[test]
+    fn test_insufficient_material_kn_vs_k() {
+        // K+N vs K
+        let board: Board = "8/8/4k3/8/8/3K4/8/7N w - - 0 1".parse().unwrap();
+        assert!(board.is_insufficient_material());
+        // K vs K+N
+        let board: Board = "8/8/4k3/8/8/3K4/8/7n w - - 0 1".parse().unwrap();
+        assert!(board.is_insufficient_material());
+    }
+
+    #[test]
+    fn test_insufficient_material_kb_vs_k() {
+        // K+B vs K
+        let board: Board = "8/8/4k3/8/8/3K4/8/7B w - - 0 1".parse().unwrap();
+        assert!(board.is_insufficient_material());
+        // K vs K+B
+        let board: Board = "8/8/4k3/8/8/3K4/8/7b w - - 0 1".parse().unwrap();
+        assert!(board.is_insufficient_material());
+    }
+
+    #[test]
+    fn test_insufficient_material_kb_vs_kb_same_color() {
+        // Both bishops on light squares (a1=dark, b1=light, c1=dark...)
+        // b1 and g8: b1 is light (file=1,rank=0 → (1+0)%2=1), g8 is (file=6,rank=7 → (6+7)%2=1) light
+        let board: Board = "6b1/8/4k3/8/8/3K4/8/1B6 w - - 0 1".parse().unwrap();
+        assert!(board.is_insufficient_material());
+    }
+
+    #[test]
+    fn test_insufficient_material_kb_vs_kb_diff_color() {
+        // Bishops on different colored squares → sufficient material
+        // a1=dark (0+0=0 even=light by our def), b1=light (1+0=1 odd=dark by our def)
+        // Let's use a1 and b1: a1 idx=0 (0%8+0/8=0 even→light), b1 idx=1 (1%8+1/8=1 odd→dark)
+        let board: Board = "8/8/4k3/8/8/3K4/8/Bb6 w - - 0 1".parse().unwrap();
+        assert!(!board.is_insufficient_material());
+    }
+
+    #[test]
+    fn test_sufficient_material_with_pawns() {
+        let board = Board::default();
+        assert!(!board.is_insufficient_material());
+    }
+
+    #[test]
+    fn test_sufficient_material_rook() {
+        let board: Board = "8/8/4k3/8/8/3K4/8/7R w - - 0 1".parse().unwrap();
+        assert!(!board.is_insufficient_material());
+    }
+
+    #[test]
+    fn test_sufficient_material_queen() {
+        let board: Board = "8/8/4k3/8/8/3K4/8/7Q w - - 0 1".parse().unwrap();
+        assert!(!board.is_insufficient_material());
     }
 }
