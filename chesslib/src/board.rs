@@ -4,6 +4,7 @@ use crate::chess_move::ChessMove;
 use crate::color::Color;
 use crate::file::{ALL_FILES, File};
 use crate::magic;
+use crate::movegen::MoveGen;
 use crate::pieces::{ALL_PIECES, Piece};
 use crate::rank::{ALL_RANKS, Rank};
 use crate::square::Square;
@@ -300,6 +301,16 @@ impl Board {
         result.side_to_move = !result.side_to_move;
         result
     }
+
+    /// Returns true if the side to move is in checkmate (in check with no legal moves).
+    pub fn is_checkmate(&self) -> bool {
+        !self.checkers_bitboard.is_empty() && MoveGen::new_legal(self).len() == 0
+    }
+
+    /// Returns true if the side to move is in stalemate (not in check with no legal moves).
+    pub fn is_stalemate(&self) -> bool {
+        self.checkers_bitboard.is_empty() && MoveGen::new_legal(self).len() == 0
+    }
 }
 
 impl Default for Board {
@@ -470,5 +481,61 @@ mod tests {
             Board::from_str("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn test_checkmate_scholars_mate() {
+        // Scholar's mate: 1.e4 e5 2.Bc4 Nc6 3.Qh5 Nf6?? 4.Qxf7#
+        let board: Board =
+            "r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4"
+                .parse()
+                .unwrap();
+        assert!(board.is_checkmate());
+        assert!(!board.is_stalemate());
+    }
+
+    #[test]
+    fn test_checkmate_fools_mate() {
+        // Fool's mate: 1.f3 e5 2.g4 Qh4#
+        let board: Board =
+            "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
+                .parse()
+                .unwrap();
+        assert!(board.is_checkmate());
+        assert!(!board.is_stalemate());
+    }
+
+    #[test]
+    fn test_not_checkmate_or_stalemate_in_play() {
+        // Opening position: neither checkmate nor stalemate
+        let board = Board::default();
+        assert!(!board.is_checkmate());
+        assert!(!board.is_stalemate());
+
+        // A mid-game position
+        let board: Board =
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+                .parse()
+                .unwrap();
+        assert!(!board.is_checkmate());
+        assert!(!board.is_stalemate());
+    }
+
+    #[test]
+    fn test_stalemate_queen() {
+        // Classic stalemate: black king on a8, white queen c7, white king b6.
+        // Black king on a8: b8 is covered by queen (c7 diagonal), a7 is covered by king b6.
+        let board: Board = "k7/2Q5/1K6/8/8/8/8/8 b - - 0 1".parse().unwrap();
+        assert!(board.is_stalemate());
+        assert!(!board.is_checkmate());
+    }
+
+    #[test]
+    fn test_stalemate_pawn() {
+        // Black king b8, white pawn b7, white king b6.
+        // b8 king: a8 & c8 covered by pawn b7 diagonally; a7 & c7 covered by king b6.
+        let board: Board = "1k6/1P6/1K6/8/8/8/8/8 b - - 0 1".parse().unwrap();
+        assert!(board.is_stalemate());
+        assert!(!board.is_checkmate());
     }
 }
