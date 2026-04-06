@@ -22,6 +22,8 @@ enum Commands {
     Report(ReportArgs),
     /// Run a SPRT-based match to determine if engine1 is an improvement over engine2
     Sprt(SprtArgs),
+    /// Generate a markdown version report for a specific engine version
+    VersionReport(VersionReportArgs),
 }
 
 #[derive(Parser)]
@@ -111,6 +113,29 @@ struct SprtArgs {
     /// Optional path to CSV file for appending SPRT results
     #[arg(long)]
     output: Option<String>,
+}
+
+#[derive(Parser)]
+struct VersionReportArgs {
+    /// Version label (e.g. 'v0.1'), used as fallback filter if --engine-name is not provided
+    #[arg(long)]
+    version: String,
+
+    /// Engine name filter for matching CSV rows (case-insensitive substring, defaults to --version)
+    #[arg(long)]
+    engine_name: Option<String>,
+
+    /// Path to match history CSV (from chess-runner match --output)
+    #[arg(long)]
+    matches_csv: String,
+
+    /// Optional path to SPRT results CSV (from chess-runner sprt --output)
+    #[arg(long)]
+    sprt_csv: Option<String>,
+
+    /// Output path for the generated markdown report
+    #[arg(long)]
+    output: String,
 }
 
 /// Observer that prints moves and game-over events to stdout.
@@ -514,6 +539,9 @@ async fn main() -> Result<()> {
         Commands::Sprt(args) => {
             run_sprt(args).await?;
         }
+        Commands::VersionReport(args) => {
+            run_version_report(&args)?;
+        }
     }
 
     Ok(())
@@ -808,6 +836,284 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
         )?;
         println!("SPRT result appended to: {}", output_path);
     }
+
+    Ok(())
+}
+
+/// Per-opponent aggregated stats from the perspective of the target engine.
+struct OpponentStats {
+    opponent: String,
+    games: usize,
+    wins: usize,
+    draws: usize,
+    losses: usize,
+}
+
+impl OpponentStats {
+    fn win_pct(&self) -> f64 {
+        if self.games == 0 {
+            0.0
+        } else {
+            self.wins as f64 / self.games as f64 * 100.0
+        }
+    }
+}
+
+fn run_version_report(args: &VersionReportArgs) -> Result<()> {
+    let filter = args
+        .engine_name
+        .as_deref()
+        .unwrap_or(args.version.as_str())
+        .to_lowercase();
+
+    // ---- Parse matches CSV ----
+    let mut opponent_map: std::collections::HashMap<String, OpponentStats> =
+        std::collections::HashMap::new();
+    let matches_note;
+
+    if !std::path::Path::new(&args.matches_csv).exists() {
+        matches_note = format!(
+            "_No matches CSV found at `{}`._",
+            args.matches_csv
+        );
+    } else {
+        let mut rdr = csv::Reader::from_path(&args.matches_csv)?;
+        let mut found = 0usize;
+
+        for record in rdr.records() {
+            let record = record?;
+            if record.len() < 7 {
+                continue;
+            }
+            let engine1 = record[1].to_string();
+            let engine2 = record[2].to_string();
+            let games: usize = record[3].parse().unwrap_or(0);
+            let e1_wins: usize = record[4].parse().unwrap_or(0);
+            let e2_wins: usize = record[5].parse().unwrap_or(0);
+            let draws: usize = record[6].parse().unwrap_or(0);
+
+            let target_is_e1 = engine1.to_lowercase().contains(&filter);
+            let target_is_e2 = engine2.to_lowercase().contains(&filter);
+
+            if !target_is_e1 && !target_is_e2 {
+                continue;
+            }
+            found += 1;
+
+            let (opponent, wins, losses) = if target_is_e1 {
+                (engine2.clone(), e1_wins, e2_wins)
+            } else {
+                (engine1.clone(), e2_wins, e1_wins)
+            };
+
+            let entry = opponent_map.entry(opponent.clone()).or_insert(OpponentStats {
+                opponent,
+                games: 0,
+                wins: 0,
+                draws: 0,
+                losses: 0,
+            });
+            entry.games += games;
+            entry.wins += wins;
+            entry.draws += draws;
+            entry.losses += losses;
+        }
+
+        if found == 0 {
+            matches_note = format!(
+                "_No rows matching `{}` found in `{}`._",
+                filter, args.matches_csv
+            );
+        } else {
+            matches_note = String::new();
+        }
+    }
+
+    // ---- Parse SPRT CSV (optional) ----
+    struct SprtRow {
+        opponent: String,
+        games: usize,
+        wins: usize,
+        draws: usize,
+        losses: usize,
+        result: String,
+    }
+    let mut sprt_rows: Vec<SprtRow> = Vec::new();
+    let sprt_note;
+
+    if let Some(ref sprt_path) = args.sprt_csv {
+        if !std::path::Path::new(sprt_path).exists() {
+            sprt_note = format!("_No SPRT CSV found at `{}`._", sprt_path);
+        } else {
+            let mut rdr = csv::Reader::from_path(sprt_path)?;
+            let mut found = 0usize;
+
+            for record in rdr.records() {
+                let record = record?;
+                if record.len() < 10 {
+                    continue;
+                }
+                let engine1 = record[1].to_string();
+                let engine2 = record[2].to_string();
+                let games: usize = record[3].parse().unwrap_or(0);
+                let wins: usize = record[4].parse().unwrap_or(0);
+                let draws: usize = record[5].parse().unwrap_or(0);
+                let losses: usize = record[6].parse().unwrap_or(0);
+                let result = record[9].to_string();
+
+                let target_is_e1 = engine1.to_lowercase().contains(&filter);
+                let target_is_e2 = engine2.to_lowercase().contains(&filter);
+
+                if !target_is_e1 && !target_is_e2 {
+                    continue;
+                }
+                found += 1;
+
+                let (opponent, w, l) = if target_is_e1 {
+                    (engine2.clone(), wins, losses)
+                } else {
+                    (engine1.clone(), losses, wins)
+                };
+
+                sprt_rows.push(SprtRow {
+                    opponent,
+                    games,
+                    wins: w,
+                    draws,
+                    losses: l,
+                    result,
+                });
+            }
+
+            if found == 0 {
+                sprt_note = format!(
+                    "_No SPRT rows matching `{}` found in `{}`._",
+                    filter,
+                    sprt_path
+                );
+            } else {
+                sprt_note = String::new();
+            }
+        }
+    } else {
+        sprt_note = String::new();
+    }
+
+    // ---- Build markdown ----
+    let mut md = String::new();
+    let generation_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+    let report_title = args
+        .engine_name
+        .as_deref()
+        .unwrap_or(args.version.as_str());
+
+    md.push_str(&format!("# {} — Version Report\n\n", report_title));
+    md.push_str(&format!("_Generated: {}_\n\n", generation_date));
+
+    // ---- Match Results section ----
+    md.push_str("## Match Results\n\n");
+
+    if !matches_note.is_empty() {
+        md.push_str(&matches_note);
+        md.push('\n');
+    } else {
+        // Summary table
+        md.push_str("| Opponent | Games | Wins | Draws | Losses | Win% |\n");
+        md.push_str("|----------|-------|------|-------|--------|------|\n");
+
+        let mut all_stats: Vec<&OpponentStats> = opponent_map.values().collect();
+        all_stats.sort_by(|a, b| a.opponent.cmp(&b.opponent));
+
+        let mut total_games = 0usize;
+        let mut total_wins = 0usize;
+        let mut total_draws = 0usize;
+        let mut total_losses = 0usize;
+
+        for s in &all_stats {
+            md.push_str(&format!(
+                "| {} | {} | {} | {} | {} | {:.1}% |\n",
+                s.opponent,
+                s.games,
+                s.wins,
+                s.draws,
+                s.losses,
+                s.win_pct()
+            ));
+            total_games += s.games;
+            total_wins += s.wins;
+            total_draws += s.draws;
+            total_losses += s.losses;
+        }
+
+        md.push('\n');
+
+        let overall_win_pct = if total_games > 0 {
+            total_wins as f64 / total_games as f64 * 100.0
+        } else {
+            0.0
+        };
+
+        md.push_str(&format!(
+            "**Overall:** {} games, {} wins, {} draws, {} losses — **{:.1}% win rate**\n\n",
+            total_games, total_wins, total_draws, total_losses, overall_win_pct
+        ));
+
+        let best = all_stats
+            .iter()
+            .max_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
+        let worst = all_stats
+            .iter()
+            .min_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
+
+        if let Some(b) = best {
+            md.push_str(&format!(
+                "**Best matchup:** {} ({:.1}%)\n\n",
+                b.opponent,
+                b.win_pct()
+            ));
+        }
+        if let Some(w) = worst {
+            md.push_str(&format!(
+                "**Worst matchup:** {} ({:.1}%)\n\n",
+                w.opponent,
+                w.win_pct()
+            ));
+        }
+    }
+
+    // ---- SPRT Results section (if --sprt-csv provided) ----
+    if args.sprt_csv.is_some() {
+        md.push_str("## SPRT Results\n\n");
+
+        if !sprt_note.is_empty() {
+            md.push_str(&sprt_note);
+            md.push('\n');
+        } else {
+            md.push_str("| Opponent | Games | W | D | L | Result |\n");
+            md.push_str("|----------|-------|---|---|---|--------|\n");
+
+            for row in &sprt_rows {
+                md.push_str(&format!(
+                    "| {} | {} | {} | {} | {} | {} |\n",
+                    row.opponent, row.games, row.wins, row.draws, row.losses, row.result
+                ));
+            }
+            md.push('\n');
+        }
+    }
+
+    // ---- Notes section ----
+    md.push_str("## Notes\n\n");
+
+    // ---- Write output ----
+    if let Some(parent) = std::path::Path::new(&args.output).parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    std::fs::write(&args.output, &md)?;
+    println!("Version report written to: {}", args.output);
 
     Ok(())
 }
