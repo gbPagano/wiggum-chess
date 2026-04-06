@@ -87,3 +87,22 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - `self.get_piece(m.dest)` returns `None` for en passant captures (the captured pawn is not on the dest square); this is why the en passant capture logic already uses a separate branch in make_move()
   - Display was outputting `" 0 1"` hardcoded — fixed to `" {} 1"` with actual halfmove_clock
 ---
+
+## 2026-04-05 - US-006
+- Added `chesslib/src/game.rs` with `Game`, `GameResult`, and `DrawReason` types
+- `GameResult` variants: Ongoing, WhiteWins, BlackWins, Draw(DrawReason)
+- `DrawReason` variants: Stalemate, InsufficientMaterial, ThreefoldRepetition, FivefoldRepetition, FiftyMoveRule, SeventyFiveMoveRule
+- `Game::new()` creates from starting position; `Game::from_fen()` creates from FEN string
+- `detect_result()` called in `new()`, `from_fen()`, and after every `make_move()`
+- Auto-applied draws: FivefoldRepetition (>= 5 hash occurrences), SeventyFiveMoveRule (halfmove_clock >= 150), FiftyMoveRule (halfmove_clock >= 100), InsufficientMaterial, checkmate, stalemate
+- Queryable-only: `is_threefold_repetition()` (threefold NOT auto-applied so fivefold can be reached)
+- `make_move()` validates legality via `MoveGen::new_legal()`, updates board/moves/hash_history, detects result
+- Files changed: `chesslib/src/game.rs` (new), `chesslib/src/lib.rs` (added pub mod game)
+- Tests added: 12 new tests covering all game outcomes and edge cases
+- All 81 tests pass (69 prior + 12 new)
+- **Learnings for future iterations:**
+  - `detect_result()` must be called in both `from_fen()` and `new()` so positions loaded from FEN correctly report draws/checkmates immediately
+  - Threefold and fivefold ordering: if threefold were auto-applied, game stops at 3 reps and fivefold tests can never be reached; solve by making threefold queryable-only and fivefold automatic
+  - 75-move check must come BEFORE 50-move check in detect_result (since 150 > 100, both would trigger at clock=150)
+  - `MoveGen::new_legal(board).find(|lm| *lm == m).is_some()` validates individual move legality
+---

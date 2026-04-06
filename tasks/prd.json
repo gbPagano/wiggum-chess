@@ -106,7 +106,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-002 (checkmate/stalemate), US-003 (insufficient material), US-004 (Zobrist), US-005 (halfmove clock)"
     },
     {
