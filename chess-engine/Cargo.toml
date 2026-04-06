@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 chesslib = { path = "../chesslib" }
+async-trait = "0.1"
+tokio = { version = "1", features = ["full"] }
