@@ -6,7 +6,7 @@ use clap::Parser;
 use std::io::{self, BufRead};
 
 #[derive(Parser)]
-#[command(name = "chess-engine", about = "MaterialEngine UCI chess engine")]
+#[command(name = "chess-engine", about = "Wiggum Engine UCI chess engine")]
 struct Args {
     /// Search depth (default 4)
     #[arg(long, default_value = "4")]
@@ -28,7 +28,7 @@ fn main() {
         let line = line.trim().to_string();
 
         if line == "uci" {
-            println!("id name MaterialEngine v0.1");
+            println!("id name Wiggum Engine v0.1");
             println!("id author chess-ic");
             println!("uciok");
         } else if line == "isready" {
