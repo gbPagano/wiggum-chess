@@ -160,7 +160,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-008 for CSV format. Uses the csv crate to read the file."
     }
   ]

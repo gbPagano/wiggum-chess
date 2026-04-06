@@ -1,3 +1,20 @@
+## 2026-04-06 - US-009
+- Refactored chess-runner CLI to use clap subcommands: `match` (existing behavior) and `report` (new)
+- `report --input <csv_path>` reads match history CSV and prints a formatted table
+- Table columns: Date, Engine1, Engine2, Games, Wins, Losses, Draws, Win%, Trend
+- Trend arrows (↑/↓/→/-) computed by comparing win_rate vs previous entry for same engine pair
+- Summary section: total games, overall win rate, best matchup, worst matchup
+- Handles missing file: "No match history found at <path>"
+- Handles empty CSV (header only): "No match results recorded yet"
+- Files changed: `chess-runner/src/main.rs`
+- All 117 workspace tests pass
+- **Learnings for future iterations:**
+  - clap subcommands via `#[command(subcommand)]` + `#[derive(Subcommand)]` on an enum; each variant wraps a dedicated `#[derive(Parser)]` struct
+  - `csv::Reader::from_path(path)?` followed by `rdr.records()` iterates StringRecord rows (headers already consumed)
+  - Use `HashMap<(String, String), f64>` keyed by engine pair to track previous win_rate for trend computation
+  - Column width alignment: compute `max(label.len(), data.iter().map(...).max())` per column then pass via named format args `{:<w$}`
+---
+
 ## 2026-04-06 - US-008
 - Added `--output <path>` CLI flag to chess-runner
 - Before the match loop, queries both engine UCI names by spawning temporary engines (handshake + quit)
