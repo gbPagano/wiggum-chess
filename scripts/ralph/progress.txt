@@ -197,3 +197,18 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - The `Engine` trait must be `Send`-bound for use with tokio multi-thread; add `: Send` to the trait definition
   - `tokio = { version = "1", features = ["full"] }` covers all needed features (rt, process, io-util, macros) for US-010 subprocess work
 ---
+
+## 2026-04-05 - US-001 (chess-engine PRD)
+- Created `scripts/download-stockfish.sh` to download Stockfish 17 for Linux x86_64
+- Script downloads from GitHub releases, extracts tar, copies binary to `engines/stockfish`, makes executable
+- Script is idempotent: exits early if `engines/stockfish` already exists
+- Added `engines/` to `.gitignore` so binary is never committed
+- Verified: `echo uci | engines/stockfish | grep uciok` returns `uciok`
+- Files changed: `scripts/download-stockfish.sh` (new), `.gitignore`
+- All 117 tests still pass (no Rust code changed)
+- **Learnings for future iterations:**
+  - Stockfish 17 release URL: `https://github.com/official-stockfish/Stockfish/releases/download/sf_17/stockfish-ubuntu-x86-64.tar`
+  - The archive is a plain `.tar` (not `.tar.gz`/`.tar.xz`) — use `tar -xf` without compression flags
+  - Binary is found inside the extracted archive via `find "$TMP_DIR" -type f -name "stockfish*"`
+  - `engines/` directory is runtime-only; always gitignore it, never commit the binary
+---
