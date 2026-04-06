@@ -28,7 +28,7 @@ pub const ALL_RANKS: [Rank; 8] = [
 impl Rank {
     /// Converts an index (0-7) to a `Rank`. Wraps around using bitwise AND.
     #[inline(always)]
-    pub fn from_index(i: usize) -> Self {
+    pub const fn from_index(i: usize) -> Self {
         match i & 7 {
             0 => Rank::First,
             1 => Rank::Second,
@@ -44,19 +44,19 @@ impl Rank {
 
     /// Returns the index (0-7) corresponding to the file.
     #[inline(always)]
-    pub fn to_index(self) -> usize {
+    pub const fn to_index(self) -> usize {
         self as usize
     }
 
     /// Returns the rank below of current one, with wrap-around
     #[inline(always)]
-    pub fn down(&self) -> Self {
+    pub const fn down(&self) -> Self {
         Self::from_index(self.to_index().wrapping_sub(1))
     }
 
     /// Returns the rank above of current one, with wrap-around
     #[inline(always)]
-    pub fn up(&self) -> Self {
+    pub const fn up(&self) -> Self {
         Self::from_index(self.to_index() + 1)
     }
 
@@ -66,7 +66,7 @@ impl Rank {
     }
 
     #[inline(always)]
-    pub fn forward(&self, color: Color) -> Self {
+    pub const fn forward(&self, color: Color) -> Self {
         match color {
             Color::White => self.up(),
             Color::Black => self.down(),

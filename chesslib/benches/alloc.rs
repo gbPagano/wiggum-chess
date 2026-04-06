@@ -1,6 +1,6 @@
-use divan::{AllocProfiler, Bencher, black_box};
 use chesslib::board::Board;
 use chesslib::movegen::MoveGen;
+use divan::{AllocProfiler, Bencher, black_box};
 
 #[global_allocator]
 static ALLOC: AllocProfiler = AllocProfiler::system();

@@ -1,0 +1,12 @@
+[package]
+name = "chess-runner"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chesslib = { path = "../chesslib" }
+tokio = { version = "1", features = ["full"] }
+clap = { version = "4", features = ["derive"] }
+anyhow = "1"
+csv = "1"
+chrono = "0.4"

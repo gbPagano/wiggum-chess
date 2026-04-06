@@ -26,7 +26,7 @@ pub const ALL_FILES: [File; 8] = [
 impl File {
     /// Converts an index (0-7) to a `File`. Wraps around using bitwise AND.
     #[inline(always)]
-    pub fn from_index(i: usize) -> Self {
+    pub const fn from_index(i: usize) -> Self {
         match i & 7 {
             0 => File::A,
             1 => File::B,
@@ -42,19 +42,19 @@ impl File {
 
     /// Returns the index (0-7) corresponding to the file.
     #[inline(always)]
-    pub fn to_index(self) -> usize {
+    pub const fn to_index(self) -> usize {
         self as usize
     }
 
     /// Returns the file to the left of current one, with wrap-around.
     #[inline(always)]
-    pub fn left(&self) -> Self {
+    pub const fn left(&self) -> Self {
         Self::from_index(self.to_index().wrapping_sub(1))
     }
 
     /// Returns the file to the right of current one, with wrap-around.
     #[inline(always)]
-    pub fn right(&self) -> Self {
+    pub const fn right(&self) -> Self {
         Self::from_index(self.to_index() + 1)
     }
 

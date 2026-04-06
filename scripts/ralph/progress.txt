@@ -1,0 +1,338 @@
+## 2026-04-06 - US-009
+- Refactored chess-runner CLI to use clap subcommands: `match` (existing behavior) and `report` (new)
+- `report --input <csv_path>` reads match history CSV and prints a formatted table
+- Table columns: Date, Engine1, Engine2, Games, Wins, Losses, Draws, Win%, Trend
+- Trend arrows (↑/↓/→/-) computed by comparing win_rate vs previous entry for same engine pair
+- Summary section: total games, overall win rate, best matchup, worst matchup
+- Handles missing file: "No match history found at <path>"
+- Handles empty CSV (header only): "No match results recorded yet"
+- Files changed: `chess-runner/src/main.rs`
+- All 117 workspace tests pass
+- **Learnings for future iterations:**
+  - clap subcommands via `#[command(subcommand)]` + `#[derive(Subcommand)]` on an enum; each variant wraps a dedicated `#[derive(Parser)]` struct
+  - `csv::Reader::from_path(path)?` followed by `rdr.records()` iterates StringRecord rows (headers already consumed)
+  - Use `HashMap<(String, String), f64>` keyed by engine pair to track previous win_rate for trend computation
+  - Column width alignment: compute `max(label.len(), data.iter().map(...).max())` per column then pass via named format args `{:<w$}`
+---
+
+## 2026-04-06 - US-008
+- Added `--output <path>` CLI flag to chess-runner
+- Before the match loop, queries both engine UCI names by spawning temporary engines (handshake + quit)
+- After all games, appends one CSV row: timestamp (ISO 8601 via chrono), engine1_name, engine2_name, games_played, engine1_wins, engine2_wins, draws, engine1_win_rate
+- Creates file with header row if it doesn't exist; appends without overwriting if it exists
+- If `--output` is not specified, no CSV is written
+- Added `csv = "1"` and `chrono = "0.4"` to `chess-runner/Cargo.toml`
+- Files changed: `chess-runner/src/main.rs`, `chess-runner/Cargo.toml`, `Cargo.lock`
+- All 117 workspace tests pass
+- **Learnings for future iterations:**
+  - Spin up a temporary engine just to call `name().await` then `quit().await` to get the UCI name before the match loop — cleaner than capturing it inside the loop
+  - `csv::WriterBuilder::new().has_headers(false).from_writer(file)` with manual header write gives full control over append behavior
+  - Check `Path::exists() && metadata.len() > 0` (not just `exists()`) to handle empty files correctly
+  - `chrono::Utc::now().to_rfc3339()` gives a proper ISO 8601 timestamp; add `chrono = "0.4"` to Cargo.toml
+---
+
+## 2026-04-06 - US-007
+- Implemented UCI protocol loop in `chess-engine/src/main.rs`
+- Responds to `uci` with `id name MaterialEngine v0.1`, `id author chess-ic`, `uciok`
+- Responds to `isready` with `readyok`
+- Handles `position startpos [moves ...]` and `position fen <fen> [moves ...]`
+- Handles `go wtime W btime B ...` — runs `search(board, depth)` and prints `bestmove <uci>`
+- Handles `ucinewgame` (resets state) and `quit` (exits)
+- Accepts `--depth <N>` CLI flag via `clap` (default 4)
+- Added `clap = { version = "4", features = ["derive"] }` to `chess-engine/Cargo.toml`
+- Verified against Stockfish: `chess-runner --engine1 chess-engine --engine2 engines/stockfish --games 1 --time 5000` completes without panics
+- Files changed: `chess-engine/src/main.rs`, `chess-engine/Cargo.toml`
+- All 117 workspace tests pass
+- **Learnings for future iterations:**
+  - UCI `position` command parsing: split by whitespace, find `moves` token index to separate FEN from move list
+  - Use `Board::default()` for `position startpos` (avoids redundant FEN string)
+  - `go` command can have many optional params (wtime, btime, winc, binc, movestogo) — just ignore them for depth-based engines
+  - When `go` is called with no current position, silently skip (guard with `if let Some(ref board) = current_board`)
+  - `bestmove 0000` is the UCI null move — use as fallback when no legal moves exist (terminal position)
+---
+
+## 2026-04-06 - US-006
+- Implemented `MaterialEngine` struct in `chess-engine/src/engine.rs`
+- `MaterialEngine::new(depth)` and `Default` impl (depth 4)
+- Implements `chesslib::engine::Engine` via `async_trait`: `name()` returns "MaterialEngine v0.1", `go()` calls `search(board, depth)`, `set_position()` caches the game
+- Added `async-trait = "0.1"` and `tokio = { version = "1", features = ["full"] }` to `chess-engine/Cargo.toml`
+- Integration tests: MaterialEngine (depth 2) vs MaterialEngine completes game and result is not Ongoing
+- Files changed: `chess-engine/src/engine.rs`, `chess-engine/Cargo.toml`
+- All 10 chess-engine tests pass; 127 total workspace tests pass
+- **Learnings for future iterations:**
+  - `Game::clone()` is available — cache `game.clone()` in `set_position()` to hold the current position
+  - Use `search(board, depth)` and unwrap `Some(mv)` or fall back to `MoveGen::new_legal(board).next()` in `go()`
+  - Depth 2 is fast enough for integration tests without long waits; depth 4 is the user-facing default
+---
+
+## 2026-04-06 - US-005
+- Implemented `search(board: &Board, depth: u8) -> (Option<ChessMove>, i32)` in `chess-engine/src/search.rs`
+- Negamax formulation: recursively negates child scores; at depth 0 falls through to `evaluate()`
+- Terminal positions (no legal moves) return evaluate() directly (handles checkmate/stalemate correctly)
+- Files changed: `chess-engine/src/search.rs`
+- Tests: returns valid legal move from start, finds mate-in-1 (Qa1# in king+queen vs king), avoids hanging queen (depth-2 search)
+- All 8 chess-engine tests pass; 125 total workspace tests pass
+- **Learnings for future iterations:**
+  - `ChessMove` fields are public: use `mv.dest` not `mv.dest()` (it's a struct field, not a method)
+  - `pub const` not `const` needed to avoid dead_code warning when constant is only used in tests
+  - Negamax: after making a move, `evaluate()` returns score from the child's side-to-move; negate it to get score from parent's perspective
+  - Mate-in-1 test position: "k7/2K5/8/8/8/8/8/7Q w - - 0 1" — white Ka8, Kc7, Qh1; Qa1# is forced checkmate
+---
+
+## 2026-04-06 - US-004
+- Implemented `evaluate(board: &Board) -> i32` in `chess-engine/src/eval.rs`
+- Returns centipawn score from side-to-move's perspective
+- Piece values: Pawn=100, Knight=320, Bishop=330, Rook=500, Queen=900
+- Detects checkmate via `board.is_checkmate()` → returns -30000
+- Detects stalemate via `board.is_stalemate()` → returns 0
+- Material score = sum of (stm_count - opp_count) * value for each piece type
+- Files changed: `chess-engine/src/eval.rs`
+- Tests: starting position=0, missing white queen=-900, missing black queen=+900, Fool's mate=-30000, stalemate=0
+- All 5 new tests pass; 122 total workspace tests pass
+- **Learnings for future iterations:**
+  - `board.get_piece_bitboard(piece) & board.get_color_bitboard(color)` gives the bitboard for a specific piece+color combo; `.0.count_ones()` counts the pieces
+  - `Board::is_checkmate()` and `Board::is_stalemate()` are already available in chesslib — no need to reimplement
+  - `!stm` (using `Not` impl on `Color`) gives the opponent's color
+---
+
+## 2026-04-06 - US-003
+- Created `chess-engine/` crate skeleton in the workspace
+- `chess-engine/Cargo.toml` depends on `chesslib = { path = "../chesslib" }`
+- `src/lib.rs` exposes `pub mod eval; pub mod search; pub mod engine;` with empty module files
+- `src/main.rs` prints "MaterialEngine v0.1"
+- Added `chess-engine` to workspace members in root `Cargo.toml`
+- `cargo build -p chess-engine` compiles cleanly; all 117 existing tests pass
+- Files changed: `chess-engine/Cargo.toml`, `chess-engine/src/lib.rs`, `chess-engine/src/main.rs`, `chess-engine/src/eval.rs`, `chess-engine/src/search.rs`, `chess-engine/src/engine.rs`, `Cargo.toml`
+- **Learnings for future iterations:**
+  - Empty module files (zero bytes) are valid in Rust — Cargo accepts them as long as `lib.rs` declares them
+  - The `chess-engine` binary crate has both `src/lib.rs` and `src/main.rs` — Cargo auto-detects both
+---
+
+## 2026-04-05 - US-002
+- Validated chess-runner match series with Stockfish vs Stockfish
+- Ran `chess-runner --engine1 engines/stockfish --engine2 engines/stockfish --games 2 --time 5000`
+- Both games completed without errors, panics, or protocol issues
+- Colors alternate correctly (game 1: engine1=white; game 2: engine1=black)
+- Final summary correctly tallied wins (0/0) and draws (2) — both games ended in draws (threefold repetition and stalemate)
+- No code changes needed: chess-runner and chesslib were already working correctly
+- All 117 tests still pass
+- **Learnings for future iterations:**
+  - US-002 was a pure validation story — no code changes required, just confirming the existing implementation works
+  - Stockfish 17 vs Stockfish on 5s time control reliably produces draws (repetition/stalemate/50-move)
+  - The match runner correctly handles color alternation, game results, and score tallying
+---
+
+## 2026-04-05 - US-012
+- Implemented `chess-runner` CLI binary with `clap`-based argument parsing
+- Args: `--engine1`, `--engine2`, `--time`, `--inc`, `--games`, `--start-fen`, `--timeout`
+- Runs N games alternating colors each game (engine1=white on even games, black on odd)
+- `PrintObserver` implements `MatchObserver` to print each move (UCI notation + board debug) and game-over event
+- Tracks wins/losses/draws per engine; prints score summary at end
+- Added `tokio`, `clap` (derive feature), `anyhow` to `chess-runner/Cargo.toml`
+- Files changed: `chess-runner/src/main.rs`, `chess-runner/Cargo.toml`
+- All 117 existing tests still pass; no new tests needed (CLI is integration-level)
+- **Learnings for future iterations:**
+  - `chess-runner` binary crate needs its own tokio dependency (chesslib's tokio is not re-exported to the binary)
+  - `clap = { version = "4", features = ["derive"] }` enables the `#[derive(Parser)]` pattern
+  - `MatchObserver::on_move` receives the game AFTER the move is applied — `game.moves().len()` gives the move number
+  - Color alternation: `game_idx % 2 == 0` → engine1 white; flip for odd games
+---
+
+## 2026-04-05 - US-011
+- Added `chesslib/src/match_runner.rs` with `Match` struct and `MatchObserver` trait
+- `MatchObserver` trait has `on_move(game, move, engine_name)` and `on_game_over(result)` callbacks
+- `Match::new(white, black)` builder with `.with_game()`, `.with_clock()`, `.with_observer()` chainable methods
+- `Match::run()` calls `new_game()` on both engines, then loops: checks terminal conditions, auto-applies threefold repetition draw, builds `TimeControl` from clock (or 60s default), calls `set_position` + `go` on the active engine, applies move, notifies observer
+- Engine error (illegal move returned) terminates the loop gracefully
+- All 5 new tests pass; 117 total (112 prior + 5 new)
+- Files changed: `chesslib/src/match_runner.rs` (new), `chesslib/src/lib.rs`
+- **Learnings for future iterations:**
+  - Test `Engine` impls that play a fixed move sequence must restore that sequence in `new_game()` — `Match::run()` calls `new_game()` before the loop, so a naive `VecDeque::new()` in `new_game()` empties the queue
+  - `SequenceEngine` pattern: store `initial_moves: Vec<ChessMove>` and reset `moves` from it in `new_game()`
+  - `is_fifty_move_rule()` is already auto-applied by `Game::detect_result()`, so the Match check is technically redundant but harmless — included for spec compliance
+  - The borrow checker allows `if let Some(ref mut obs) = self.observer { obs.on_move(&self.game, ...) }` because `observer` and `game` are distinct fields
+---
+
+## 2026-04-05 - US-010
+- Added `chesslib/src/uci_engine.rs` with `UciEngine` struct implementing `Engine` trait
+- `UciEngine::new(path, timeout_ms)` spawns engine subprocess, performs `uci`→`uciok` handshake, then `isready`→`readyok` synchronization
+- Collects engine name from `id name ...` lines during handshake
+- `set_position()` sends `position startpos moves ...` and caches current `Board` for move parsing in `go()`
+- `go()` sends `go wtime X btime Y winc Z binc W [movestogo N]`, reads lines until `bestmove`, parses with `ChessMove::from_uci()` using cached board
+- `quit()` sends `quit` and waits up to 5s for process exit
+- Tests use a shell script mock engine written to `/tmp/mock_uci_engine_chesslib.sh` via `OnceLock` to avoid "Text file busy" races between parallel tests
+- Files changed: `chesslib/src/uci_engine.rs` (new), `chesslib/src/lib.rs` (added pub mod)
+- All 112 tests pass
+- **Learnings for future iterations:**
+  - "Text file busy" (os error 26) occurs when multiple parallel tests write the same temp file; use `OnceLock` to write the mock script only once
+  - `UciEngine` must cache the `Board` from `set_position()` so `go()` can parse the bestmove UCI string via `ChessMove::from_uci()`
+  - Use `tokio::time::timeout` wrapping `Lines::next_line()` for all engine reads to enforce response timeouts
+  - `bestmove` lines may include `ponder <move>` — take only the first whitespace token after `bestmove `
+---
+
+## Codebase Patterns
+- Cargo is not pre-installed in devcontainer — install with `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`, then `source "$HOME/.cargo/env"`
+- Workspace root `Cargo.toml` holds profiles; subcrate `Cargo.toml` files should NOT have `[profile.*]` sections
+- The test `gen_files::magics::name` intentionally has `assert!(false)` — it's a dev scratchpad, always fails, not a regression
+- Run tests with `--skip gen_files::magics::name` to exclude it; all other tests should pass
+- `cargo build --workspace`, `cargo test --workspace`, `cargo bench --bench perft -p chesslib` are the key quality checks
+- Build-time code generation: add new tables by creating `gen_files/foo.rs`, exporting from `gen_files/mod.rs`, calling `write_foo(&mut f)?` in `build.rs`, and adding accessor functions in `magic.rs` (which includes the generated file via `include!(concat!(env!("OUT_DIR"), "/magic_file.rs"))`)
+- BitBoard: use `get_squares()` iterator to enumerate set bits; no `Sub` trait — can't do `bb - BitBoard(1)` in safe code
+- Zobrist keys are in `ZOBRIST_PIECES[piece*128 + color*64 + sq]`, `ZOBRIST_CASTLING[0..4]` (WK,WQ,BK,BQ), `ZOBRIST_EN_PASSANT[file]`, `ZOBRIST_SIDE`
+---
+
+# Ralph Progress Log
+Started: Sun Apr  5 22:30:19 PDT 2026
+---
+
+## 2026-04-05 - US-001
+- Converted project to Cargo workspace with `chesslib` and `chess-runner` subcrates
+- Created root `Cargo.toml` as workspace with `[profile.*]` sections
+- Moved `src/`, `benches/` into `chesslib/` subdirectory with its own `Cargo.toml`
+- Moved `src/main.rs` (perft runner) to `chess-runner/src/main.rs`
+- Created `chess-runner/Cargo.toml` depending on chesslib
+- Updated `CLAUDE.md` to reflect new workspace structure and build commands
+- Files changed: Cargo.toml (root, new workspace), chesslib/Cargo.toml (new), chess-runner/Cargo.toml (new), chess-runner/src/main.rs (moved from src/main.rs), all src/* → chesslib/src/*, benches/* → chesslib/benches/*
+- **Learnings for future iterations:**
+  - Rust/cargo must be installed manually via rustup in this devcontainer
+  - Workspace profiles go in root Cargo.toml only; subcrates don't need them
+  - `gen_files::magics::name` has `assert!(false)` — pre-existing intentional failure, not a new break
+  - All 46 real tests pass; bench builds succeed
+---
+
+## 2026-04-05 - US-002
+- Added `is_checkmate()` and `is_stalemate()` methods to `Board` in `chesslib/src/board.rs`
+- Both methods use `MoveGen::new_legal(self).len() == 0` to detect no legal moves, combined with `checkers_bitboard` to distinguish check from stalemate
+- Added import `use crate::movegen::MoveGen;` in board.rs (intra-crate cyclic module references are fine in Rust)
+- Files changed: `chesslib/src/board.rs`
+- Tests added: Scholar's mate, Fool's mate, queen stalemate, pawn stalemate, and negative cases
+- All 51 tests pass (46 original + 5 new)
+- **Learnings for future iterations:**
+  - Intra-crate cyclic module imports work fine in Rust (`board.rs` imports from `movegen.rs` which imports from `board.rs`)
+  - `checkers_bitboard` is precomputed in `update_attacked_bitboards()` and updated incrementally in `make_move()` — it correctly reflects whether the side to move is in check
+  - `MoveGen::new_legal(board).len()` is the canonical way to count legal moves; uses `ExactSizeIterator`
+---
+
+## 2026-04-05 - US-003
+- Added `is_insufficient_material()` method to `Board` in `chesslib/src/board.rs`
+- Checks for absence of pawns/rooks/queens, then enumerates minor piece counts per side
+- Covers: K vs K, K+N vs K, K+B vs K, K+B vs K+B (same color bishops)
+- Square color computed as `(idx % 8 + idx / 8) % 2` where idx is `square.to_index()`
+- Files changed: `chesslib/src/board.rs`
+- Tests added: 7 new tests covering all insufficient material cases and sufficient material cases
+- All 59 tests pass (51 prior + 8 new)
+- **Learnings for future iterations:**
+  - Square index layout: `to_index() = rank * 8 + file`; square color = `(file + rank) % 2`
+  - `BitBoard.0.count_ones()` to count set bits (pieces on a bitboard)
+  - Bishop same-color check: extract square index and compare `(idx%8 + idx/8) % 2` for both bishops
+---
+
+## 2026-04-05 - US-004
+- Added Zobrist hashing to `Board` in `chesslib/src/board.rs`
+- Added `chesslib/src/gen_files/zobrist.rs` with `write_zobrist()` — generates 768 piece/color/square keys, 4 castling keys, 8 en passant file keys, and 1 side-to-move key using xorshift64 seeded at a fixed value
+- Updated `gen_files/mod.rs` to export `write_zobrist`; updated `build.rs` to call it; keys are appended to `magic_file.rs`
+- Added `zobrist_piece_key()`, `zobrist_castling_key()`, `zobrist_en_passant_key()`, `zobrist_side_key()` accessor functions in `magic.rs`
+- `Board` now has a `zobrist_hash: u64` field, initialized to 0 in `new()` and computed from scratch via `compute_zobrist()` at the end of `from_str()`
+- `make_move()` updates the hash incrementally via XOR: flips side key, XORs out old en passant/castling, XORs piece moves, handles promotions/en passant captures/castling rook, XORs in new castling/en passant
+- Added `zobrist_hash()` public method
+- Files changed: `chesslib/src/gen_files/zobrist.rs` (new), `chesslib/src/gen_files/mod.rs`, `chesslib/src/build.rs`, `chesslib/src/magic.rs`, `chesslib/src/board.rs`
+- Tests added: 5 new Zobrist tests verifying non-zero hash, different positions, incremental vs from-scratch consistency, and move-order independence
+- All 64 tests pass (59 prior + 5 new)
+- **Learnings for future iterations:**
+  - The `include!(concat!(env!("OUT_DIR"), "/magic_file.rs"))` pattern in `magic.rs` means all generated constants (including Zobrist) are accessible there — just add accessors to `magic.rs`
+  - `set_en_passant()` only sets `en_passant` if an adjacent enemy pawn can actually capture — check `result.en_passant` after calling it to know if the key should be XOR'd in
+  - Castling rights index convention: 0=WK, 1=WQ, 2=BK, 3=BQ (matching `CastleRights` field order)
+---
+
+## 2026-04-05 - US-005
+- Added `halfmove_clock: u32` field to `Board` struct in `chesslib/src/board.rs`
+- Initialized to 0 in `Board::new()`; parsed from FEN token[4] in `from_str()` (optional, defaults to 0)
+- `make_move()` resets to 0 on pawn moves or captures, increments by 1 otherwise
+- En passant captures correctly reset clock because `moved_piece == Piece::Pawn` always triggers reset
+- Added `halfmove_clock()` public getter method
+- Fixed `Display` impl to output real halfmove_clock value instead of hardcoded `0`
+- Files changed: `chesslib/src/board.rs`
+- Tests added: 5 new tests — FEN init, default zero, increment on knight moves, reset on pawn, reset on capture
+- All 69 tests pass (64 prior + 5 new)
+- **Learnings for future iterations:**
+  - En passant captures don't need special halfmove handling: the pawn check (`moved_piece == Piece::Pawn`) catches all pawn moves including en passant
+  - `self.get_piece(m.dest)` returns `None` for en passant captures (the captured pawn is not on the dest square); this is why the en passant capture logic already uses a separate branch in make_move()
+  - Display was outputting `" 0 1"` hardcoded — fixed to `" {} 1"` with actual halfmove_clock
+---
+
+## 2026-04-05 - US-006
+- Added `chesslib/src/game.rs` with `Game`, `GameResult`, and `DrawReason` types
+- `GameResult` variants: Ongoing, WhiteWins, BlackWins, Draw(DrawReason)
+- `DrawReason` variants: Stalemate, InsufficientMaterial, ThreefoldRepetition, FivefoldRepetition, FiftyMoveRule, SeventyFiveMoveRule
+- `Game::new()` creates from starting position; `Game::from_fen()` creates from FEN string
+- `detect_result()` called in `new()`, `from_fen()`, and after every `make_move()`
+- Auto-applied draws: FivefoldRepetition (>= 5 hash occurrences), SeventyFiveMoveRule (halfmove_clock >= 150), FiftyMoveRule (halfmove_clock >= 100), InsufficientMaterial, checkmate, stalemate
+- Queryable-only: `is_threefold_repetition()` (threefold NOT auto-applied so fivefold can be reached)
+- `make_move()` validates legality via `MoveGen::new_legal()`, updates board/moves/hash_history, detects result
+- Files changed: `chesslib/src/game.rs` (new), `chesslib/src/lib.rs` (added pub mod game)
+- Tests added: 12 new tests covering all game outcomes and edge cases
+- All 81 tests pass (69 prior + 12 new)
+- **Learnings for future iterations:**
+  - `detect_result()` must be called in both `from_fen()` and `new()` so positions loaded from FEN correctly report draws/checkmates immediately
+  - Threefold and fivefold ordering: if threefold were auto-applied, game stops at 3 reps and fivefold tests can never be reached; solve by making threefold queryable-only and fivefold automatic
+  - 75-move check must come BEFORE 50-move check in detect_result (since 150 > 100, both would trigger at clock=150)
+  - `MoveGen::new_legal(board).find(|lm| *lm == m).is_some()` validates individual move legality
+---
+
+## 2026-04-05 - US-007
+- Added `chesslib/src/clock.rs` with `Clock` struct: `white_ms`, `black_ms`, `increment_ms`, `moves_to_go: Option<u32>`, `turn_start: Instant`
+- `Clock::new(time_ms, increment_ms)` sets equal time for both players; `Clock::with_moves_to_go(...)` supports classical time controls
+- `Clock::record_move(color)` uses `std::time::Instant` to measure elapsed time, subtracts it, adds increment, decrements `moves_to_go`; returns `true` if flagged
+- `Clock::record_move_with_elapsed(color, elapsed_ms)` is `pub(crate)` for deterministic testing
+- Added `Game::new_with_clock()`, `Game::from_fen_with_clock()`, `Game::clock() -> Option<&Clock>`
+- `make_move()` saves `moving_side` before applying the move, then calls `clock.record_move(moving_side)` — flag → BlackWins if White flagged, WhiteWins if Black flagged
+- Files changed: `chesslib/src/clock.rs` (new), `chesslib/src/lib.rs` (pub mod clock), `chesslib/src/game.rs`
+- Tests added: 8 clock unit tests in `clock.rs` + 4 game integration tests; 94 total (81 prior + 13 new)
+- **Learnings for future iterations:**
+  - `std::time::Instant` implements `Clone`, so `Clock` can derive `Clone` (needed since `Game` derives `Clone`)
+  - `moving_side` must be captured BEFORE `self.board = self.board.make_move(m)` since `make_move()` switches side-to-move
+  - `pub(crate)` on `record_move_with_elapsed` makes it accessible from sibling module tests (all in the same crate)
+  - Flag tests with real Instant need a sleep; 5ms sleep with 1ms budget is reliable enough for CI
+---
+
+## 2026-04-05 - US-008
+- Added `to_uci()` and `from_uci()` methods to `ChessMove` in `chesslib/src/chess_move.rs`
+- `to_uci()`: formats as `{source}{dest}` or `{source}{dest}{promotion}` using existing `Display` impl on `Square` and `Piece`
+- `from_uci()`: parses source/dest squares via `Square::from_str`, maps promotion char to `Piece`, then finds matching legal move via `MoveGen::new_legal(board).find(...)`
+- Files changed: `chesslib/src/chess_move.rs`
+- Tests added: 8 tests — normal move, promotion (all 4 pieces), castling (kingside/queenside), en passant, invalid length, illegal move, roundtrip
+- All 102 tests pass (94 prior + 8 new)
+- **Learnings for future iterations:**
+  - `Square` already has `FromStr` and `Display` impls — reuse them for UCI parsing/formatting
+  - `Piece::fmt` already outputs lowercase letters (p/n/b/r/q/k) — perfect for UCI promotion format
+  - `MoveGen::new_legal(board).find(|m| ...)` is the canonical way to validate and resolve a move from partial info (source+dest+promotion)
+---
+
+## 2026-04-05 - US-009
+- Added `chesslib/src/engine.rs` with `TimeControl` struct and `Engine` trait
+- `TimeControl` fields: `wtime`, `btime`, `winc`, `binc`, `movestogo: Option<u32>` (all milliseconds)
+- `Engine` trait (using `async_trait`) with: `name()`, `new_game()`, `set_position(game: &Game)`, `go(time_control: &TimeControl) -> ChessMove`, `quit()`
+- Added `async-trait = "0.1"` and `tokio = { version = "1", features = ["full"] }` to `chesslib/Cargo.toml`
+- Updated `chesslib/src/lib.rs` to expose `pub mod engine`
+- Tests include: concrete impl, `Box<dyn Engine>` object safety, `TimeControl` field checks
+- All 106 tests pass (102 prior + 4 new)
+- **Learnings for future iterations:**
+  - Use `async_trait` crate for `async fn` in traits to get `Box<dyn Engine>` object safety (needed in US-011)
+  - The `Engine` trait must be `Send`-bound for use with tokio multi-thread; add `: Send` to the trait definition
+  - `tokio = { version = "1", features = ["full"] }` covers all needed features (rt, process, io-util, macros) for US-010 subprocess work
+---
+
+## 2026-04-05 - US-001 (chess-engine PRD)
+- Created `scripts/download-stockfish.sh` to download Stockfish 17 for Linux x86_64
+- Script downloads from GitHub releases, extracts tar, copies binary to `engines/stockfish`, makes executable
+- Script is idempotent: exits early if `engines/stockfish` already exists
+- Added `engines/` to `.gitignore` so binary is never committed
+- Verified: `echo uci | engines/stockfish | grep uciok` returns `uciok`
+- Files changed: `scripts/download-stockfish.sh` (new), `.gitignore`
+- All 117 tests still pass (no Rust code changed)
+- **Learnings for future iterations:**
+  - Stockfish 17 release URL: `https://github.com/official-stockfish/Stockfish/releases/download/sf_17/stockfish-ubuntu-x86-64.tar`
+  - The archive is a plain `.tar` (not `.tar.gz`/`.tar.xz`) — use `tar -xf` without compression flags
+  - Binary is found inside the extracted archive via `find "$TMP_DIR" -type f -name "stockfish*"`
+  - `engines/` directory is runtime-only; always gitignore it, never commit the binary
+---

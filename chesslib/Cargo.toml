@@ -1,0 +1,31 @@
+[package]
+name = "chesslib"
+version = "0.1.0"
+edition = "2024"
+build = "src/build.rs"
+
+[dependencies]
+anyhow = "1.0.95"
+arrayvec = "0.7.6"
+async-trait = "0.1"
+rand = "0.9.0"
+tokio = { version = "1", features = ["full"] }
+
+[build-dependencies]
+anyhow = "1.0.95"
+rand = { version = "0.9.0", features = ["small_rng"] }
+
+[dev-dependencies]
+criterion = "0.5.1"
+divan = "0.1.17"
+
+[[bench]]
+name = "perft"
+harness = false
+
+[[bench]]
+name = "alloc"
+harness = false
+
+[lints.clippy]
+large_const_arrays = "allow"
