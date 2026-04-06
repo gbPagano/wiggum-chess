@@ -1,3 +1,19 @@
+## 2026-04-05 - US-012
+- Implemented `chess-runner` CLI binary with `clap`-based argument parsing
+- Args: `--engine1`, `--engine2`, `--time`, `--inc`, `--games`, `--start-fen`, `--timeout`
+- Runs N games alternating colors each game (engine1=white on even games, black on odd)
+- `PrintObserver` implements `MatchObserver` to print each move (UCI notation + board debug) and game-over event
+- Tracks wins/losses/draws per engine; prints score summary at end
+- Added `tokio`, `clap` (derive feature), `anyhow` to `chess-runner/Cargo.toml`
+- Files changed: `chess-runner/src/main.rs`, `chess-runner/Cargo.toml`
+- All 117 existing tests still pass; no new tests needed (CLI is integration-level)
+- **Learnings for future iterations:**
+  - `chess-runner` binary crate needs its own tokio dependency (chesslib's tokio is not re-exported to the binary)
+  - `clap = { version = "4", features = ["derive"] }` enables the `#[derive(Parser)]` pattern
+  - `MatchObserver::on_move` receives the game AFTER the move is applied — `game.moves().len()` gives the move number
+  - Color alternation: `game_idx % 2 == 0` → engine1 white; flip for odd games
+---
+
 ## 2026-04-05 - US-011
 - Added `chesslib/src/match_runner.rs` with `Match` struct and `MatchObserver` trait
 - `MatchObserver` trait has `on_move(game, move, engine_name)` and `on_game_over(result)` callbacks
