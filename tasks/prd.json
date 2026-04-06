@@ -124,7 +124,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-006. Use clap for CLI flags. UCI parsing is synchronous stdin line reading."
     },
     {

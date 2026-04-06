@@ -1,3 +1,23 @@
+## 2026-04-06 - US-007
+- Implemented UCI protocol loop in `chess-engine/src/main.rs`
+- Responds to `uci` with `id name MaterialEngine v0.1`, `id author chess-ic`, `uciok`
+- Responds to `isready` with `readyok`
+- Handles `position startpos [moves ...]` and `position fen <fen> [moves ...]`
+- Handles `go wtime W btime B ...` — runs `search(board, depth)` and prints `bestmove <uci>`
+- Handles `ucinewgame` (resets state) and `quit` (exits)
+- Accepts `--depth <N>` CLI flag via `clap` (default 4)
+- Added `clap = { version = "4", features = ["derive"] }` to `chess-engine/Cargo.toml`
+- Verified against Stockfish: `chess-runner --engine1 chess-engine --engine2 engines/stockfish --games 1 --time 5000` completes without panics
+- Files changed: `chess-engine/src/main.rs`, `chess-engine/Cargo.toml`
+- All 117 workspace tests pass
+- **Learnings for future iterations:**
+  - UCI `position` command parsing: split by whitespace, find `moves` token index to separate FEN from move list
+  - Use `Board::default()` for `position startpos` (avoids redundant FEN string)
+  - `go` command can have many optional params (wtime, btime, winc, binc, movestogo) — just ignore them for depth-based engines
+  - When `go` is called with no current position, silently skip (guard with `if let Some(ref board) = current_board`)
+  - `bestmove 0000` is the UCI null move — use as fallback when no legal moves exist (terminal position)
+---
+
 ## 2026-04-06 - US-006
 - Implemented `MaterialEngine` struct in `chess-engine/src/engine.rs`
 - `MaterialEngine::new(depth)` and `Default` impl (depth 4)
