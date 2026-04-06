@@ -1,3 +1,20 @@
+## 2026-04-05 - US-010
+- Added `chesslib/src/uci_engine.rs` with `UciEngine` struct implementing `Engine` trait
+- `UciEngine::new(path, timeout_ms)` spawns engine subprocess, performs `uci`→`uciok` handshake, then `isready`→`readyok` synchronization
+- Collects engine name from `id name ...` lines during handshake
+- `set_position()` sends `position startpos moves ...` and caches current `Board` for move parsing in `go()`
+- `go()` sends `go wtime X btime Y winc Z binc W [movestogo N]`, reads lines until `bestmove`, parses with `ChessMove::from_uci()` using cached board
+- `quit()` sends `quit` and waits up to 5s for process exit
+- Tests use a shell script mock engine written to `/tmp/mock_uci_engine_chesslib.sh` via `OnceLock` to avoid "Text file busy" races between parallel tests
+- Files changed: `chesslib/src/uci_engine.rs` (new), `chesslib/src/lib.rs` (added pub mod)
+- All 112 tests pass
+- **Learnings for future iterations:**
+  - "Text file busy" (os error 26) occurs when multiple parallel tests write the same temp file; use `OnceLock` to write the mock script only once
+  - `UciEngine` must cache the `Board` from `set_position()` so `go()` can parse the bestmove UCI string via `ChessMove::from_uci()`
+  - Use `tokio::time::timeout` wrapping `Lines::next_line()` for all engine reads to enforce response timeouts
+  - `bestmove` lines may include `ponder <move>` — take only the first whitespace token after `bestmove `
+---
+
 ## Codebase Patterns
 - Cargo is not pre-installed in devcontainer — install with `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`, then `source "$HOME/.cargo/env"`
 - Workspace root `Cargo.toml` holds profiles; subcrate `Cargo.toml` files should NOT have `[profile.*]` sections
@@ -121,4 +138,31 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - `moving_side` must be captured BEFORE `self.board = self.board.make_move(m)` since `make_move()` switches side-to-move
   - `pub(crate)` on `record_move_with_elapsed` makes it accessible from sibling module tests (all in the same crate)
   - Flag tests with real Instant need a sleep; 5ms sleep with 1ms budget is reliable enough for CI
+---
+
+## 2026-04-05 - US-008
+- Added `to_uci()` and `from_uci()` methods to `ChessMove` in `chesslib/src/chess_move.rs`
+- `to_uci()`: formats as `{source}{dest}` or `{source}{dest}{promotion}` using existing `Display` impl on `Square` and `Piece`
+- `from_uci()`: parses source/dest squares via `Square::from_str`, maps promotion char to `Piece`, then finds matching legal move via `MoveGen::new_legal(board).find(...)`
+- Files changed: `chesslib/src/chess_move.rs`
+- Tests added: 8 tests — normal move, promotion (all 4 pieces), castling (kingside/queenside), en passant, invalid length, illegal move, roundtrip
+- All 102 tests pass (94 prior + 8 new)
+- **Learnings for future iterations:**
+  - `Square` already has `FromStr` and `Display` impls — reuse them for UCI parsing/formatting
+  - `Piece::fmt` already outputs lowercase letters (p/n/b/r/q/k) — perfect for UCI promotion format
+  - `MoveGen::new_legal(board).find(|m| ...)` is the canonical way to validate and resolve a move from partial info (source+dest+promotion)
+---
+
+## 2026-04-05 - US-009
+- Added `chesslib/src/engine.rs` with `TimeControl` struct and `Engine` trait
+- `TimeControl` fields: `wtime`, `btime`, `winc`, `binc`, `movestogo: Option<u32>` (all milliseconds)
+- `Engine` trait (using `async_trait`) with: `name()`, `new_game()`, `set_position(game: &Game)`, `go(time_control: &TimeControl) -> ChessMove`, `quit()`
+- Added `async-trait = "0.1"` and `tokio = { version = "1", features = ["full"] }` to `chesslib/Cargo.toml`
+- Updated `chesslib/src/lib.rs` to expose `pub mod engine`
+- Tests include: concrete impl, `Box<dyn Engine>` object safety, `TimeControl` field checks
+- All 106 tests pass (102 prior + 4 new)
+- **Learnings for future iterations:**
+  - Use `async_trait` crate for `async fn` in traits to get `Box<dyn Engine>` object safety (needed in US-011)
+  - The `Engine` trait must be `Send`-bound for use with tokio multi-thread; add `: Send` to the trait definition
+  - `tokio = { version = "1", features = ["full"] }` covers all needed features (rt, process, io-util, macros) for US-010 subprocess work
 ---
