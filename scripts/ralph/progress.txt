@@ -24,3 +24,30 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - `gen_files::magics::name` has `assert!(false)` — pre-existing intentional failure, not a new break
   - All 46 real tests pass; bench builds succeed
 ---
+
+## 2026-04-05 - US-002
+- Added `is_checkmate()` and `is_stalemate()` methods to `Board` in `chesslib/src/board.rs`
+- Both methods use `MoveGen::new_legal(self).len() == 0` to detect no legal moves, combined with `checkers_bitboard` to distinguish check from stalemate
+- Added import `use crate::movegen::MoveGen;` in board.rs (intra-crate cyclic module references are fine in Rust)
+- Files changed: `chesslib/src/board.rs`
+- Tests added: Scholar's mate, Fool's mate, queen stalemate, pawn stalemate, and negative cases
+- All 51 tests pass (46 original + 5 new)
+- **Learnings for future iterations:**
+  - Intra-crate cyclic module imports work fine in Rust (`board.rs` imports from `movegen.rs` which imports from `board.rs`)
+  - `checkers_bitboard` is precomputed in `update_attacked_bitboards()` and updated incrementally in `make_move()` — it correctly reflects whether the side to move is in check
+  - `MoveGen::new_legal(board).len()` is the canonical way to count legal moves; uses `ExactSizeIterator`
+---
+
+## 2026-04-05 - US-003
+- Added `is_insufficient_material()` method to `Board` in `chesslib/src/board.rs`
+- Checks for absence of pawns/rooks/queens, then enumerates minor piece counts per side
+- Covers: K vs K, K+N vs K, K+B vs K, K+B vs K+B (same color bishops)
+- Square color computed as `(idx % 8 + idx / 8) % 2` where idx is `square.to_index()`
+- Files changed: `chesslib/src/board.rs`
+- Tests added: 7 new tests covering all insufficient material cases and sufficient material cases
+- All 59 tests pass (51 prior + 8 new)
+- **Learnings for future iterations:**
+  - Square index layout: `to_index() = rank * 8 + file`; square color = `(file + rank) % 2`
+  - `BitBoard.0.count_ones()` to count set bits (pieces on a bitboard)
+  - Bishop same-color check: extract square index and compare `(idx%8 + idx/8) % 2` for both bishops
+---
