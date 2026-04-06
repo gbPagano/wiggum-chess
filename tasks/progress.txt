@@ -62,3 +62,18 @@
   - Trinomial SPRT requires draw_ratio estimated from actual results; when D=0, falls back to pure win/loss model
   - The `pub fn` on sprt_bounds/compute_llr allows unit testing within same file's #[cfg(test)] module — no separate test binary needed
 ---
+
+## 2026-04-06 - US-006
+- Added `chess-runner version-report` subcommand with args: --version, --engine-name, --matches-csv, --sprt-csv (optional), --output
+- Reads matches CSV (engine1_name/engine2_name/games_played/wins/draws/losses format), filters by case-insensitive substring match on engine name
+- Aggregates per-opponent stats from target engine's perspective (handles both engine1 and engine2 positions)
+- Generates markdown with H1 header, generation date, summary table (Opponent/Games/Wins/Draws/Losses/Win%), overall stats, best/worst matchup
+- If --sprt-csv provided, adds SPRT Results section (Opponent/Games/W/D/L/Result table)
+- Ends with empty ## Notes section; creates parent directories if output path doesn't exist
+- Handles missing/empty CSVs gracefully with inline markdown notes
+- Files changed: chess-runner/src/main.rs
+- **Learnings for future iterations:**
+  - Rust allows struct definitions inside function bodies (used for SprtRow local struct)
+  - When both engine1 and engine2 could match the filter, handle both cases and flip wins/losses perspective accordingly
+  - Use `opponent_map.entry(opponent.clone()).or_insert(...)` pattern for aggregating per-opponent stats
+---

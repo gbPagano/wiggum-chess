@@ -110,7 +110,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-015. Depends on US-005 for SPRT CSV format. The --engine-name matching should be case-insensitive substring match to handle name variations."
     },
     {
