@@ -1,3 +1,18 @@
+## 2026-04-05 - US-011
+- Added `chesslib/src/match_runner.rs` with `Match` struct and `MatchObserver` trait
+- `MatchObserver` trait has `on_move(game, move, engine_name)` and `on_game_over(result)` callbacks
+- `Match::new(white, black)` builder with `.with_game()`, `.with_clock()`, `.with_observer()` chainable methods
+- `Match::run()` calls `new_game()` on both engines, then loops: checks terminal conditions, auto-applies threefold repetition draw, builds `TimeControl` from clock (or 60s default), calls `set_position` + `go` on the active engine, applies move, notifies observer
+- Engine error (illegal move returned) terminates the loop gracefully
+- All 5 new tests pass; 117 total (112 prior + 5 new)
+- Files changed: `chesslib/src/match_runner.rs` (new), `chesslib/src/lib.rs`
+- **Learnings for future iterations:**
+  - Test `Engine` impls that play a fixed move sequence must restore that sequence in `new_game()` — `Match::run()` calls `new_game()` before the loop, so a naive `VecDeque::new()` in `new_game()` empties the queue
+  - `SequenceEngine` pattern: store `initial_moves: Vec<ChessMove>` and reset `moves` from it in `new_game()`
+  - `is_fifty_move_rule()` is already auto-applied by `Game::detect_result()`, so the Match check is technically redundant but harmless — included for spec compliance
+  - The borrow checker allows `if let Some(ref mut obs) = self.observer { obs.on_move(&self.game, ...) }` because `observer` and `game` are distinct fields
+---
+
 ## 2026-04-05 - US-010
 - Added `chesslib/src/uci_engine.rs` with `UciEngine` struct implementing `Engine` trait
 - `UciEngine::new(path, timeout_ms)` spawns engine subprocess, performs `uci`→`uciok` handshake, then `isready`→`readyok` synchronization
