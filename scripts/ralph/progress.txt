@@ -71,3 +71,19 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - `set_en_passant()` only sets `en_passant` if an adjacent enemy pawn can actually capture — check `result.en_passant` after calling it to know if the key should be XOR'd in
   - Castling rights index convention: 0=WK, 1=WQ, 2=BK, 3=BQ (matching `CastleRights` field order)
 ---
+
+## 2026-04-05 - US-005
+- Added `halfmove_clock: u32` field to `Board` struct in `chesslib/src/board.rs`
+- Initialized to 0 in `Board::new()`; parsed from FEN token[4] in `from_str()` (optional, defaults to 0)
+- `make_move()` resets to 0 on pawn moves or captures, increments by 1 otherwise
+- En passant captures correctly reset clock because `moved_piece == Piece::Pawn` always triggers reset
+- Added `halfmove_clock()` public getter method
+- Fixed `Display` impl to output real halfmove_clock value instead of hardcoded `0`
+- Files changed: `chesslib/src/board.rs`
+- Tests added: 5 new tests — FEN init, default zero, increment on knight moves, reset on pawn, reset on capture
+- All 69 tests pass (64 prior + 5 new)
+- **Learnings for future iterations:**
+  - En passant captures don't need special halfmove handling: the pawn check (`moved_piece == Piece::Pawn`) catches all pawn moves including en passant
+  - `self.get_piece(m.dest)` returns `None` for en passant captures (the captured pawn is not on the dest square); this is why the en passant capture logic already uses a separate branch in make_move()
+  - Display was outputting `" 0 1"` hardcoded — fixed to `" {} 1"` with actual halfmove_clock
+---
