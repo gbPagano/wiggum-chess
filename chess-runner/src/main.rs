@@ -20,6 +20,8 @@ enum Commands {
     Match(MatchArgs),
     /// Show a report of match history from a CSV file
     Report(ReportArgs),
+    /// Run a SPRT-based match to determine if engine1 is an improvement over engine2
+    Sprt(SprtArgs),
 }
 
 #[derive(Parser)]
@@ -66,6 +68,49 @@ struct ReportArgs {
     /// Path to CSV file with match history
     #[arg(long)]
     input: String,
+}
+
+#[derive(Parser)]
+struct SprtArgs {
+    /// Path to the first engine executable (the one being tested)
+    #[arg(long)]
+    engine1: String,
+
+    /// Path to the second engine executable (the baseline)
+    #[arg(long)]
+    engine2: String,
+
+    /// Time per player in milliseconds
+    #[arg(long, default_value = "10000")]
+    time: u64,
+
+    /// Increment per move in milliseconds
+    #[arg(long, default_value = "100")]
+    inc: u64,
+
+    /// H0 Elo difference (null hypothesis — no improvement)
+    #[arg(long, default_value = "0.0")]
+    elo0: f64,
+
+    /// H1 Elo difference (alternative hypothesis — target improvement)
+    #[arg(long, default_value = "5.0")]
+    elo1: f64,
+
+    /// Type I error bound (false positive rate)
+    #[arg(long, default_value = "0.05")]
+    alpha: f64,
+
+    /// Type II error bound (false negative rate)
+    #[arg(long, default_value = "0.05")]
+    beta: f64,
+
+    /// Engine response timeout in milliseconds
+    #[arg(long, default_value = "5000")]
+    timeout: u64,
+
+    /// Optional path to CSV file for appending SPRT results
+    #[arg(long)]
+    output: Option<String>,
 }
 
 /// Observer that prints moves and game-over events to stdout.
@@ -119,6 +164,109 @@ fn format_draw_reason(reason: &DrawReason) -> &'static str {
         DrawReason::FiftyMoveRule => "50-move rule",
         DrawReason::SeventyFiveMoveRule => "75-move rule",
     }
+}
+
+/// Compute expected score from Elo difference using the logistic model.
+fn elo_to_score(elo_diff: f64) -> f64 {
+    1.0 / (1.0 + 10.0_f64.powf(-elo_diff / 400.0))
+}
+
+/// Compute LLR bounds from alpha and beta.
+pub fn sprt_bounds(alpha: f64, beta: f64) -> (f64, f64) {
+    let lower = (beta / (1.0 - alpha)).ln();
+    let upper = ((1.0 - beta) / alpha).ln();
+    (lower, upper)
+}
+
+/// Compute SPRT LLR using the trinomial (W/D/L) model.
+/// draw_ratio is estimated from actual results: D / total.
+pub fn compute_llr(wins: usize, draws: usize, losses: usize, elo0: f64, elo1: f64) -> f64 {
+    let total = wins + draws + losses;
+    if total == 0 {
+        return 0.0;
+    }
+
+    let draw_ratio = draws as f64 / total as f64;
+    const EPS: f64 = 1e-9;
+
+    let s0 = elo_to_score(elo0);
+    let s1 = elo_to_score(elo1);
+
+    // Trinomial probabilities under each hypothesis.
+    let p0_w = (s0 - draw_ratio / 2.0).max(EPS);
+    let p0_d = draw_ratio.max(EPS);
+    let p0_l = (1.0 - s0 - draw_ratio / 2.0).max(EPS);
+
+    let p1_w = (s1 - draw_ratio / 2.0).max(EPS);
+    let p1_d = draw_ratio.max(EPS);
+    let p1_l = (1.0 - s1 - draw_ratio / 2.0).max(EPS);
+
+    let w = wins as f64;
+    let d = draws as f64;
+    let l = losses as f64;
+
+    w * (p1_w / p0_w).ln() + d * (p1_d / p0_d).ln() + l * (p1_l / p0_l).ln()
+}
+
+/// Write a SPRT result row to a CSV file, creating it with headers if needed.
+fn write_sprt_csv(
+    path: &str,
+    engine1_name: &str,
+    engine2_name: &str,
+    games_played: usize,
+    wins: usize,
+    draws: usize,
+    losses: usize,
+    elo0: f64,
+    elo1: f64,
+    sprt_result: &str,
+) -> Result<()> {
+    let file_exists = std::path::Path::new(path).exists()
+        && std::fs::metadata(path)
+            .map(|m| m.len() > 0)
+            .unwrap_or(false);
+
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(file);
+
+    if !file_exists {
+        wtr.write_record([
+            "timestamp",
+            "engine1_name",
+            "engine2_name",
+            "games_played",
+            "wins",
+            "draws",
+            "losses",
+            "elo0",
+            "elo1",
+            "sprt_result",
+        ])?;
+    }
+
+    let timestamp = chrono::Utc::now().to_rfc3339();
+
+    wtr.write_record([
+        timestamp.as_str(),
+        engine1_name,
+        engine2_name,
+        &games_played.to_string(),
+        &wins.to_string(),
+        &draws.to_string(),
+        &losses.to_string(),
+        &format!("{:.2}", elo0),
+        &format!("{:.2}", elo1),
+        sprt_result,
+    ])?;
+
+    wtr.flush()?;
+    Ok(())
 }
 
 /// Write a match result row to a CSV file, creating it with headers if needed.
@@ -363,6 +511,9 @@ async fn main() -> Result<()> {
         Commands::Match(args) => {
             run_match(args).await?;
         }
+        Commands::Sprt(args) => {
+            run_sprt(args).await?;
+        }
     }
 
     Ok(())
@@ -516,4 +667,179 @@ async fn run_match(args: MatchArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+async fn run_sprt(args: SprtArgs) -> Result<()> {
+    let (lower_bound, upper_bound) = sprt_bounds(args.alpha, args.beta);
+
+    println!("Engine 1: {}", args.engine1);
+    println!("Engine 2: {}", args.engine2);
+    println!(
+        "SPRT: elo0={}, elo1={}, alpha={}, beta={}",
+        args.elo0, args.elo1, args.alpha, args.beta
+    );
+    println!(
+        "LLR bounds: [{:.3}, {:.3}]",
+        lower_bound, upper_bound
+    );
+    println!();
+
+    // Query engine names via UCI handshake before the match loop.
+    let engine1_name = {
+        let mut e = UciEngine::new(&args.engine1, args.timeout)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to query engine1 name: {}", e))?;
+        let n = e.name().await;
+        e.quit().await;
+        n
+    };
+    let engine2_name = {
+        let mut e = UciEngine::new(&args.engine2, args.timeout)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to query engine2 name: {}", e))?;
+        let n = e.name().await;
+        e.quit().await;
+        n
+    };
+
+    println!("Engine 1 UCI name: {}", engine1_name);
+    println!("Engine 2 UCI name: {}", engine2_name);
+    println!();
+
+    let mut wins = 0usize;
+    let mut draws = 0usize;
+    let mut losses = 0usize;
+    let mut game_number = 0usize;
+    let mut sprt_result = "inconclusive";
+
+    loop {
+        game_number += 1;
+        let game_idx = game_number - 1;
+        let engine1_is_white = game_idx % 2 == 0;
+
+        let (white_path, black_path) = if engine1_is_white {
+            (args.engine1.as_str(), args.engine2.as_str())
+        } else {
+            (args.engine2.as_str(), args.engine1.as_str())
+        };
+
+        let white_engine = Box::new(
+            UciEngine::new(white_path, args.timeout)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to start white engine: {}", e))?,
+        );
+        let black_engine = Box::new(
+            UciEngine::new(black_path, args.timeout)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to start black engine: {}", e))?,
+        );
+
+        let clock = Clock::new(args.time, args.inc);
+        let observer = Box::new(PrintObserver {
+            game_number,
+            verbose: false,
+        });
+
+        let mut chess_match = Match::new(white_engine, black_engine)
+            .with_clock(clock)
+            .with_observer(observer);
+
+        let result = chess_match.run().await;
+
+        match &result {
+            GameResult::WhiteWins => {
+                if engine1_is_white {
+                    wins += 1;
+                } else {
+                    losses += 1;
+                }
+            }
+            GameResult::BlackWins => {
+                if engine1_is_white {
+                    losses += 1;
+                } else {
+                    wins += 1;
+                }
+            }
+            GameResult::Draw(_) => draws += 1,
+            GameResult::Ongoing => {
+                eprintln!(
+                    "Warning: game {} ended in unexpected Ongoing state",
+                    game_number
+                );
+                draws += 1;
+            }
+        }
+
+        let llr = compute_llr(wins, draws, losses, args.elo0, args.elo1);
+        println!(
+            "[Game {}] LLR: {:.2} / [{:.3}, {:.3}] | W:{} D:{} L:{}",
+            game_number, llr, lower_bound, upper_bound, wins, draws, losses
+        );
+
+        if llr >= upper_bound {
+            sprt_result = "H1 accepted";
+            break;
+        } else if llr <= lower_bound {
+            sprt_result = "H0 accepted";
+            break;
+        }
+    }
+
+    println!();
+    if sprt_result == "H1 accepted" {
+        println!("SPRT Result: H1 accepted (improvement confirmed)");
+    } else {
+        println!("SPRT Result: H0 accepted (no improvement detected)");
+    }
+
+    if let Some(ref output_path) = args.output {
+        write_sprt_csv(
+            output_path,
+            &engine1_name,
+            &engine2_name,
+            game_number,
+            wins,
+            draws,
+            losses,
+            args.elo0,
+            args.elo1,
+            sprt_result,
+        )?;
+        println!("SPRT result appended to: {}", output_path);
+    }
+
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sprt_bounds_alpha05_beta05() {
+        let (lower, upper) = sprt_bounds(0.05, 0.05);
+        // Expected: ln(0.05/0.95) ≈ -2.944, ln(0.95/0.05) ≈ 2.944
+        assert!((lower - (-2.944)).abs() < 0.001, "lower={}", lower);
+        assert!((upper - 2.944).abs() < 0.001, "upper={}", upper);
+    }
+
+    #[test]
+    fn test_compute_llr_known_values() {
+        // W=60, D=20, L=20, elo0=0, elo1=5
+        // draw_ratio=0.2, s0=0.5, s1≈0.50718
+        // p0_w=0.4, p0_d=0.2, p0_l=0.4
+        // p1_w≈0.40718, p1_d=0.2, p1_l≈0.39282
+        // LLR should be positive since engine1 wins more than H0 predicts
+        let llr = compute_llr(60, 20, 20, 0.0, 5.0);
+        assert!(llr > 0.0, "LLR should be positive, got {}", llr);
+        assert!(llr < 10.0, "LLR unexpectedly large: {}", llr);
+    }
+
+    #[test]
+    fn test_compute_llr_equal_score_near_zero() {
+        // W=50, D=0, L=50 with elo0=0 — actual score matches H0
+        let llr = compute_llr(50, 0, 50, 0.0, 5.0);
+        assert!(llr.abs() < 1.0, "LLR should be near 0, got {}", llr);
+    }
 }
