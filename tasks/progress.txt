@@ -77,3 +77,18 @@
   - When both engine1 and engine2 could match the filter, handle both cases and flip wins/losses perspective accordingly
   - Use `opponent_map.entry(opponent.clone()).or_insert(...)` pattern for aggregating per-opponent stats
 ---
+
+## 2026-04-06 - US-007
+- Created `scripts/benchmark-version.sh` (chmod +x, bash -n syntax check passes)
+- Script accepts: --version, --engine, --prev-engine (optional), --stockfish, --games (default 100), --output-dir (default chess-engine/versions/<version>)
+- Workaround for chess-runner setoption limitation: creates temporary FIFO-based wrapper scripts per Stockfish skill level that inject setoption commands after intercepting the 'uci' command
+- Skill level wrappers: stockfish-1500.sh (UCI_LimitStrength=true, UCI_Elo=1500), stockfish-2000.sh, stockfish-2500.sh, stockfish-max.sh (UCI_LimitStrength=false)
+- If --prev-engine provided, runs `chess-runner sprt` first and saves to <output-dir>/sprt_results.csv
+- All match results appended to <output-dir>/results.csv via --output flag
+- Temporary wrappers cleaned up via trap on EXIT
+- Files changed: scripts/benchmark-version.sh
+- **Learnings for future iterations:**
+  - chess-runner match has no --setoption flag; FIFO-based wrapper is the cleanest workaround without modifying chess-runner
+  - bash FIFO pattern: `mkfifo $FIFO_IN`, open with `exec 3>$FIFO_IN`, start engine reading from FIFO, write setoption via >&3 after intercepting 'uci'
+  - cargo not available in this environment — shell script quality check is `bash -n` only
+---

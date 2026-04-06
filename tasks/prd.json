@@ -131,7 +131,7 @@
         "Typecheck passes (N/A for shell — verify script has no syntax errors with bash -n scripts/benchmark-version.sh)"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-014. Depends on US-004 (set_option) and US-005 (sprt subcommand). IMPORTANT: chess-runner match does not support passing setoption to engines. The benchmark script should use a thin wrapper script per Stockfish level (e.g. a wrapper that sends setoption before UCI handshake) OR document this as a limitation. The simplest approach: create wrapper shell scripts like scripts/stockfish-1500.sh that exec stockfish but intercept uci/setoption."
     },
     {
