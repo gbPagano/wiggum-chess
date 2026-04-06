@@ -1,3 +1,17 @@
+## 2026-04-06 - US-005
+- Implemented `search(board: &Board, depth: u8) -> (Option<ChessMove>, i32)` in `chess-engine/src/search.rs`
+- Negamax formulation: recursively negates child scores; at depth 0 falls through to `evaluate()`
+- Terminal positions (no legal moves) return evaluate() directly (handles checkmate/stalemate correctly)
+- Files changed: `chess-engine/src/search.rs`
+- Tests: returns valid legal move from start, finds mate-in-1 (Qa1# in king+queen vs king), avoids hanging queen (depth-2 search)
+- All 8 chess-engine tests pass; 125 total workspace tests pass
+- **Learnings for future iterations:**
+  - `ChessMove` fields are public: use `mv.dest` not `mv.dest()` (it's a struct field, not a method)
+  - `pub const` not `const` needed to avoid dead_code warning when constant is only used in tests
+  - Negamax: after making a move, `evaluate()` returns score from the child's side-to-move; negate it to get score from parent's perspective
+  - Mate-in-1 test position: "k7/2K5/8/8/8/8/8/7Q w - - 0 1" — white Ka8, Kc7, Qh1; Qa1# is forced checkmate
+---
+
 ## 2026-04-06 - US-004
 - Implemented `evaluate(board: &Board) -> i32` in `chess-engine/src/eval.rs`
 - Returns centipawn score from side-to-move's perspective
