@@ -31,7 +31,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-001 for Stockfish binary. This is a validation story — fix any bugs found in chess-runner or chesslib."
     },
     {

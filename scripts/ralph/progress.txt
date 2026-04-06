@@ -1,3 +1,17 @@
+## 2026-04-05 - US-002
+- Validated chess-runner match series with Stockfish vs Stockfish
+- Ran `chess-runner --engine1 engines/stockfish --engine2 engines/stockfish --games 2 --time 5000`
+- Both games completed without errors, panics, or protocol issues
+- Colors alternate correctly (game 1: engine1=white; game 2: engine1=black)
+- Final summary correctly tallied wins (0/0) and draws (2) — both games ended in draws (threefold repetition and stalemate)
+- No code changes needed: chess-runner and chesslib were already working correctly
+- All 117 tests still pass
+- **Learnings for future iterations:**
+  - US-002 was a pure validation story — no code changes required, just confirming the existing implementation works
+  - Stockfish 17 vs Stockfish on 5s time control reliably produces draws (repetition/stalemate/50-move)
+  - The match runner correctly handles color alternation, game results, and score tallying
+---
+
 ## 2026-04-05 - US-012
 - Implemented `chess-runner` CLI binary with `clap`-based argument parsing
 - Args: `--engine1`, `--engine2`, `--time`, `--inc`, `--games`, `--start-fen`, `--timeout`
