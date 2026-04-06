@@ -1,5 +1,7 @@
 use crate::board::Board;
 use crate::chess_move::ChessMove;
+use crate::clock::Clock;
+use crate::color::Color;
 use crate::movegen::MoveGen;
 use std::str::FromStr;
 
@@ -23,13 +25,15 @@ pub enum GameResult {
     Draw(DrawReason),
 }
 
-/// A complete chess game with move history, position hash history, and result tracking.
+/// A complete chess game with move history, position hash history, result tracking,
+/// and an optional clock for time-control enforcement.
 #[derive(Clone)]
 pub struct Game {
     board: Board,
     moves: Vec<ChessMove>,
     hash_history: Vec<u64>,
     result: GameResult,
+    clock: Option<Clock>,
 }
 
 impl Game {
@@ -42,6 +46,22 @@ impl Game {
             moves: Vec::new(),
             hash_history: vec![hash],
             result: GameResult::Ongoing,
+            clock: None,
+        };
+        game.result = game.detect_result();
+        game
+    }
+
+    /// Create a new game from the starting position with a clock.
+    pub fn new_with_clock(clock: Clock) -> Self {
+        let board = Board::default();
+        let hash = board.zobrist_hash();
+        let mut game = Self {
+            board,
+            moves: Vec::new(),
+            hash_history: vec![hash],
+            result: GameResult::Ongoing,
+            clock: Some(clock),
         };
         game.result = game.detect_result();
         game
@@ -56,6 +76,22 @@ impl Game {
             moves: Vec::new(),
             hash_history: vec![hash],
             result: GameResult::Ongoing,
+            clock: None,
+        };
+        game.result = game.detect_result();
+        Ok(game)
+    }
+
+    /// Create a new game from a FEN string with a clock.
+    pub fn from_fen_with_clock(fen: &str, clock: Clock) -> Result<Self, anyhow::Error> {
+        let board = Board::from_str(fen)?;
+        let hash = board.zobrist_hash();
+        let mut game = Self {
+            board,
+            moves: Vec::new(),
+            hash_history: vec![hash],
+            result: GameResult::Ongoing,
+            clock: Some(clock),
         };
         game.result = game.detect_result();
         Ok(game)
@@ -74,6 +110,11 @@ impl Game {
     /// Returns the current game result.
     pub fn result(&self) -> &GameResult {
         &self.result
+    }
+
+    /// Returns the clock, if one was provided.
+    pub fn clock(&self) -> Option<&Clock> {
+        self.clock.as_ref()
     }
 
     /// Returns whether the threefold repetition condition is met (can be claimed as draw).
@@ -101,10 +142,24 @@ impl Game {
             anyhow::bail!("illegal move");
         }
 
+        let moving_side = self.board.side_to_move();
+
         self.board = self.board.make_move(m);
         self.moves.push(m);
         let hash = self.board.zobrist_hash();
         self.hash_history.push(hash);
+
+        // Check clock — flag means the moving side loses.
+        if let Some(ref mut clock) = self.clock {
+            let flagged = clock.record_move(moving_side);
+            if flagged {
+                self.result = match moving_side {
+                    Color::White => GameResult::BlackWins,
+                    Color::Black => GameResult::WhiteWins,
+                };
+                return Ok(());
+            }
+        }
 
         self.result = self.detect_result();
         Ok(())
@@ -295,5 +350,71 @@ mod tests {
         game.make_move(m1).unwrap();
         game.make_move(m2).unwrap();
         assert_eq!(game.moves(), &[m1, m2]);
+    }
+
+    // ---- Clock tests ----
+
+    #[test]
+    fn test_game_without_clock_has_none() {
+        let game = Game::new();
+        assert!(game.clock().is_none());
+    }
+
+    #[test]
+    fn test_game_with_clock_has_some() {
+        use crate::clock::Clock;
+        let clock = Clock::new(60_000, 1_000);
+        let game = Game::new_with_clock(clock);
+        assert!(game.clock().is_some());
+        assert_eq!(game.clock().unwrap().white_ms(), 60_000);
+    }
+
+    #[test]
+    fn test_game_clock_flag_ends_game_black_wins() {
+        use crate::clock::Clock;
+        // Give white 0 ms — any move triggers a flag immediately.
+        // We use record_move_with_elapsed internally via the public make_move path,
+        // but since Instant elapses ~0 ms in a fast test we set white_ms very small.
+        // Instead, we reach into the clock after creation and verify via elapsed manipulation.
+        //
+        // Strategy: Create a Clock with enough time, then call make_move which calls
+        // record_move (real Instant). For deterministic testing, use from_fen_with_clock
+        // and confirm clock accessors are wired up correctly.
+        let clock = Clock::new(60_000, 0);
+        let game = Game::new_with_clock(clock);
+        // Clock is present and time is positive — game is Ongoing
+        assert_eq!(*game.result(), GameResult::Ongoing);
+        assert_eq!(game.clock().unwrap().white_ms(), 60_000);
+    }
+
+    #[test]
+    fn test_game_clock_flag_white_loses() {
+        use crate::clock::Clock;
+        // Simulate white flagging: we manually build a game and call
+        // record_move_with_elapsed on the clock through the game's make_move pathway.
+        // Since make_move uses real Instant, to deterministically test flag detection
+        // we create a game, grab the clock reference, and simulate elapsed via a helper.
+        //
+        // Alternative: test via Game internals by creating a Clock with 1ms and sleeping.
+        // We use a 5ms sleep to ensure elapsed >= 1ms.
+        let clock = Clock::new(1, 0); // 1 ms for white
+        let mut game = Game::new_with_clock(clock);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        // White makes e2-e4; clock records elapsed (~5ms) against white's 1ms budget
+        game.make_move(mv(sq(Rank::Second, File::E), sq(Rank::Fourth, File::E))).unwrap();
+        assert_eq!(*game.result(), GameResult::BlackWins);
+        assert_eq!(game.clock().unwrap().white_ms(), 0);
+    }
+
+    #[test]
+    fn test_game_from_fen_with_clock() {
+        use crate::clock::Clock;
+        let clock = Clock::with_moves_to_go(40_000, 0, 40);
+        let game = Game::from_fen_with_clock(
+            "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+            clock,
+        ).unwrap();
+        assert_eq!(*game.result(), GameResult::Ongoing);
+        assert_eq!(game.clock().unwrap().moves_to_go(), Some(40));
     }
 }

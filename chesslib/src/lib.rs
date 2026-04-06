@@ -1,4 +1,5 @@
 pub mod bitboard;
+pub mod clock;
 pub mod game;
 pub mod board;
 pub mod castle_rights;
