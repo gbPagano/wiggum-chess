@@ -121,6 +121,15 @@ impl UciEngine {
             }
         }
     }
+
+    /// Send a UCI `setoption` command to configure the engine.
+    ///
+    /// Sends `setoption name <name> value <value>` and flushes stdin.
+    /// Per the UCI spec, `setoption` has no reply from the engine.
+    pub async fn set_option(&mut self, name: &str, value: &str) -> Result<()> {
+        let cmd = format!("setoption name {} value {}", name, value);
+        self.send_line(&cmd).await
+    }
 }
 
 #[async_trait]
@@ -274,5 +283,15 @@ done
     async fn test_uci_engine_spawn_nonexistent_fails() {
         let result = UciEngine::new("/nonexistent/engine/binary", 1000).await;
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_set_option_sends_without_error() {
+        // The mock engine silently ignores unknown commands (unmatched case branches).
+        let path = mock_engine_path();
+        let mut engine = UciEngine::new(path, 2000).await.unwrap();
+        // setoption has no reply per UCI spec — just verify it doesn't error.
+        engine.set_option("Skill Level", "10").await.unwrap();
+        engine.quit().await;
     }
 }
