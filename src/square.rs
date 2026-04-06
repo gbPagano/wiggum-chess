@@ -11,28 +11,28 @@ pub struct Square(u8);
 
 impl Square {
     #[inline(always)]
-    pub fn new(rank: Rank, file: File) -> Self {
+    pub const fn new(rank: Rank, file: File) -> Self {
         Square(((rank.to_index() << 3) ^ file.to_index()) as u8)
     }
 
     /// Creates a `Square` from an index (0-63), ensuring it remains within bounds.
     #[inline(always)]
-    pub fn from_index(idx: u8) -> Self {
+    pub const fn from_index(idx: u8) -> Self {
         Square(idx & 63)
     }
 
     #[inline(always)]
-    pub fn to_index(self) -> usize {
+    pub const fn to_index(self) -> usize {
         self.0 as usize
     }
 
     #[inline(always)]
-    pub fn get_rank(&self) -> Rank {
+    pub const fn get_rank(&self) -> Rank {
         Rank::from_index((self.0 >> 3) as usize)
     }
 
     #[inline(always)]
-    pub fn get_file(&self) -> File {
+    pub const fn get_file(&self) -> File {
         File::from_index((self.0 & 7) as usize)
     }
 
@@ -104,6 +104,7 @@ impl Square {
         (0..64).map(Square::from_index)
     }
 }
+
 
 impl Default for Square {
     /// Returns the default square (A1).
