@@ -1,3 +1,16 @@
+## 2026-04-06 - US-003
+- Created `chess-engine/` crate skeleton in the workspace
+- `chess-engine/Cargo.toml` depends on `chesslib = { path = "../chesslib" }`
+- `src/lib.rs` exposes `pub mod eval; pub mod search; pub mod engine;` with empty module files
+- `src/main.rs` prints "MaterialEngine v0.1"
+- Added `chess-engine` to workspace members in root `Cargo.toml`
+- `cargo build -p chess-engine` compiles cleanly; all 117 existing tests pass
+- Files changed: `chess-engine/Cargo.toml`, `chess-engine/src/lib.rs`, `chess-engine/src/main.rs`, `chess-engine/src/eval.rs`, `chess-engine/src/search.rs`, `chess-engine/src/engine.rs`, `Cargo.toml`
+- **Learnings for future iterations:**
+  - Empty module files (zero bytes) are valid in Rust — Cargo accepts them as long as `lib.rs` declares them
+  - The `chess-engine` binary crate has both `src/lib.rs` and `src/main.rs` — Cargo auto-detects both
+---
+
 ## 2026-04-05 - US-002
 - Validated chess-runner match series with Stockfish vs Stockfish
 - Ran `chess-runner --engine1 engines/stockfish --engine2 engines/stockfish --games 2 --time 5000`
