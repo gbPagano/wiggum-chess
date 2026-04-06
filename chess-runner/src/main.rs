@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use chesslib::chess_move::ChessMove;
 use chesslib::clock::Clock;
 use chesslib::engine::Engine;
@@ -9,7 +9,21 @@ use chesslib::uci_engine::UciEngine;
 
 #[derive(Parser)]
 #[command(name = "chess-runner", about = "Run engine vs engine chess matches")]
-struct Args {
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Run an engine vs engine match
+    Match(MatchArgs),
+    /// Show a report of match history from a CSV file
+    Report(ReportArgs),
+}
+
+#[derive(Parser)]
+struct MatchArgs {
     /// Path to the first engine executable
     #[arg(long)]
     engine1: String,
@@ -41,6 +55,13 @@ struct Args {
     /// Optional path to CSV file for appending match results
     #[arg(long)]
     output: Option<String>,
+}
+
+#[derive(Parser)]
+struct ReportArgs {
+    /// Path to CSV file with match history
+    #[arg(long)]
+    input: String,
 }
 
 /// Observer that prints moves and game-over events to stdout.
@@ -143,10 +164,165 @@ fn write_csv(
     Ok(())
 }
 
+/// A parsed row from the match history CSV.
+#[derive(Debug)]
+struct MatchRow {
+    timestamp: String,
+    engine1_name: String,
+    engine2_name: String,
+    games_played: usize,
+    engine1_wins: usize,
+    engine2_wins: usize,
+    draws: usize,
+    engine1_win_rate: f64,
+}
+
+fn run_report(args: &ReportArgs) -> Result<()> {
+    let path = &args.input;
+
+    if !std::path::Path::new(path).exists() {
+        println!("No match history found at {}", path);
+        return Ok(());
+    }
+
+    let mut rdr = csv::Reader::from_path(path)?;
+    let mut rows: Vec<MatchRow> = Vec::new();
+
+    for result in rdr.records() {
+        let record = result?;
+        rows.push(MatchRow {
+            timestamp: record[0].to_string(),
+            engine1_name: record[1].to_string(),
+            engine2_name: record[2].to_string(),
+            games_played: record[3].parse().unwrap_or(0),
+            engine1_wins: record[4].parse().unwrap_or(0),
+            engine2_wins: record[5].parse().unwrap_or(0),
+            draws: record[6].parse().unwrap_or(0),
+            engine1_win_rate: record[7].parse().unwrap_or(0.0),
+        });
+    }
+
+    if rows.is_empty() {
+        println!("No match results recorded yet");
+        return Ok(());
+    }
+
+    // Compute trend arrows: compare each row's win_rate with the previous row
+    // for the same (engine1, engine2) pair.
+    let mut last_win_rate: std::collections::HashMap<(String, String), f64> =
+        std::collections::HashMap::new();
+    let mut trends: Vec<&'static str> = Vec::with_capacity(rows.len());
+
+    for row in &rows {
+        let key = (row.engine1_name.clone(), row.engine2_name.clone());
+        let trend = if let Some(&prev) = last_win_rate.get(&key) {
+            let diff = row.engine1_win_rate - prev;
+            if diff > 0.001 {
+                "↑"
+            } else if diff < -0.001 {
+                "↓"
+            } else {
+                "→"
+            }
+        } else {
+            "-"
+        };
+        trends.push(trend);
+        last_win_rate.insert(key, row.engine1_win_rate);
+    }
+
+    // Determine column widths.
+    let date_w = rows.iter().map(|r| {
+        // Use only the date portion of the ISO timestamp for display
+        r.timestamp.get(..10).unwrap_or(&r.timestamp).len()
+    }).max().unwrap_or(10).max(4); // "Date"
+    let e1_w = rows.iter().map(|r| r.engine1_name.len()).max().unwrap_or(6).max(7); // "Engine1"
+    let e2_w = rows.iter().map(|r| r.engine2_name.len()).max().unwrap_or(6).max(7); // "Engine2"
+
+    // Print header
+    println!(
+        "{:<date_w$}  {:<e1_w$}  {:<e2_w$}  {:>5}  {:>4}  {:>6}  {:>5}  {:>6}  {}",
+        "Date", "Engine1", "Engine2", "Games", "Wins", "Losses", "Draws", "Win%", "Trend",
+        date_w = date_w,
+        e1_w = e1_w,
+        e2_w = e2_w,
+    );
+    println!("{}", "-".repeat(date_w + e1_w + e2_w + 45));
+
+    for (row, trend) in rows.iter().zip(trends.iter()) {
+        let date = row.timestamp.get(..10).unwrap_or(&row.timestamp);
+        println!(
+            "{:<date_w$}  {:<e1_w$}  {:<e2_w$}  {:>5}  {:>4}  {:>6}  {:>5}  {:>5.1}%  {}",
+            date,
+            row.engine1_name,
+            row.engine2_name,
+            row.games_played,
+            row.engine1_wins,
+            row.engine2_wins,
+            row.draws,
+            row.engine1_win_rate * 100.0,
+            trend,
+            date_w = date_w,
+            e1_w = e1_w,
+            e2_w = e2_w,
+        );
+    }
+
+    println!();
+
+    // Overall summary
+    let total_games: usize = rows.iter().map(|r| r.games_played).sum();
+    let total_wins: usize = rows.iter().map(|r| r.engine1_wins).sum();
+    let overall_win_rate = if total_games > 0 {
+        total_wins as f64 / total_games as f64
+    } else {
+        0.0
+    };
+
+    // Best and worst matchup by win_rate
+    let best = rows.iter().max_by(|a, b| {
+        a.engine1_win_rate.partial_cmp(&b.engine1_win_rate).unwrap()
+    });
+    let worst = rows.iter().min_by(|a, b| {
+        a.engine1_win_rate.partial_cmp(&b.engine1_win_rate).unwrap()
+    });
+
+    println!("=== Summary ===");
+    println!("Total games played: {}", total_games);
+    println!("Overall win rate (engine1): {:.1}%", overall_win_rate * 100.0);
+    if let Some(b) = best {
+        println!(
+            "Best matchup:  {} vs {} ({:.1}%)",
+            b.engine1_name, b.engine2_name, b.engine1_win_rate * 100.0
+        );
+    }
+    if let Some(w) = worst {
+        println!(
+            "Worst matchup: {} vs {} ({:.1}%)",
+            w.engine1_name, w.engine2_name, w.engine1_win_rate * 100.0
+        );
+    }
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
+    match cli.command {
+        Commands::Report(ref args) => {
+            run_report(args)?;
+        }
+        Commands::Match(args) => {
+            run_match(args).await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn run_match(args: MatchArgs) -> Result<()> {
     println!("Engine 1: {}", args.engine1);
     println!("Engine 2: {}", args.engine2);
     println!(
@@ -255,14 +431,8 @@ async fn main() -> Result<()> {
     }
 
     println!("=== Match Complete ===");
-    println!(
-        "{}: {} win(s)",
-        args.engine1, engine1_wins
-    );
-    println!(
-        "{}: {} win(s)",
-        args.engine2, engine2_wins
-    );
+    println!("{}: {} win(s)", args.engine1, engine1_wins);
+    println!("{}: {} win(s)", args.engine2, engine2_wins);
     println!("Draws: {}", draws);
 
     // Write CSV output if requested.
