@@ -1,0 +1,35 @@
+## Codebase Patterns
+- chess-engine/src/engine.rs contains WiggumEngine struct (renamed from MaterialEngine in US-001)
+- cargo not available in shell PATH in this environment; use full path or verify via other means
+- All Rust quality checks (cargo test, cargo build) must be done via the cargo binary in PATH if available
+
+---
+
+## 2026-04-06 - US-001
+- Renamed MaterialEngine to WiggumEngine in chess-engine/src/engine.rs
+- Updated name() to return 'Wiggum Engine v0.1'
+- Updated UCI main.rs to respond with correct id name/author
+- Updated all tests referencing the old name
+- Files changed: chess-engine/src/engine.rs, chess-engine/src/main.rs, and test files
+
+---
+
+## 2026-04-06 - US-002
+- Added --verbose flag to MatchArgs in chess-runner/src/main.rs
+- Refactored PrintObserver to support quiet (default) and verbose modes
+- Without --verbose: prints one line per game + final summary
+- With --verbose: full board diagram and move output
+- Files changed: chess-runner/src/main.rs
+
+---
+
+## 2026-04-06 - US-003
+- Created chess-engine/versions/ folder structure
+- chess-engine/versions/README.md: explains folder convention (one subfolder per version, each with CHANGES.md and report.md)
+- chess-engine/versions/v0.1/CHANGES.md: documents initial implementation (material eval, negamax depth-4, no alpha-beta)
+- chess-engine/versions/v0.1/.gitkeep: placeholder until report.md is generated
+- Files changed: chess-engine/versions/README.md, chess-engine/versions/v0.1/CHANGES.md, chess-engine/versions/v0.1/.gitkeep
+- **Learnings for future iterations:**
+  - cargo binary is not in PATH in this shell environment; quality checks via cargo not runnable directly
+  - US-003 was pure file creation — no code to typecheck or test
+---

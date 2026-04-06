@@ -1,0 +1,221 @@
+{
+  "project": "chesslib",
+  "branchName": "ralph/chesslib-workspace",
+  "description": "Restructure project as Cargo workspace, add game logic with FIDE end-game detection, UCI move parsing, async engine abstraction, and match orchestration between engines",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Convert project to Cargo workspace",
+      "description": "As a developer, I want the project to be a Cargo workspace with chesslib as a subcrate, so I can add separate binary crates.",
+      "acceptanceCriteria": [
+        "Root Cargo.toml defines a workspace with members 'chesslib' and 'chess-runner'",
+        "chesslib/Cargo.toml contains the lib with all existing code (including build.rs and gen_files)",
+        "chess-runner/Cargo.toml defines a binary crate that depends on chesslib",
+        "cargo build --workspace compiles without errors",
+        "cargo test --workspace passes all existing tests",
+        "Benchmarks continue working (cargo bench --bench perft -p chesslib)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Detect checkmate and stalemate",
+      "description": "As a lib user, I want to know if a position is checkmate or stalemate to determine end of game.",
+      "acceptanceCriteria": [
+        "Function/method that takes a Board and returns if it is checkmate (no legal moves + in check)",
+        "Function/method that returns if it is stalemate (no legal moves + not in check)",
+        "Tests with known checkmate positions (Scholar's mate, back rank mate)",
+        "Tests with known stalemate positions",
+        "Existing perft tests continue passing",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Detect draw by insufficient material",
+      "description": "As a lib user, I want to detect draw by insufficient material (K vs K, K+B vs K, K+N vs K, K+B vs K+B same color).",
+      "acceptanceCriteria": [
+        "Function that analyzes remaining material and returns if it is insufficient",
+        "Covers cases: K vs K, K+N vs K, K+B vs K, K+B vs K+B (bishops on same color)",
+        "Tests for each insufficient material case",
+        "Tests for positions with sufficient material (does not return draw)",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Implement Zobrist hashing for Board",
+      "description": "As a developer, I need Zobrist hashing on Board so that position repetition can be detected efficiently.",
+      "acceptanceCriteria": [
+        "Zobrist keys generated as constants (in build.rs or const): one key per piece/square combination, keys for castling rights, en passant files, and side to move",
+        "Zobrist hashing includes a key for Side to Move to ensure identical positions with different turns have different hashes",
+        "Board stores its current Zobrist hash",
+        "Hash is updated incrementally in make_move() via XOR",
+        "Board exposes method to get current hash (e.g. board.zobrist_hash() -> u64)",
+        "Tests verifying that the same position reached by different move orders produces the same hash",
+        "Tests verifying different positions produce different hashes",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Halfmove clock on Board",
+      "description": "As a developer, I need Board to track the halfmove clock so 50/75-move rules can be detected.",
+      "acceptanceCriteria": [
+        "Board stores halfmove_clock field, initialized from FEN (6th token)",
+        "halfmove_clock is reset to 0 on pawn moves and captures in make_move()",
+        "halfmove_clock is incremented by 1 on all other moves in make_move()",
+        "Board exposes method to get halfmove clock",
+        "Board::default() starts with halfmove_clock = 0",
+        "Tests for halfmove clock incrementing and resetting correctly",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Game struct with move history and result tracking",
+      "description": "As a lib user, I want a Game struct representing a complete game with history, so I can track game progress.",
+      "acceptanceCriteria": [
+        "Game contains: current Board, list of moves played (Vec<ChessMove>), game result, and position hash history (Vec<u64> from Zobrist)",
+        "Enum GameResult with variants: Ongoing, WhiteWins, BlackWins, Draw(DrawReason)",
+        "DrawReason with variants: Stalemate, InsufficientMaterial, ThreefoldRepetition, FivefoldRepetition, FiftyMoveRule, SeventyFiveMoveRule",
+        "Game::new() from a FEN string or default starting position",
+        "Method make_move() that validates legality, applies the move, updates history, hash history, and detects end of game (checkmate, stalemate, insufficient material, threefold/fivefold repetition, 50/75-move rule)",
+        "Fivefold repetition and 75-move rule are applied automatically as draws",
+        "Threefold repetition and 50-move rule are exposed as queryable but also applied automatically",
+        "Method to get current Board",
+        "Method to get move history",
+        "Tests for a complete game (opening to mate)",
+        "Tests for draw detection via repetition (make moves that repeat position 3 and 5 times)",
+        "Tests for 50-move and 75-move rule detection",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Depends on US-002 (checkmate/stalemate), US-003 (insufficient material), US-004 (Zobrist), US-005 (halfmove clock)"
+    },
+    {
+      "id": "US-007",
+      "title": "Clock struct with time control and increment",
+      "description": "As a lib user, I want Game to support time control with increment for UCI compatibility.",
+      "acceptanceCriteria": [
+        "Struct Clock with remaining time per player (in milliseconds) and increment",
+        "Clock is updated each move: subtracts elapsed time (using std::time::Instant), adds increment",
+        "Support for configurations: total time + increment, moves to go (for classical time controls)",
+        "Detection of flag (time expired) as end of game condition",
+        "Game can be created with or without a clock (clock is optional)",
+        "Tests for time decrement and flag detection",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "UCI move parsing and serialization",
+      "description": "As a lib user, I want to convert between ChessMove and UCI string (e.g. e2e4, e7e8q) to communicate with engines.",
+      "acceptanceCriteria": [
+        "ChessMove::from_uci(s: &str, board: &Board) -> Result<ChessMove> — needs board to resolve promotion ambiguity and validate legality",
+        "ChessMove::to_uci() -> String — serializes to UCI format",
+        "Format: {source}{dest} (4 chars) or {source}{dest}{promotion} (5 chars, promotion lowercase: q/r/b/n)",
+        "Tests for normal moves, captures, castling (e1g1, e1c1), en passant, and promotions",
+        "Tests for invalid UCI strings returning errors",
+        "Roundtrip test: ChessMove -> UCI string -> ChessMove preserves the original move",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Async Engine trait for engine abstraction",
+      "description": "As a developer, I want an async Engine trait that abstracts engine communication, to plug in-process or UCI engines.",
+      "acceptanceCriteria": [
+        "Trait Engine with async methods: name() -> String, new_game(), set_position(game: &Game), go(time_control: &TimeControl) -> ChessMove, quit()",
+        "TimeControl struct that encapsulates wtime, btime, winc, binc, movestogo",
+        "Trait uses async fn with tokio as the runtime",
+        "Add tokio as dependency to chesslib (with appropriate features)",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "UciEngine subprocess communication",
+      "description": "As a user, I want to instantiate a UCI engine from an executable path to use engines like Stockfish.",
+      "acceptanceCriteria": [
+        "Struct UciEngine that implements trait Engine",
+        "Spawns engine process using tokio::process::Command and communicates via stdin/stdout",
+        "Implements UCI handshake: sends 'uci', waits for 'uciok'",
+        "Implements 'isready'/'readyok' for synchronization",
+        "Sends 'ucinewgame' in new_game() to clear state between games",
+        "Sends 'position startpos moves e2e4 e7e5 ...' with full move history",
+        "Sends 'go wtime X btime Y winc Z binc W' with clock information",
+        "stdout reader consumes/discards all intermediate lines (like 'info') until finding and extracting the 'bestmove' line",
+        "Parses 'bestmove e2e4' from response",
+        "Sends 'quit' on drop/quit",
+        "Configurable timeout for engine responses",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Tests may require a mock engine or simple UCI-compliant engine available in the environment"
+    },
+    {
+      "id": "US-011",
+      "title": "Match orchestrator for engine vs engine games",
+      "description": "As a user, I want to run a complete game between two engines to compare engines or test the lib.",
+      "acceptanceCriteria": [
+        "Struct Match that takes two Box<dyn Engine>, a Game, and clock configuration",
+        "Game loop: asks move from engine of side to move, applies to Game, checks end of game, passes to next engine",
+        "Updates clock each move",
+        "Terminates on: checkmate, stalemate, draw (any type), flag (time expired), or engine error",
+        "Threefold repetition and 50-move rule are applied automatically as draws by the Match",
+        "Returns GameResult at the end",
+        "Callback or trait to observe the game (e.g. print each move)",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "chess-runner CLI binary",
+      "description": "As a user, I want a CLI that runs a match between two UCI engines to test the full integration.",
+      "acceptanceCriteria": [
+        "Accepts arguments: paths of two engines, time control (time + increment)",
+        "Instantiates two UciEngine, creates a Match, runs the game",
+        "Prints each move in UCI notation and the board (debug format) during the game",
+        "Prints final result (winner, draw reason, or error)",
+        "Supports match of N games (--games N), alternating colors between engines each game",
+        "Accepts optional --start-fen argument to start all games from a specific position",
+        "At the end of the match, prints total score (wins/losses/draws per engine)",
+        "Example: cargo run -p chess-runner -- --engine1 /path/to/stockfish --engine2 /path/to/engine2 --time 60000 --inc 1000 --games 10",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    }
+  ]
+}

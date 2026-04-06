@@ -50,7 +50,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-012. Pure file/folder creation — no code changes."
     },
     {
