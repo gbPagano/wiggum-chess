@@ -1,3 +1,26 @@
+## Codebase Patterns
+- Cargo is not pre-installed in devcontainer — install with `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`, then `source "$HOME/.cargo/env"`
+- Workspace root `Cargo.toml` holds profiles; subcrate `Cargo.toml` files should NOT have `[profile.*]` sections
+- The test `gen_files::magics::name` intentionally has `assert!(false)` — it's a dev scratchpad, always fails, not a regression
+- Run tests with `--skip gen_files::magics::name` to exclude it; all other 46 tests should pass
+- `cargo build --workspace`, `cargo test --workspace`, `cargo bench --bench perft -p chesslib` are the key quality checks
+---
+
 # Ralph Progress Log
 Started: Sun Apr  5 22:30:19 PDT 2026
+---
+
+## 2026-04-05 - US-001
+- Converted project to Cargo workspace with `chesslib` and `chess-runner` subcrates
+- Created root `Cargo.toml` as workspace with `[profile.*]` sections
+- Moved `src/`, `benches/` into `chesslib/` subdirectory with its own `Cargo.toml`
+- Moved `src/main.rs` (perft runner) to `chess-runner/src/main.rs`
+- Created `chess-runner/Cargo.toml` depending on chesslib
+- Updated `CLAUDE.md` to reflect new workspace structure and build commands
+- Files changed: Cargo.toml (root, new workspace), chesslib/Cargo.toml (new), chess-runner/Cargo.toml (new), chess-runner/src/main.rs (moved from src/main.rs), all src/* → chesslib/src/*, benches/* → chesslib/benches/*
+- **Learnings for future iterations:**
+  - Rust/cargo must be installed manually via rustup in this devcontainer
+  - Workspace profiles go in root Cargo.toml only; subcrates don't need them
+  - `gen_files::magics::name` has `assert!(false)` — pre-existing intentional failure, not a new break
+  - All 46 real tests pass; bench builds succeed
 ---
