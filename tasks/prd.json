@@ -68,7 +68,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-017. Prerequisite for US-007 (benchmark script). The mock engine uses a wildcard case that ignores unknown commands — confirm before writing the test."
     },
     {
