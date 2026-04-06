@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::Parser;
 use chesslib::chess_move::ChessMove;
 use chesslib::clock::Clock;
+use chesslib::engine::Engine;
 use chesslib::game::{DrawReason, Game, GameResult};
 use chesslib::match_runner::{Match, MatchObserver};
 use chesslib::uci_engine::UciEngine;
@@ -36,6 +37,10 @@ struct Args {
     /// Engine response timeout in milliseconds
     #[arg(long, default_value = "5000")]
     timeout: u64,
+
+    /// Optional path to CSV file for appending match results
+    #[arg(long)]
+    output: Option<String>,
 }
 
 /// Observer that prints moves and game-over events to stdout.
@@ -80,6 +85,64 @@ fn format_draw_reason(reason: &DrawReason) -> &'static str {
     }
 }
 
+/// Write a match result row to a CSV file, creating it with headers if needed.
+fn write_csv(
+    path: &str,
+    engine1_name: &str,
+    engine2_name: &str,
+    games_played: usize,
+    engine1_wins: usize,
+    engine2_wins: usize,
+    draws: usize,
+) -> Result<()> {
+    let file_exists = std::path::Path::new(path).exists()
+        && std::fs::metadata(path).map(|m| m.len() > 0).unwrap_or(false);
+
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(false)
+        .from_writer(file);
+
+    if !file_exists {
+        wtr.write_record(&[
+            "timestamp",
+            "engine1_name",
+            "engine2_name",
+            "games_played",
+            "engine1_wins",
+            "engine2_wins",
+            "draws",
+            "engine1_win_rate",
+        ])?;
+    }
+
+    let win_rate = if games_played > 0 {
+        engine1_wins as f64 / games_played as f64
+    } else {
+        0.0
+    };
+
+    let timestamp = chrono::Utc::now().to_rfc3339();
+
+    wtr.write_record(&[
+        timestamp.as_str(),
+        engine1_name,
+        engine2_name,
+        &games_played.to_string(),
+        &engine1_wins.to_string(),
+        &engine2_wins.to_string(),
+        &draws.to_string(),
+        &format!("{:.4}", win_rate),
+    ])?;
+
+    wtr.flush()?;
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -93,6 +156,28 @@ async fn main() -> Result<()> {
     if let Some(ref fen) = args.start_fen {
         println!("Starting FEN: {}", fen);
     }
+    println!();
+
+    // Query engine names via UCI handshake before the match loop.
+    let engine1_name = {
+        let mut e = UciEngine::new(&args.engine1, args.timeout)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to query engine1 name: {}", e))?;
+        let n = e.name().await;
+        e.quit().await;
+        n
+    };
+    let engine2_name = {
+        let mut e = UciEngine::new(&args.engine2, args.timeout)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to query engine2 name: {}", e))?;
+        let n = e.name().await;
+        e.quit().await;
+        n
+    };
+
+    println!("Engine 1 UCI name: {}", engine1_name);
+    println!("Engine 2 UCI name: {}", engine2_name);
     println!();
 
     // Score: [engine1_wins, engine2_wins, draws]
@@ -179,6 +264,20 @@ async fn main() -> Result<()> {
         args.engine2, engine2_wins
     );
     println!("Draws: {}", draws);
+
+    // Write CSV output if requested.
+    if let Some(ref output_path) = args.output {
+        write_csv(
+            output_path,
+            &engine1_name,
+            &engine2_name,
+            args.games,
+            engine1_wins,
+            engine2_wins,
+            draws,
+        )?;
+        println!("Match result appended to: {}", output_path);
+    }
 
     Ok(())
 }

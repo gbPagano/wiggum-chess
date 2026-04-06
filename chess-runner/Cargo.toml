@@ -8,3 +8,5 @@ chesslib = { path = "../chesslib" }
 tokio = { version = "1", features = ["full"] }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
+csv = "1"
+chrono = "0.4"
