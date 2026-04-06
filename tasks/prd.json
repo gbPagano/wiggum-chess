@@ -91,7 +91,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-013. Colors alternate each game pair (same as match subcommand). Handle the edge case where score=1.0 or score=0.0 to avoid log(0) — clamp to a small epsilon."
     },
     {
