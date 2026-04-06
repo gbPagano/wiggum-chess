@@ -1,3 +1,19 @@
+## 2026-04-06 - US-004
+- Implemented `evaluate(board: &Board) -> i32` in `chess-engine/src/eval.rs`
+- Returns centipawn score from side-to-move's perspective
+- Piece values: Pawn=100, Knight=320, Bishop=330, Rook=500, Queen=900
+- Detects checkmate via `board.is_checkmate()` → returns -30000
+- Detects stalemate via `board.is_stalemate()` → returns 0
+- Material score = sum of (stm_count - opp_count) * value for each piece type
+- Files changed: `chess-engine/src/eval.rs`
+- Tests: starting position=0, missing white queen=-900, missing black queen=+900, Fool's mate=-30000, stalemate=0
+- All 5 new tests pass; 122 total workspace tests pass
+- **Learnings for future iterations:**
+  - `board.get_piece_bitboard(piece) & board.get_color_bitboard(color)` gives the bitboard for a specific piece+color combo; `.0.count_ones()` counts the pieces
+  - `Board::is_checkmate()` and `Board::is_stalemate()` are already available in chesslib — no need to reimplement
+  - `!stm` (using `Not` impl on `Color`) gives the opponent's color
+---
+
 ## 2026-04-06 - US-003
 - Created `chess-engine/` crate skeleton in the workspace
 - `chess-engine/Cargo.toml` depends on `chesslib = { path = "../chesslib" }`
