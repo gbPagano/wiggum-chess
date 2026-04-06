@@ -1,3 +1,19 @@
+## 2026-04-06 - US-008
+- Added `--output <path>` CLI flag to chess-runner
+- Before the match loop, queries both engine UCI names by spawning temporary engines (handshake + quit)
+- After all games, appends one CSV row: timestamp (ISO 8601 via chrono), engine1_name, engine2_name, games_played, engine1_wins, engine2_wins, draws, engine1_win_rate
+- Creates file with header row if it doesn't exist; appends without overwriting if it exists
+- If `--output` is not specified, no CSV is written
+- Added `csv = "1"` and `chrono = "0.4"` to `chess-runner/Cargo.toml`
+- Files changed: `chess-runner/src/main.rs`, `chess-runner/Cargo.toml`, `Cargo.lock`
+- All 117 workspace tests pass
+- **Learnings for future iterations:**
+  - Spin up a temporary engine just to call `name().await` then `quit().await` to get the UCI name before the match loop — cleaner than capturing it inside the loop
+  - `csv::WriterBuilder::new().has_headers(false).from_writer(file)` with manual header write gives full control over append behavior
+  - Check `Path::exists() && metadata.len() > 0` (not just `exists()`) to handle empty files correctly
+  - `chrono::Utc::now().to_rfc3339()` gives a proper ISO 8601 timestamp; add `chrono = "0.4"` to Cargo.toml
+---
+
 ## 2026-04-06 - US-007
 - Implemented UCI protocol loop in `chess-engine/src/main.rs`
 - Responds to `uci` with `id name MaterialEngine v0.1`, `id author chess-ic`, `uciok`

@@ -142,7 +142,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-007 for engine names via UCI. Needs to query engine names before logging."
     },
     {
