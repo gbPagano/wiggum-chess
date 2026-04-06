@@ -24,6 +24,7 @@ pub struct Board {
     pinned_bitboard: BitBoard,
     checkers_bitboard: BitBoard,
     zobrist_hash: u64,
+    halfmove_clock: u32,
 }
 
 impl Board {
@@ -39,7 +40,14 @@ impl Board {
             pinned_bitboard: BitBoard(0),
             checkers_bitboard: BitBoard(0),
             zobrist_hash: 0,
+            halfmove_clock: 0,
         }
+    }
+
+    /// Returns the halfmove clock (number of half-moves since last pawn move or capture).
+    #[inline(always)]
+    pub fn halfmove_clock(&self) -> u32 {
+        self.halfmove_clock
     }
 
     /// Returns the current Zobrist hash of the board position.
@@ -281,11 +289,20 @@ impl Board {
             magic::zobrist_piece_key(moved_piece, self.side_to_move, m.source);
         result.zobrist_hash ^= magic::zobrist_piece_key(moved_piece, self.side_to_move, m.dest);
 
-        if let Some(captured) = self.get_piece(m.dest) {
+        let is_capture = self.get_piece(m.dest).is_some();
+        if is_capture {
+            let captured = self.get_piece(m.dest).unwrap();
             result.xor(captured, dest_bb, !self.side_to_move);
             // Zobrist: remove captured piece
             result.zobrist_hash ^=
                 magic::zobrist_piece_key(captured, !self.side_to_move, m.dest);
+        }
+
+        // Halfmove clock: reset on pawn moves and captures, increment otherwise
+        if moved_piece == Piece::Pawn || is_capture {
+            result.halfmove_clock = 0;
+        } else {
+            result.halfmove_clock = self.halfmove_clock + 1;
         }
 
         result
@@ -562,6 +579,13 @@ impl FromStr for Board {
             board.side_to_move = !board.side_to_move;
         }
 
+        // Halfmove clock (token 4, optional — default 0)
+        if tokens.len() >= 5 {
+            if let Ok(hmc) = tokens[4].parse::<u32>() {
+                board.halfmove_clock = hmc;
+            }
+        }
+
         board.update_attacked_bitboards();
         board.zobrist_hash = board.compute_zobrist();
 
@@ -609,7 +633,7 @@ impl fmt::Display for Board {
             write!(f, "-")?;
         }
 
-        write!(f, " 0 1") // TODO
+        write!(f, " {} 1", self.halfmove_clock)
     }
 }
 
@@ -855,5 +879,85 @@ mod tests {
             "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1".parse().unwrap();
 
         assert_eq!(board_via_moves.zobrist_hash(), board_from_fen.zobrist_hash());
+    }
+
+    // --- Halfmove clock tests ---
+
+    #[test]
+    fn test_halfmove_clock_initialized_from_fen() {
+        // FEN with halfmove_clock = 5
+        let board: Board =
+            "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 5 3"
+                .parse()
+                .unwrap();
+        assert_eq!(board.halfmove_clock(), 5);
+    }
+
+    #[test]
+    fn test_halfmove_clock_default_is_zero() {
+        let board = Board::default();
+        assert_eq!(board.halfmove_clock(), 0);
+    }
+
+    #[test]
+    fn test_halfmove_clock_increments_on_non_pawn_non_capture() {
+        // Starting position: play Nf3 (knight move, no capture)
+        let board = Board::default();
+        let nf3 = MoveGen::new_legal(&board)
+            .find(|m| m.source.to_index() == 6 && m.dest.to_index() == 21) // g1->f3
+            .unwrap();
+        let board2 = board.make_move(nf3);
+        assert_eq!(board2.halfmove_clock(), 1);
+
+        // Play Nf6 (knight move, no capture)
+        let nf6 = MoveGen::new_legal(&board2)
+            .find(|m| m.source.to_index() == 62 && m.dest.to_index() == 45) // g8->f6
+            .unwrap();
+        let board3 = board2.make_move(nf6);
+        assert_eq!(board3.halfmove_clock(), 2);
+    }
+
+    #[test]
+    fn test_halfmove_clock_resets_on_pawn_move() {
+        // Play Nf3 twice (clock = 2), then a pawn move (clock resets to 0)
+        let board = Board::default();
+        let nf3 = MoveGen::new_legal(&board)
+            .find(|m| m.source.to_index() == 6 && m.dest.to_index() == 21)
+            .unwrap();
+        let board2 = board.make_move(nf3);
+        let nf6 = MoveGen::new_legal(&board2)
+            .find(|m| m.source.to_index() == 62 && m.dest.to_index() == 45)
+            .unwrap();
+        let board3 = board2.make_move(nf6);
+        assert_eq!(board3.halfmove_clock(), 2);
+
+        // e4 pawn move
+        let e4 = MoveGen::new_legal(&board3)
+            .find(|m| m.source.to_index() == 12 && m.dest.to_index() == 28) // e2->e4
+            .unwrap();
+        let board4 = board3.make_move(e4);
+        assert_eq!(board4.halfmove_clock(), 0);
+    }
+
+    #[test]
+    fn test_halfmove_clock_resets_on_capture() {
+        // FEN: after 1.e4 e5 2.Nf3 Nc6 — knight on f3 can capture on e5 indirectly
+        // Use a position where a capture is straightforward: Bxe5 or similar.
+        // Simpler: construct a position where white can capture immediately.
+        // FEN with halfmove_clock=3 and a capture available.
+        // r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3
+        // Nxe5 is a capture of the e5 pawn.
+        let board: Board =
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 3 3"
+                .parse()
+                .unwrap();
+        assert_eq!(board.halfmove_clock(), 3);
+
+        // Find Nxe5: f3(idx=21) -> e5(idx=36)
+        let nxe5 = MoveGen::new_legal(&board)
+            .find(|m| m.source.to_index() == 21 && m.dest.to_index() == 36)
+            .unwrap();
+        let board2 = board.make_move(nxe5);
+        assert_eq!(board2.halfmove_clock(), 0);
     }
 }
