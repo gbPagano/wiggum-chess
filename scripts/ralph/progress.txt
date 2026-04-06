@@ -1,3 +1,17 @@
+## 2026-04-06 - US-006
+- Implemented `MaterialEngine` struct in `chess-engine/src/engine.rs`
+- `MaterialEngine::new(depth)` and `Default` impl (depth 4)
+- Implements `chesslib::engine::Engine` via `async_trait`: `name()` returns "MaterialEngine v0.1", `go()` calls `search(board, depth)`, `set_position()` caches the game
+- Added `async-trait = "0.1"` and `tokio = { version = "1", features = ["full"] }` to `chess-engine/Cargo.toml`
+- Integration tests: MaterialEngine (depth 2) vs MaterialEngine completes game and result is not Ongoing
+- Files changed: `chess-engine/src/engine.rs`, `chess-engine/Cargo.toml`
+- All 10 chess-engine tests pass; 127 total workspace tests pass
+- **Learnings for future iterations:**
+  - `Game::clone()` is available — cache `game.clone()` in `set_position()` to hold the current position
+  - Use `search(board, depth)` and unwrap `Some(mv)` or fall back to `MoveGen::new_legal(board).next()` in `go()`
+  - Depth 2 is fast enough for integration tests without long waits; depth 4 is the user-facing default
+---
+
 ## 2026-04-06 - US-005
 - Implemented `search(board: &Board, depth: u8) -> (Option<ChessMove>, i32)` in `chess-engine/src/search.rs`
 - Negamax formulation: recursively negates child scores; at depth 0 falls through to `evaluate()`
