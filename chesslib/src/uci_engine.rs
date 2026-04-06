@@ -41,8 +41,14 @@ impl UciEngine {
             .spawn()
             .with_context(|| format!("failed to spawn engine at {:?}", path.as_ref()))?;
 
-        let stdin = child.stdin.take().context("failed to acquire engine stdin")?;
-        let stdout = child.stdout.take().context("failed to acquire engine stdout")?;
+        let stdin = child
+            .stdin
+            .take()
+            .context("failed to acquire engine stdin")?;
+        let stdout = child
+            .stdout
+            .take()
+            .context("failed to acquire engine stdout")?;
         let stdout = BufReader::new(stdout).lines();
 
         let mut engine = Self {

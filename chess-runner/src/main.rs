@@ -1,11 +1,11 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
 use chesslib::chess_move::ChessMove;
 use chesslib::clock::Clock;
 use chesslib::engine::Engine;
 use chesslib::game::{DrawReason, Game, GameResult};
 use chesslib::match_runner::{Match, MatchObserver};
 use chesslib::uci_engine::UciEngine;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 #[command(name = "chess-runner", about = "Run engine vs engine chess matches")]
@@ -82,7 +82,11 @@ impl MatchObserver for PrintObserver {
     }
 
     fn on_game_over(&mut self, result: &GameResult) {
-        println!("  Game {} result: {}", self.game_number, format_result(result));
+        println!(
+            "  Game {} result: {}",
+            self.game_number,
+            format_result(result)
+        );
     }
 }
 
@@ -117,7 +121,9 @@ fn write_csv(
     draws: usize,
 ) -> Result<()> {
     let file_exists = std::path::Path::new(path).exists()
-        && std::fs::metadata(path).map(|m| m.len() > 0).unwrap_or(false);
+        && std::fs::metadata(path)
+            .map(|m| m.len() > 0)
+            .unwrap_or(false);
 
     let file = std::fs::OpenOptions::new()
         .create(true)
@@ -129,7 +135,7 @@ fn write_csv(
         .from_writer(file);
 
     if !file_exists {
-        wtr.write_record(&[
+        wtr.write_record([
             "timestamp",
             "engine1_name",
             "engine2_name",
@@ -149,7 +155,7 @@ fn write_csv(
 
     let timestamp = chrono::Utc::now().to_rfc3339();
 
-    wtr.write_record(&[
+    wtr.write_record([
         timestamp.as_str(),
         engine1_name,
         engine2_name,
@@ -232,17 +238,39 @@ fn run_report(args: &ReportArgs) -> Result<()> {
     }
 
     // Determine column widths.
-    let date_w = rows.iter().map(|r| {
-        // Use only the date portion of the ISO timestamp for display
-        r.timestamp.get(..10).unwrap_or(&r.timestamp).len()
-    }).max().unwrap_or(10).max(4); // "Date"
-    let e1_w = rows.iter().map(|r| r.engine1_name.len()).max().unwrap_or(6).max(7); // "Engine1"
-    let e2_w = rows.iter().map(|r| r.engine2_name.len()).max().unwrap_or(6).max(7); // "Engine2"
+    let date_w = rows
+        .iter()
+        .map(|r| {
+            // Use only the date portion of the ISO timestamp for display
+            r.timestamp.get(..10).unwrap_or(&r.timestamp).len()
+        })
+        .max()
+        .unwrap_or(10)
+        .max(4); // "Date"
+    let e1_w = rows
+        .iter()
+        .map(|r| r.engine1_name.len())
+        .max()
+        .unwrap_or(6)
+        .max(7); // "Engine1"
+    let e2_w = rows
+        .iter()
+        .map(|r| r.engine2_name.len())
+        .max()
+        .unwrap_or(6)
+        .max(7); // "Engine2"
 
     // Print header
     println!(
-        "{:<date_w$}  {:<e1_w$}  {:<e2_w$}  {:>5}  {:>4}  {:>6}  {:>5}  {:>6}  {}",
-        "Date", "Engine1", "Engine2", "Games", "Wins", "Losses", "Draws", "Win%", "Trend",
+        "{:<date_w$}  {:<e1_w$}  {:<e2_w$}  {:>5}  {:>4}  {:>6}  {:>5}  {:>6}  Trend",
+        "Date",
+        "Engine1",
+        "Engine2",
+        "Games",
+        "Wins",
+        "Losses",
+        "Draws",
+        "Win%",
         date_w = date_w,
         e1_w = e1_w,
         e2_w = e2_w,
@@ -280,26 +308,33 @@ fn run_report(args: &ReportArgs) -> Result<()> {
     };
 
     // Best and worst matchup by win_rate
-    let best = rows.iter().max_by(|a, b| {
-        a.engine1_win_rate.partial_cmp(&b.engine1_win_rate).unwrap()
-    });
-    let worst = rows.iter().min_by(|a, b| {
-        a.engine1_win_rate.partial_cmp(&b.engine1_win_rate).unwrap()
-    });
+    let best = rows
+        .iter()
+        .max_by(|a, b| a.engine1_win_rate.partial_cmp(&b.engine1_win_rate).unwrap());
+    let worst = rows
+        .iter()
+        .min_by(|a, b| a.engine1_win_rate.partial_cmp(&b.engine1_win_rate).unwrap());
 
     println!("=== Summary ===");
     println!("Total games played: {}", total_games);
-    println!("Overall win rate (engine1): {:.1}%", overall_win_rate * 100.0);
+    println!(
+        "Overall win rate (engine1): {:.1}%",
+        overall_win_rate * 100.0
+    );
     if let Some(b) = best {
         println!(
             "Best matchup:  {} vs {} ({:.1}%)",
-            b.engine1_name, b.engine2_name, b.engine1_win_rate * 100.0
+            b.engine1_name,
+            b.engine2_name,
+            b.engine1_win_rate * 100.0
         );
     }
     if let Some(w) = worst {
         println!(
             "Worst matchup: {} vs {} ({:.1}%)",
-            w.engine1_name, w.engine2_name, w.engine1_win_rate * 100.0
+            w.engine1_name,
+            w.engine2_name,
+            w.engine1_win_rate * 100.0
         );
     }
 
@@ -422,7 +457,10 @@ async fn run_match(args: MatchArgs) -> Result<()> {
             }
             GameResult::Draw(_) => draws += 1,
             GameResult::Ongoing => {
-                eprintln!("Warning: game {} ended in unexpected Ongoing state", game_number);
+                eprintln!(
+                    "Warning: game {} ended in unexpected Ongoing state",
+                    game_number
+                );
                 draws += 1;
             }
         }

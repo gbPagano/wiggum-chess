@@ -47,8 +47,6 @@ static MOVES_MAX_IDX: Mutex<usize> = Mutex::new(0);
 static MOVES: Mutex<[BitBoard; NUM_MOVES]> = Mutex::new([BitBoard(0); NUM_MOVES]);
 static MOVE_RAYS: Mutex<[BitBoard; NUM_MOVES]> = Mutex::new([BitBoard(0); NUM_MOVES]);
 
-
-
 fn generate_magic(square: Square, piece: Piece, curr_offset: usize) -> usize {
     let (blockers, attacks) = gen_magic_attack_map(square, piece);
     let mask = magic_mask(square, piece);

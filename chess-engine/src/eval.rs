@@ -58,8 +58,8 @@ mod tests {
 
     #[test]
     fn starting_position_is_zero() {
-        let board = Board::from_str("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-            .unwrap();
+        let board =
+            Board::from_str("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         assert_eq!(evaluate(&board), 0);
     }
 

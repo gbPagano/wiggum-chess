@@ -1,6 +1,6 @@
-use criterion::{Criterion, SamplingMode, criterion_group, criterion_main};
 use chesslib::board::Board;
 use chesslib::movegen::MoveGen;
+use criterion::{Criterion, SamplingMode, criterion_group, criterion_main};
 use std::time::Duration;
 
 fn perft_bench(c: &mut Criterion) {

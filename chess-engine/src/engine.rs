@@ -1,7 +1,7 @@
 use async_trait::async_trait;
+use chesslib::chess_move::ChessMove;
 use chesslib::engine::{Engine, TimeControl};
 use chesslib::game::Game;
-use chesslib::chess_move::ChessMove;
 use chesslib::movegen::MoveGen;
 
 use crate::search::search;
@@ -15,7 +15,10 @@ pub struct MaterialEngine {
 impl MaterialEngine {
     /// Create a new MaterialEngine with the given search depth.
     pub fn new(depth: u8) -> Self {
-        Self { depth, last_game: None }
+        Self {
+            depth,
+            last_game: None,
+        }
     }
 }
 
@@ -56,8 +59,8 @@ impl Engine for MaterialEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chesslib::match_runner::Match;
     use chesslib::game::GameResult;
+    use chesslib::match_runner::Match;
 
     #[tokio::test]
     async fn material_engine_vs_self_completes_game() {
@@ -65,7 +68,11 @@ mod tests {
         let black: Box<dyn Engine> = Box::new(MaterialEngine::new(2));
         let mut m = Match::new(white, black);
         let result = m.run().await;
-        assert_ne!(result, GameResult::Ongoing, "Game must end with a definitive result");
+        assert_ne!(
+            result,
+            GameResult::Ongoing,
+            "Game must end with a definitive result"
+        );
     }
 
     #[tokio::test]

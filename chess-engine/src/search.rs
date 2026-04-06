@@ -1,5 +1,5 @@
-use chesslib::chess_move::ChessMove;
 use chesslib::board::Board;
+use chesslib::chess_move::ChessMove;
 use chesslib::movegen::MoveGen;
 
 use crate::eval::evaluate;
@@ -46,8 +46,8 @@ mod tests {
 
     #[test]
     fn returns_valid_move_from_start() {
-        let board = Board::from_str("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
-            .unwrap();
+        let board =
+            Board::from_str("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
         let (mv, _score) = search(&board, 1);
         assert!(mv.is_some(), "Expected a legal move from start position");
         // Verify the move is actually legal

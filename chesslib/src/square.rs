@@ -105,7 +105,6 @@ impl Square {
     }
 }
 
-
 impl Default for Square {
     /// Returns the default square (A1).
     #[inline(always)]

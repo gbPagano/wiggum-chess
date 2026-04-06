@@ -2,7 +2,7 @@ use crate::board::Board;
 use crate::movegen::MoveGen;
 use crate::pieces::Piece;
 use crate::square::Square;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::str::FromStr;
 
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -86,8 +86,12 @@ mod tests {
     #[test]
     fn test_to_uci_promotion_all_pieces() {
         let b = board("8/4P3/8/8/8/8/8/4K2k w - - 0 1");
-        for (uci, piece) in [("e7e8q", Piece::Queen), ("e7e8r", Piece::Rook),
-                              ("e7e8b", Piece::Bishop), ("e7e8n", Piece::Knight)] {
+        for (uci, piece) in [
+            ("e7e8q", Piece::Queen),
+            ("e7e8r", Piece::Rook),
+            ("e7e8b", Piece::Bishop),
+            ("e7e8n", Piece::Knight),
+        ] {
             let m = ChessMove::from_uci(uci, &b).unwrap();
             assert_eq!(m.promotion, Some(piece));
             assert_eq!(m.to_uci(), uci);

@@ -285,8 +285,7 @@ impl Board {
         result.xor(moved_piece, source_bb, self.side_to_move);
         result.xor(moved_piece, dest_bb, self.side_to_move);
         // Zobrist: move piece from source to dest
-        result.zobrist_hash ^=
-            magic::zobrist_piece_key(moved_piece, self.side_to_move, m.source);
+        result.zobrist_hash ^= magic::zobrist_piece_key(moved_piece, self.side_to_move, m.source);
         result.zobrist_hash ^= magic::zobrist_piece_key(moved_piece, self.side_to_move, m.dest);
 
         let is_capture = self.get_piece(m.dest).is_some();
@@ -294,8 +293,7 @@ impl Board {
             let captured = self.get_piece(m.dest).unwrap();
             result.xor(captured, dest_bb, !self.side_to_move);
             // Zobrist: remove captured piece
-            result.zobrist_hash ^=
-                magic::zobrist_piece_key(captured, !self.side_to_move, m.dest);
+            result.zobrist_hash ^= magic::zobrist_piece_key(captured, !self.side_to_move, m.dest);
         }
 
         // Halfmove clock: reset on pawn moves and captures, increment otherwise
@@ -497,8 +495,8 @@ impl Board {
             let wb_idx = white_bishops.to_square().to_index();
             let bb_idx = black_bishops.to_square().to_index();
             // Square color: (file + rank) % 2; index = rank*8 + file
-            let wb_light = (wb_idx % 8 + wb_idx / 8) % 2 == 0;
-            let bb_light = (bb_idx % 8 + bb_idx / 8) % 2 == 0;
+            let wb_light = (wb_idx % 8 + wb_idx / 8).is_multiple_of(2);
+            let bb_light = (bb_idx % 8 + bb_idx / 8).is_multiple_of(2);
             if wb_light == bb_light {
                 return true;
             }
@@ -580,10 +578,9 @@ impl FromStr for Board {
         }
 
         // Halfmove clock (token 4, optional — default 0)
-        if tokens.len() >= 5 {
-            if let Ok(hmc) = tokens[4].parse::<u32>() {
-                board.halfmove_clock = hmc;
-            }
+        if tokens.len() >= 5
+            && let Ok(hmc) = tokens[4].parse::<u32>() {
+            board.halfmove_clock = hmc;
         }
 
         board.update_attacked_bitboards();
@@ -689,10 +686,9 @@ mod tests {
     #[test]
     fn test_checkmate_scholars_mate() {
         // Scholar's mate: 1.e4 e5 2.Bc4 Nc6 3.Qh5 Nf6?? 4.Qxf7#
-        let board: Board =
-            "r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4"
-                .parse()
-                .unwrap();
+        let board: Board = "r1bqkb1r/pppp1Qpp/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 0 4"
+            .parse()
+            .unwrap();
         assert!(board.is_checkmate());
         assert!(!board.is_stalemate());
     }
@@ -700,10 +696,9 @@ mod tests {
     #[test]
     fn test_checkmate_fools_mate() {
         // Fool's mate: 1.f3 e5 2.g4 Qh4#
-        let board: Board =
-            "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
-                .parse()
-                .unwrap();
+        let board: Board = "rnb1kbnr/pppp1ppp/8/4p3/6Pq/5P2/PPPPP2P/RNBQKBNR w KQkq - 1 3"
+            .parse()
+            .unwrap();
         assert!(board.is_checkmate());
         assert!(!board.is_stalemate());
     }
@@ -716,10 +711,9 @@ mod tests {
         assert!(!board.is_stalemate());
 
         // A mid-game position
-        let board: Board =
-            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
-                .parse()
-                .unwrap();
+        let board: Board = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+            .parse()
+            .unwrap();
         assert!(!board.is_checkmate());
         assert!(!board.is_stalemate());
     }
@@ -814,8 +808,9 @@ mod tests {
     #[test]
     fn test_zobrist_different_positions_different_hashes() {
         let board1 = Board::default();
-        let board2: Board =
-            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1".parse().unwrap();
+        let board2: Board = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+            .parse()
+            .unwrap();
         assert_ne!(board1.zobrist_hash(), board2.zobrist_hash());
     }
 
@@ -823,14 +818,12 @@ mod tests {
     fn test_zobrist_same_position_different_move_orders() {
         // Reach the same position via two different move orders and verify hashes match.
         // 1.e4 e5 2.Nf3 Nc6 vs 1.Nf3 Nc6 2.e4 e5
-        let board_a: Board =
-            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
-                .parse()
-                .unwrap();
-        let board_b: Board =
-            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
-                .parse()
-                .unwrap();
+        let board_a: Board = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+            .parse()
+            .unwrap();
+        let board_b: Board = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+            .parse()
+            .unwrap();
         assert_eq!(board_a.zobrist_hash(), board_b.zobrist_hash());
     }
 
@@ -875,10 +868,14 @@ mod tests {
             .unwrap();
         let board_via_moves = board.make_move(e4_move);
 
-        let board_from_fen: Board =
-            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1".parse().unwrap();
+        let board_from_fen: Board = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"
+            .parse()
+            .unwrap();
 
-        assert_eq!(board_via_moves.zobrist_hash(), board_from_fen.zobrist_hash());
+        assert_eq!(
+            board_via_moves.zobrist_hash(),
+            board_from_fen.zobrist_hash()
+        );
     }
 
     // --- Halfmove clock tests ---
@@ -886,10 +883,9 @@ mod tests {
     #[test]
     fn test_halfmove_clock_initialized_from_fen() {
         // FEN with halfmove_clock = 5
-        let board: Board =
-            "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 5 3"
-                .parse()
-                .unwrap();
+        let board: Board = "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 5 3"
+            .parse()
+            .unwrap();
         assert_eq!(board.halfmove_clock(), 5);
     }
 
@@ -947,10 +943,9 @@ mod tests {
         // FEN with halfmove_clock=3 and a capture available.
         // r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3
         // Nxe5 is a capture of the e5 pawn.
-        let board: Board =
-            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 3 3"
-                .parse()
-                .unwrap();
+        let board: Board = "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 3 3"
+            .parse()
+            .unwrap();
         assert_eq!(board.halfmove_clock(), 3);
 
         // Find Nxe5: f3(idx=21) -> e5(idx=36)

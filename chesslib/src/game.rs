@@ -214,9 +214,9 @@ impl Default for Game {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::square::Square;
-    use crate::rank::Rank;
     use crate::file::File;
+    use crate::rank::Rank;
+    use crate::square::Square;
 
     fn sq(rank: Rank, file: File) -> Square {
         Square::new(rank, file)
@@ -246,13 +246,20 @@ mod tests {
     fn test_game_scholars_mate() {
         // 1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6? 4. Qxf7#
         let mut game = Game::new();
-        game.make_move(mv(sq(Rank::Second, File::E), sq(Rank::Fourth, File::E))).unwrap();
-        game.make_move(mv(sq(Rank::Seventh, File::E), sq(Rank::Fifth, File::E))).unwrap();
-        game.make_move(mv(sq(Rank::First, File::D), sq(Rank::Fifth, File::H))).unwrap();
-        game.make_move(mv(sq(Rank::Eighth, File::B), sq(Rank::Sixth, File::C))).unwrap();
-        game.make_move(mv(sq(Rank::First, File::F), sq(Rank::Fourth, File::C))).unwrap();
-        game.make_move(mv(sq(Rank::Eighth, File::G), sq(Rank::Sixth, File::F))).unwrap();
-        game.make_move(mv(sq(Rank::Fifth, File::H), sq(Rank::Seventh, File::F))).unwrap();
+        game.make_move(mv(sq(Rank::Second, File::E), sq(Rank::Fourth, File::E)))
+            .unwrap();
+        game.make_move(mv(sq(Rank::Seventh, File::E), sq(Rank::Fifth, File::E)))
+            .unwrap();
+        game.make_move(mv(sq(Rank::First, File::D), sq(Rank::Fifth, File::H)))
+            .unwrap();
+        game.make_move(mv(sq(Rank::Eighth, File::B), sq(Rank::Sixth, File::C)))
+            .unwrap();
+        game.make_move(mv(sq(Rank::First, File::F), sq(Rank::Fourth, File::C)))
+            .unwrap();
+        game.make_move(mv(sq(Rank::Eighth, File::G), sq(Rank::Sixth, File::F)))
+            .unwrap();
+        game.make_move(mv(sq(Rank::Fifth, File::H), sq(Rank::Seventh, File::F)))
+            .unwrap();
         assert_eq!(*game.result(), GameResult::WhiteWins);
     }
 
@@ -278,7 +285,10 @@ mod tests {
     #[test]
     fn test_game_insufficient_material_kk() {
         let game = Game::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
-        assert_eq!(*game.result(), GameResult::Draw(DrawReason::InsufficientMaterial));
+        assert_eq!(
+            *game.result(),
+            GameResult::Draw(DrawReason::InsufficientMaterial)
+        );
     }
 
     #[test]
@@ -289,10 +299,14 @@ mod tests {
         // g1-f3, g8-f6, f3-g1, f6-g8 — back to start (hash = start)
         // Do this twice: starting position will appear 3 times in hash_history
         for _ in 0..2 {
-            game.make_move(mv(sq(Rank::First, File::G), sq(Rank::Third, File::F))).unwrap();
-            game.make_move(mv(sq(Rank::Eighth, File::G), sq(Rank::Sixth, File::F))).unwrap();
-            game.make_move(mv(sq(Rank::Third, File::F), sq(Rank::First, File::G))).unwrap();
-            game.make_move(mv(sq(Rank::Sixth, File::F), sq(Rank::Eighth, File::G))).unwrap();
+            game.make_move(mv(sq(Rank::First, File::G), sq(Rank::Third, File::F)))
+                .unwrap();
+            game.make_move(mv(sq(Rank::Eighth, File::G), sq(Rank::Sixth, File::F)))
+                .unwrap();
+            game.make_move(mv(sq(Rank::Third, File::F), sq(Rank::First, File::G)))
+                .unwrap();
+            game.make_move(mv(sq(Rank::Sixth, File::F), sq(Rank::Eighth, File::G)))
+                .unwrap();
         }
         assert!(game.is_threefold_repetition());
         assert_eq!(*game.result(), GameResult::Ongoing);
@@ -302,12 +316,19 @@ mod tests {
     fn test_game_fivefold_repetition() {
         let mut game = Game::new();
         for _ in 0..4 {
-            game.make_move(mv(sq(Rank::First, File::G), sq(Rank::Third, File::F))).unwrap();
-            game.make_move(mv(sq(Rank::Eighth, File::G), sq(Rank::Sixth, File::F))).unwrap();
-            game.make_move(mv(sq(Rank::Third, File::F), sq(Rank::First, File::G))).unwrap();
-            game.make_move(mv(sq(Rank::Sixth, File::F), sq(Rank::Eighth, File::G))).unwrap();
+            game.make_move(mv(sq(Rank::First, File::G), sq(Rank::Third, File::F)))
+                .unwrap();
+            game.make_move(mv(sq(Rank::Eighth, File::G), sq(Rank::Sixth, File::F)))
+                .unwrap();
+            game.make_move(mv(sq(Rank::Third, File::F), sq(Rank::First, File::G)))
+                .unwrap();
+            game.make_move(mv(sq(Rank::Sixth, File::F), sq(Rank::Eighth, File::G)))
+                .unwrap();
         }
-        assert_eq!(*game.result(), GameResult::Draw(DrawReason::FivefoldRepetition));
+        assert_eq!(
+            *game.result(),
+            GameResult::Draw(DrawReason::FivefoldRepetition)
+        );
     }
 
     #[test]
@@ -321,7 +342,8 @@ mod tests {
         // Here we start with clock=99; after one non-pawn/non-capture move -> clock=100 -> draw
         let mut game = game;
         // Move rook a1 to a2 (non-capture, non-pawn)
-        game.make_move(mv(sq(Rank::First, File::A), sq(Rank::Second, File::A))).unwrap();
+        game.make_move(mv(sq(Rank::First, File::A), sq(Rank::Second, File::A)))
+            .unwrap();
         assert_eq!(*game.result(), GameResult::Draw(DrawReason::FiftyMoveRule));
     }
 
@@ -330,14 +352,20 @@ mod tests {
         // FEN with halfmove_clock=150; 75-move rule triggers immediately on detection.
         // (75-move check comes before 50-move check in detect_result)
         let game = Game::from_fen("4k3/8/8/8/8/8/8/R3K2R w - - 150 1").unwrap();
-        assert_eq!(*game.result(), GameResult::Draw(DrawReason::SeventyFiveMoveRule));
+        assert_eq!(
+            *game.result(),
+            GameResult::Draw(DrawReason::SeventyFiveMoveRule)
+        );
     }
 
     #[test]
     fn test_game_make_move_after_game_over_fails() {
         let mut game = Game::from_fen("4k3/8/8/8/8/8/8/4K3 w - - 0 1").unwrap();
         // Game is already a draw
-        assert_eq!(*game.result(), GameResult::Draw(DrawReason::InsufficientMaterial));
+        assert_eq!(
+            *game.result(),
+            GameResult::Draw(DrawReason::InsufficientMaterial)
+        );
         let m = mv(sq(Rank::First, File::E), sq(Rank::Second, File::E));
         assert!(game.make_move(m).is_err());
     }
@@ -401,7 +429,8 @@ mod tests {
         let mut game = Game::new_with_clock(clock);
         std::thread::sleep(std::time::Duration::from_millis(5));
         // White makes e2-e4; clock records elapsed (~5ms) against white's 1ms budget
-        game.make_move(mv(sq(Rank::Second, File::E), sq(Rank::Fourth, File::E))).unwrap();
+        game.make_move(mv(sq(Rank::Second, File::E), sq(Rank::Fourth, File::E)))
+            .unwrap();
         assert_eq!(*game.result(), GameResult::BlackWins);
         assert_eq!(game.clock().unwrap().white_ms(), 0);
     }
@@ -413,7 +442,8 @@ mod tests {
         let game = Game::from_fen_with_clock(
             "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
             clock,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(*game.result(), GameResult::Ongoing);
         assert_eq!(game.clock().unwrap().moves_to_go(), Some(40));
     }

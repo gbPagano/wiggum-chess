@@ -1,9 +1,9 @@
-use std::io::{self, BufRead};
-use clap::Parser;
+use chess_engine::search::search;
 use chesslib::board::Board;
 use chesslib::chess_move::ChessMove;
 use chesslib::movegen::MoveGen;
-use chess_engine::search::search;
+use clap::Parser;
+use std::io::{self, BufRead};
 
 #[derive(Parser)]
 #[command(name = "chess-engine", about = "MaterialEngine UCI chess engine")]
