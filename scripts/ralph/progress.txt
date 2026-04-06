@@ -2,8 +2,11 @@
 - Cargo is not pre-installed in devcontainer — install with `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y`, then `source "$HOME/.cargo/env"`
 - Workspace root `Cargo.toml` holds profiles; subcrate `Cargo.toml` files should NOT have `[profile.*]` sections
 - The test `gen_files::magics::name` intentionally has `assert!(false)` — it's a dev scratchpad, always fails, not a regression
-- Run tests with `--skip gen_files::magics::name` to exclude it; all other 46 tests should pass
+- Run tests with `--skip gen_files::magics::name` to exclude it; all other tests should pass
 - `cargo build --workspace`, `cargo test --workspace`, `cargo bench --bench perft -p chesslib` are the key quality checks
+- Build-time code generation: add new tables by creating `gen_files/foo.rs`, exporting from `gen_files/mod.rs`, calling `write_foo(&mut f)?` in `build.rs`, and adding accessor functions in `magic.rs` (which includes the generated file via `include!(concat!(env!("OUT_DIR"), "/magic_file.rs"))`)
+- BitBoard: use `get_squares()` iterator to enumerate set bits; no `Sub` trait — can't do `bb - BitBoard(1)` in safe code
+- Zobrist keys are in `ZOBRIST_PIECES[piece*128 + color*64 + sq]`, `ZOBRIST_CASTLING[0..4]` (WK,WQ,BK,BQ), `ZOBRIST_EN_PASSANT[file]`, `ZOBRIST_SIDE`
 ---
 
 # Ralph Progress Log
@@ -50,4 +53,21 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - Square index layout: `to_index() = rank * 8 + file`; square color = `(file + rank) % 2`
   - `BitBoard.0.count_ones()` to count set bits (pieces on a bitboard)
   - Bishop same-color check: extract square index and compare `(idx%8 + idx/8) % 2` for both bishops
+---
+
+## 2026-04-05 - US-004
+- Added Zobrist hashing to `Board` in `chesslib/src/board.rs`
+- Added `chesslib/src/gen_files/zobrist.rs` with `write_zobrist()` — generates 768 piece/color/square keys, 4 castling keys, 8 en passant file keys, and 1 side-to-move key using xorshift64 seeded at a fixed value
+- Updated `gen_files/mod.rs` to export `write_zobrist`; updated `build.rs` to call it; keys are appended to `magic_file.rs`
+- Added `zobrist_piece_key()`, `zobrist_castling_key()`, `zobrist_en_passant_key()`, `zobrist_side_key()` accessor functions in `magic.rs`
+- `Board` now has a `zobrist_hash: u64` field, initialized to 0 in `new()` and computed from scratch via `compute_zobrist()` at the end of `from_str()`
+- `make_move()` updates the hash incrementally via XOR: flips side key, XORs out old en passant/castling, XORs piece moves, handles promotions/en passant captures/castling rook, XORs in new castling/en passant
+- Added `zobrist_hash()` public method
+- Files changed: `chesslib/src/gen_files/zobrist.rs` (new), `chesslib/src/gen_files/mod.rs`, `chesslib/src/build.rs`, `chesslib/src/magic.rs`, `chesslib/src/board.rs`
+- Tests added: 5 new Zobrist tests verifying non-zero hash, different positions, incremental vs from-scratch consistency, and move-order independence
+- All 64 tests pass (59 prior + 5 new)
+- **Learnings for future iterations:**
+  - The `include!(concat!(env!("OUT_DIR"), "/magic_file.rs"))` pattern in `magic.rs` means all generated constants (including Zobrist) are accessible there — just add accessors to `magic.rs`
+  - `set_en_passant()` only sets `en_passant` if an adjacent enemy pawn can actually capture — check `result.en_passant` after calling it to know if the key should be XOR'd in
+  - Castling rights index convention: 0=WK, 1=WQ, 2=BK, 3=BQ (matching `CastleRights` field order)
 ---
