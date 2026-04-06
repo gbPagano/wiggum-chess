@@ -23,6 +23,7 @@ pub struct Board {
     castle_rights: CastleRights,
     pinned_bitboard: BitBoard,
     checkers_bitboard: BitBoard,
+    zobrist_hash: u64,
 }
 
 impl Board {
@@ -37,7 +38,55 @@ impl Board {
             castle_rights: CastleRights::default(),
             pinned_bitboard: BitBoard(0),
             checkers_bitboard: BitBoard(0),
+            zobrist_hash: 0,
         }
+    }
+
+    /// Returns the current Zobrist hash of the board position.
+    #[inline(always)]
+    pub fn zobrist_hash(&self) -> u64 {
+        self.zobrist_hash
+    }
+
+    /// Compute the Zobrist hash from scratch based on current board state.
+    fn compute_zobrist(&self) -> u64 {
+        let mut hash = 0u64;
+
+        // Piece/color/square keys
+        for piece in ALL_PIECES {
+            for color in [Color::White, Color::Black] {
+                let bb = self.get_piece_bitboard(piece) & self.get_color_bitboard(color);
+                for sq in bb.get_squares() {
+                    hash ^= magic::zobrist_piece_key(piece, color, sq);
+                }
+            }
+        }
+
+        // Castling rights
+        if self.castle_rights.white_kingside {
+            hash ^= magic::zobrist_castling_key(0);
+        }
+        if self.castle_rights.white_queenside {
+            hash ^= magic::zobrist_castling_key(1);
+        }
+        if self.castle_rights.black_kingside {
+            hash ^= magic::zobrist_castling_key(2);
+        }
+        if self.castle_rights.black_queenside {
+            hash ^= magic::zobrist_castling_key(3);
+        }
+
+        // En passant file
+        if let Some(sq) = self.en_passant {
+            hash ^= magic::zobrist_en_passant_key(sq.get_file());
+        }
+
+        // Side to move
+        if self.side_to_move == Color::Black {
+            hash ^= magic::zobrist_side_key();
+        }
+
+        hash
     }
 
     #[inline(always)]
@@ -201,6 +250,25 @@ impl Board {
         result.checkers_bitboard = BitBoard(0);
         result.pinned_bitboard = BitBoard(0);
 
+        // Zobrist: XOR out old en passant and castling; flip side to move
+        result.zobrist_hash ^= magic::zobrist_side_key();
+        if let Some(ep_sq) = self.en_passant {
+            result.zobrist_hash ^= magic::zobrist_en_passant_key(ep_sq.get_file());
+        }
+        let old_rights = self.castle_rights;
+        if old_rights.white_kingside {
+            result.zobrist_hash ^= magic::zobrist_castling_key(0);
+        }
+        if old_rights.white_queenside {
+            result.zobrist_hash ^= magic::zobrist_castling_key(1);
+        }
+        if old_rights.black_kingside {
+            result.zobrist_hash ^= magic::zobrist_castling_key(2);
+        }
+        if old_rights.black_queenside {
+            result.zobrist_hash ^= magic::zobrist_castling_key(3);
+        }
+
         let source_bb = BitBoard::from_square(m.source);
         let dest_bb = BitBoard::from_square(m.dest);
 
@@ -208,8 +276,16 @@ impl Board {
 
         result.xor(moved_piece, source_bb, self.side_to_move);
         result.xor(moved_piece, dest_bb, self.side_to_move);
+        // Zobrist: move piece from source to dest
+        result.zobrist_hash ^=
+            magic::zobrist_piece_key(moved_piece, self.side_to_move, m.source);
+        result.zobrist_hash ^= magic::zobrist_piece_key(moved_piece, self.side_to_move, m.dest);
+
         if let Some(captured) = self.get_piece(m.dest) {
             result.xor(captured, dest_bb, !self.side_to_move);
+            // Zobrist: remove captured piece
+            result.zobrist_hash ^=
+                magic::zobrist_piece_key(captured, !self.side_to_move, m.dest);
         }
 
         result
@@ -233,22 +309,40 @@ impl Board {
             if let Some(Piece::Knight) = m.promotion {
                 result.xor(Piece::Pawn, dest_bb, self.side_to_move);
                 result.xor(Piece::Knight, dest_bb, self.side_to_move);
+                // Zobrist: replace pawn with knight at dest
+                result.zobrist_hash ^=
+                    magic::zobrist_piece_key(Piece::Pawn, self.side_to_move, m.dest);
+                result.zobrist_hash ^=
+                    magic::zobrist_piece_key(Piece::Knight, self.side_to_move, m.dest);
                 result.checkers_bitboard ^= magic::get_knight_moves(enemy_king_sq) & dest_bb;
             } else if let Some(promotion) = m.promotion {
                 result.xor(Piece::Pawn, dest_bb, self.side_to_move);
                 result.xor(promotion, dest_bb, self.side_to_move);
+                // Zobrist: replace pawn with promoted piece at dest
+                result.zobrist_hash ^=
+                    magic::zobrist_piece_key(Piece::Pawn, self.side_to_move, m.dest);
+                result.zobrist_hash ^=
+                    magic::zobrist_piece_key(promotion, self.side_to_move, m.dest);
             } else if !(source_bb & magic::get_pawn_source_double_moves()).is_empty()
                 && !(dest_bb & magic::get_pawn_dest_double_moves()).is_empty()
             {
                 result.set_en_passant(m.dest.backward(self.side_to_move).unwrap());
+                // Zobrist: XOR in new en passant file if actually set
+                if let Some(ep_sq) = result.en_passant {
+                    result.zobrist_hash ^= magic::zobrist_en_passant_key(ep_sq.get_file());
+                }
                 result.checkers_bitboard ^=
                     magic::get_pawn_attacks(enemy_king_sq, !self.side_to_move, dest_bb);
             } else if Some(m.dest) == self.en_passant {
+                let captured_sq = m.dest.forward(!self.side_to_move).unwrap();
                 result.xor(
                     Piece::Pawn,
-                    BitBoard::from_square(m.dest.forward(!self.side_to_move).unwrap()),
+                    BitBoard::from_square(captured_sq),
                     !self.side_to_move,
                 );
+                // Zobrist: remove the captured en passant pawn
+                result.zobrist_hash ^=
+                    magic::zobrist_piece_key(Piece::Pawn, !self.side_to_move, captured_sq);
                 result.checkers_bitboard ^=
                     magic::get_pawn_attacks(enemy_king_sq, !self.side_to_move, dest_bb);
             } else {
@@ -260,24 +354,31 @@ impl Board {
                 Color::White => Rank::First,
                 Color::Black => Rank::Eighth,
             };
-            let start_bb = BitBoard::set(
-                backrank,
-                match m.dest.get_file() {
-                    File::C | File::B => File::A,
-                    File::G => File::H,
-                    _ => unreachable!(),
-                },
-            );
-            let end_bb = BitBoard::set(
-                backrank,
-                match m.dest.get_file() {
-                    File::C | File::B => File::D,
-                    File::G => File::F,
-                    _ => unreachable!(),
-                },
-            );
+            let rook_start_file = match m.dest.get_file() {
+                File::C | File::B => File::A,
+                File::G => File::H,
+                _ => unreachable!(),
+            };
+            let rook_end_file = match m.dest.get_file() {
+                File::C | File::B => File::D,
+                File::G => File::F,
+                _ => unreachable!(),
+            };
+            let start_bb = BitBoard::set(backrank, rook_start_file);
+            let end_bb = BitBoard::set(backrank, rook_end_file);
             result.xor(Piece::Rook, start_bb, self.side_to_move);
             result.xor(Piece::Rook, end_bb, self.side_to_move);
+            // Zobrist: move rook during castling
+            result.zobrist_hash ^= magic::zobrist_piece_key(
+                Piece::Rook,
+                self.side_to_move,
+                Square::new(backrank, rook_start_file),
+            );
+            result.zobrist_hash ^= magic::zobrist_piece_key(
+                Piece::Rook,
+                self.side_to_move,
+                Square::new(backrank, rook_end_file),
+            );
         }
 
         let rays_attackers = result.get_color_bitboard(self.side_to_move)
@@ -296,6 +397,21 @@ impl Board {
             } else if between.0.count_ones() == 1 {
                 result.pinned_bitboard ^= between;
             }
+        }
+
+        // Zobrist: XOR in new castling rights
+        let new_rights = result.castle_rights;
+        if new_rights.white_kingside {
+            result.zobrist_hash ^= magic::zobrist_castling_key(0);
+        }
+        if new_rights.white_queenside {
+            result.zobrist_hash ^= magic::zobrist_castling_key(1);
+        }
+        if new_rights.black_kingside {
+            result.zobrist_hash ^= magic::zobrist_castling_key(2);
+        }
+        if new_rights.black_queenside {
+            result.zobrist_hash ^= magic::zobrist_castling_key(3);
         }
 
         result.side_to_move = !result.side_to_move;
@@ -447,6 +563,7 @@ impl FromStr for Board {
         }
 
         board.update_attacked_bitboards();
+        board.zobrist_hash = board.compute_zobrist();
 
         Ok(board)
     }
@@ -660,5 +777,83 @@ mod tests {
     fn test_sufficient_material_queen() {
         let board: Board = "8/8/4k3/8/8/3K4/8/7Q w - - 0 1".parse().unwrap();
         assert!(!board.is_insufficient_material());
+    }
+
+    // --- Zobrist hash tests ---
+
+    #[test]
+    fn test_zobrist_initial_position_is_nonzero() {
+        let board = Board::default();
+        assert_ne!(board.zobrist_hash(), 0);
+    }
+
+    #[test]
+    fn test_zobrist_different_positions_different_hashes() {
+        let board1 = Board::default();
+        let board2: Board =
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1".parse().unwrap();
+        assert_ne!(board1.zobrist_hash(), board2.zobrist_hash());
+    }
+
+    #[test]
+    fn test_zobrist_same_position_different_move_orders() {
+        // Reach the same position via two different move orders and verify hashes match.
+        // 1.e4 e5 2.Nf3 Nc6 vs 1.Nf3 Nc6 2.e4 e5
+        let board_a: Board =
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+                .parse()
+                .unwrap();
+        let board_b: Board =
+            "r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3"
+                .parse()
+                .unwrap();
+        assert_eq!(board_a.zobrist_hash(), board_b.zobrist_hash());
+    }
+
+    #[test]
+    fn test_zobrist_incremental_matches_from_scratch() {
+        // Play a sequence of moves and verify the incremental hash equals compute_zobrist().
+        let board = Board::default();
+        // 1. e4
+        let e4_move = MoveGen::new_legal(&board)
+            .find(|m| {
+                m.source.to_index() == 12 && m.dest.to_index() == 28 // e2->e4
+            })
+            .expect("e4 move should exist");
+        let board2 = board.make_move(e4_move);
+        assert_eq!(board2.zobrist_hash(), board2.compute_zobrist());
+
+        // 1...e5
+        let e5_move = MoveGen::new_legal(&board2)
+            .find(|m| {
+                m.source.to_index() == 52 && m.dest.to_index() == 36 // e7->e5
+            })
+            .expect("e5 move should exist");
+        let board3 = board2.make_move(e5_move);
+        assert_eq!(board3.zobrist_hash(), board3.compute_zobrist());
+
+        // 2. Nf3
+        let nf3_move = MoveGen::new_legal(&board3)
+            .find(|m| {
+                m.source.to_index() == 6 && m.dest.to_index() == 21 // g1->f3
+            })
+            .expect("Nf3 move should exist");
+        let board4 = board3.make_move(nf3_move);
+        assert_eq!(board4.zobrist_hash(), board4.compute_zobrist());
+    }
+
+    #[test]
+    fn test_zobrist_same_position_via_moves() {
+        // Start → e4 → and reach same position as from FEN
+        let board = Board::default();
+        let e4_move = MoveGen::new_legal(&board)
+            .find(|m| m.source.to_index() == 12 && m.dest.to_index() == 28)
+            .unwrap();
+        let board_via_moves = board.make_move(e4_move);
+
+        let board_from_fen: Board =
+            "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1".parse().unwrap();
+
+        assert_eq!(board_via_moves.zobrist_hash(), board_from_fen.zobrist_hash());
     }
 }

@@ -31,6 +31,7 @@ fn main() -> Result<()> {
     write_pawn_moves(&mut f)?;
     write_pawn_attacks(&mut f)?;
     write_chessboard_utils(&mut f)?;
+    write_zobrist(&mut f)?;
 
     Ok(())
 }

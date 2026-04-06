@@ -1,6 +1,7 @@
 use crate::bitboard::BitBoard;
 use crate::color::Color;
 use crate::file::File;
+use crate::pieces::Piece;
 use crate::rank::Rank;
 use crate::square::Square;
 
@@ -122,4 +123,33 @@ pub fn get_king_moves(sq: Square) -> BitBoard {
 #[inline(always)]
 pub fn get_castle_squares() -> BitBoard {
     CASTLE_SQUARES
+}
+
+/// Zobrist key for a piece of the given color on the given square.
+/// Index: piece.to_index() * 128 + color.to_index() * 64 + square.to_index()
+#[inline(always)]
+pub fn zobrist_piece_key(piece: Piece, color: Color, square: Square) -> u64 {
+    unsafe {
+        *ZOBRIST_PIECES
+            .get_unchecked(piece.to_index() * 128 + color.to_index() * 64 + square.to_index())
+    }
+}
+
+/// Zobrist key for a castling right.
+/// Index: white_kingside=0, white_queenside=1, black_kingside=2, black_queenside=3
+#[inline(always)]
+pub fn zobrist_castling_key(index: usize) -> u64 {
+    unsafe { *ZOBRIST_CASTLING.get_unchecked(index) }
+}
+
+/// Zobrist key for the en passant file.
+#[inline(always)]
+pub fn zobrist_en_passant_key(file: File) -> u64 {
+    unsafe { *ZOBRIST_EN_PASSANT.get_unchecked(file.to_index()) }
+}
+
+/// Zobrist key for side to move — XOR this when it is Black's turn.
+#[inline(always)]
+pub fn zobrist_side_key() -> u64 {
+    ZOBRIST_SIDE
 }
