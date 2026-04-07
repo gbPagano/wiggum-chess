@@ -128,8 +128,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created .claude/skills/evolution-decide/SKILL.md with YAML frontmatter (name, description, triggers) and markdown body implementing the decide phase contract: reads implementation.md and benchmark.md, evaluates against acceptance policy, writes decision.md, updates iteration.json with one of four allowed final states (accepted, rejected, inconclusive, failed)."
     },
     {
       "id": "US-009",
