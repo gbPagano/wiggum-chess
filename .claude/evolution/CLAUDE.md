@@ -64,6 +64,8 @@ Every iteration proceeds through the following phases in order. The orchestratio
 | `inconclusive` | Evidence was insufficient for promotion. Changes may be refined in a future iteration. Baseline unchanged. |
 | `no_hypothesis`| No further improvement ideas remain. Session terminates early. |
 
+The canonical versioning policy lives in `tasks/prd-wiggum-evolution-loop.md`. Accepted outcomes must sync the workspace crate versions with the promoted `chess-engine/versions/<tag>/` directory, while non-winning outcomes must leave both unchanged.
+
 ## Iteration State Machine
 
 The canonical state-machine contract lives in `tasks/prd-wiggum-evolution-loop.md` and is referenced by the orchestration script through `STATE_MACHINE_REFERENCE`.

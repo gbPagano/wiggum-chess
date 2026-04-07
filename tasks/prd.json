@@ -208,8 +208,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Documented the canonical versioning policy in tasks/prd-wiggum-evolution-loop.md, including where versions are stored, how accepted iterations bump versions, which promotion artifacts must be recorded, and that non-winning outcomes do not change versions; aligned .claude/evolution/CLAUDE.md and .claude/skills/evolution-decide/SKILL.md with the same contract."
     },
     {
       "id": "US-014",

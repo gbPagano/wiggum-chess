@@ -374,17 +374,55 @@ A transition outside this graph is an orchestration error. The script must stop 
 
 The orchestration script references this contract via `STATE_MACHINE_REFERENCE`, and the decision skill must use the same state names and final-state rules.
 
+### Versioning policy contract
+
+The accepted engine version is stored in two synchronized forms:
+
+- Cargo manifest semver in `chess-engine/Cargo.toml`, `chess-runner/Cargo.toml`, and `chesslib/Cargo.toml` under `[package].version`
+- Release-tag form in orchestration artifacts and version folders as `v<major>.<minor>` under `chess-engine/versions/<tag>/`
+
+For the current baseline, the manifests use `0.1.0` and the matching version-artifact directory is `chess-engine/versions/v0.1/`.
+
+#### Accepted-iteration version bump rule
+
+- Only an `accepted` iteration may create a new promoted version.
+- Promotion increments the **minor** release tag by one while keeping the major version unchanged.
+- The Cargo manifest versions mirror that promoted tag with a `.0` patch component.
+- Example: accepting a candidate from baseline `v0.1` promotes it to `v0.2`, and the synchronized Cargo manifest version becomes `0.2.0` in all three workspace crates.
+
+#### Required promotion artifact contents
+
+When an iteration is accepted, the decision flow must record promotion metadata in the accepted iteration artifacts (`decision.md` and matching `iteration.json` decision metadata) with at least:
+
+- previous baseline version tag
+- promoted version tag
+- previous accepted baseline ref
+- promoted baseline ref or commit to carry forward
+- benchmark evidence summary used to justify promotion
+- changed-files summary from the implementation artifact
+- version-artifact path under `chess-engine/versions/<new-tag>/`
+
+The promoted version directory under `chess-engine/versions/<new-tag>/` is expected to contain `CHANGES.md` and `report.md` per the engine-version directory contract.
+
+#### Non-winning outcomes
+
+- `rejected`, `failed`, and `inconclusive` iterations must not change any Cargo manifest version.
+- `rejected`, `failed`, and `inconclusive` iterations must not create a new promoted version directory under `chess-engine/versions/`.
+- The accepted baseline version remains unchanged until a later iteration reaches `accepted`.
+
+The decision flow is responsible for applying this contract when it determines whether a candidate can be promoted.
+
 ---
 
 ### US-013: Add versioning policy contract
 **Description:** As a developer, I want the version bump behavior defined clearly so that accepted candidates promote consistently.
 
 **Acceptance Criteria:**
-- [ ] The project documents where the engine version is stored.
-- [ ] The project documents how an accepted iteration increments the version.
-- [ ] The promotion artifact contents are documented.
-- [ ] Rejected, failed, and inconclusive iterations are documented as non-version-bumping outcomes.
-- [ ] The versioning policy is referenced by the decision flow.
+- [x] The project documents where the engine version is stored.
+- [x] The project documents how an accepted iteration increments the version.
+- [x] The promotion artifact contents are documented.
+- [x] Rejected, failed, and inconclusive iterations are documented as non-version-bumping outcomes.
+- [x] The versioning policy is referenced by the decision flow.
 
 ### US-014: Add discard and restore contract
 **Description:** As a developer, I want a documented discard path so that non-winning candidates can be removed safely.
@@ -470,5 +508,4 @@ The orchestration script references this contract via `STATE_MACHINE_REFERENCE`,
 
 - What should the default SPRT parameters be for screening and confirmation?
 - Should the benchmark skill reuse the same opening set between screening and confirmation?
-- What exact version string format should promoted engine versions follow?
 - Should the loop keep a machine-readable registry of previously rejected ideas to prevent near-duplicate retries?

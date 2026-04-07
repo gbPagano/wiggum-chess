@@ -33,7 +33,7 @@ Determine the final outcome of the current iteration and persist the decision.
 1. **Read All Artifacts** — Open `implementation.md` and `benchmark.md` to review what was implemented and how it performed. Open `iteration.json` for the full context including hypothesis, state, and metrics.
 
 2. **Evaluate Against Acceptance Policy** — Determine the outcome based on:
-   - **Accepted**: The implementation succeeded, the benchmark evidence satisfies the documented policy, and `benchmark.sufficientForPromotion` is `true` with a statistically meaningful improvement over the baseline.
+   - **Accepted**: The implementation succeeded, the benchmark evidence satisfies the documented policy, `benchmark.sufficientForPromotion` is `true` with a statistically meaningful improvement over the baseline, and the candidate can be promoted under the versioning policy.
    - **Rejected**: The implementation succeeded and benchmark evidence is strong enough to show the candidate is weaker than or equivalent to the baseline. The candidate is discarded.
    - **Inconclusive**: The implementation succeeded but the benchmark evidence is insufficient for a clear accept/reject decision (for example: only screening evidence, weak signal, high variance, or confirmation still required). The candidate may be refined in a future iteration.
    - **Failed**: The implementation, correctness gate, or benchmark infrastructure failed (build error, test failure, benchmark crash). No evaluation of the candidate's merit is possible.
@@ -42,6 +42,7 @@ Determine the final outcome of the current iteration and persist the decision.
    - The final outcome (accepted, rejected, inconclusive, failed)
    - The reasoning for the decision
    - Key evidence cited from the benchmark results, including `policyStage`, completed games, and whether `benchmark.sufficientForPromotion` was satisfied
+   - For an `accepted` outcome, the promotion metadata required by the versioning policy (`previousVersion`, `promotedVersion`, baseline refs, and version-artifact path)
    - Any recommendations for future iterations
 
 4. **Update `iteration.json`** — Follow the canonical state-machine contract in `tasks/prd-wiggum-evolution-loop.md`:
@@ -120,4 +121,5 @@ After this skill runs, the following must be true:
 - Evolution loop: `scripts/evolution-loop.sh`
 - Benchmarks: `scripts/benchmark-version.sh`
 - Benchmark policy: see US-011 benchmark policy contract
+- Versioning policy: see US-013 versioning policy contract in `tasks/prd-wiggum-evolution-loop.md`
 - Iteration state machine: `tasks/prd-wiggum-evolution-loop.md`
