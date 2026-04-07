@@ -2,6 +2,7 @@
 
 ## Codebase Patterns
 - For evolution-loop phase execution, keep terminal output concise and write raw skill stdout/stderr to per-iteration log files under `iterations/<N>/phase-logs/`; record those paths in `iteration.json` so later phases and operators can inspect failures without banner noise.
+- Keep the loop's operator-facing phase list in one ordered sequence and derive both the full plan and remaining-phase output from it so progress text stays synchronized across iterations.
 
 Started: 2026-04-07
 ---
@@ -13,4 +14,13 @@ Started: 2026-04-07
 - **Learnings for future iterations:**
   - Keep phase-level logs as first-class artifacts so terminal output can stay quiet without losing debuggability.
   - `iteration.json.artifacts.phaseLogs` is the contract for locating captured phase stdout/stderr later.
+---
+
+## 2026-04-07 09:16:37 PDT - US-002
+- Added concise phase progress output to `scripts/evolution-loop.sh` so each iteration prints the ordered phase list once and then prints the current phase plus remaining phases before propose, implement, validate, benchmark, and decide.
+- Kept the phase progress output aligned with the quiet logging behavior from US-001 by deriving it from a single ordered phase sequence.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Define operator-visible phase order in one canonical array so start-of-iteration and per-phase progress text cannot drift apart.
+  - Include `validate` in the operator-visible phase plan even though it runs locally rather than through a Claude skill, because it explains the gap between implement and benchmark.
 ---

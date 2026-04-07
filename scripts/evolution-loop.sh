@@ -40,12 +40,14 @@ IMPLEMENTATION_FILENAME="implementation.md"
 BENCHMARK_FILENAME="benchmark.md"
 DECISION_FILENAME="decision.md"
 CORRECTNESS_DIRNAME="correctness"
+PHASE_SEQUENCE=(propose implement validate benchmark decide)
 LAST_PHASE_LOG_PATH=""
 LAST_PHASE_EXIT_STATUS=0
 LAST_PHASE_SKILL_NAME=""
 LAST_PHASE_NAME=""
 LAST_PHASE_RESULT=""
 LAST_PHASE_LOG_RELATIVE_PATH=""
+LAST_PHASE_REMAINING_PHASES=""
 
 usage() {
   sed -n '1,15p' "$0"
@@ -388,6 +390,54 @@ with open(sys.argv[1], 'r', encoding='utf-8') as handle:
 
 print(data.get('state', ''))
 PY
+}
+
+remaining_phases_after() {
+  local current_phase="$1"
+  local phase
+  local found="no"
+  local remaining=()
+
+  for phase in "${PHASE_SEQUENCE[@]}"; do
+    if [[ "$found" == "yes" ]]; then
+      remaining+=("$phase")
+      continue
+    fi
+
+    if [[ "$phase" == "$current_phase" ]]; then
+      found="yes"
+    fi
+  done
+
+  if (( ${#remaining[@]} == 0 )); then
+    printf 'none\n'
+    return 0
+  fi
+
+  local joined=""
+  for phase in "${remaining[@]}"; do
+    if [[ -n "$joined" ]]; then
+      joined+=", "
+    fi
+    joined+="$phase"
+  done
+
+  printf '%s\n' "$joined"
+}
+
+print_iteration_phase_plan() {
+  echo "Phase order: ${PHASE_SEQUENCE[*]}"
+}
+
+print_phase_start() {
+  local phase_name="$1"
+  local remaining_phases
+
+  remaining_phases="$(remaining_phases_after "$phase_name")"
+  LAST_PHASE_REMAINING_PHASES="$remaining_phases"
+
+  echo "Current phase: $phase_name"
+  echo "Remaining phases: $remaining_phases"
 }
 
 run_logged_phase() {
@@ -1103,6 +1153,9 @@ run_iteration() {
     return 0
   fi
 
+  print_iteration_phase_plan
+
+  print_phase_start "propose"
   update_iteration_state "$LAST_ITERATION_STATE_PATH" "initialized" "proposing" "proposal phase start"
   if ! run_logged_phase "propose" "evolution-propose" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
     record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "propose" "Claude skill execution failed during the propose phase. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
@@ -1123,6 +1176,7 @@ run_iteration() {
     return 0
   fi
 
+  print_phase_start "implement"
   update_iteration_state "$LAST_ITERATION_STATE_PATH" "proposed" "implementing" "implementation phase start"
   if ! run_logged_phase "implement" "evolution-implement" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
     record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Claude skill execution failed during the implementation phase. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
@@ -1139,6 +1193,7 @@ run_iteration() {
     return 0
   fi
 
+  print_phase_start "validate"
   if ! run_correctness_gate "$LAST_ITERATION_STATE_PATH" "$LAST_CORRECTNESS_RESULTS_PATH" "$LAST_BENCHMARK_PATH" "$LAST_DECISION_PATH" "$LAST_CANDIDATE_WORKSPACE_PATH"; then
     return 0
   fi
@@ -1149,6 +1204,7 @@ run_iteration() {
     return 0
   fi
 
+  print_phase_start "benchmark"
   if ! run_logged_phase "benchmark" "evolution-benchmark" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
     record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "benchmark" "Claude skill execution failed during the benchmark phase. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
@@ -1164,6 +1220,7 @@ run_iteration() {
     return 0
   fi
 
+  print_phase_start "decide"
   update_iteration_state "$LAST_ITERATION_STATE_PATH" "benchmarked" "deciding" "decision phase start"
   if ! run_logged_phase "decide" "evolution-decide" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
     record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Claude skill execution failed during the decision phase. See $LAST_PHASE_LOG_RELATIVE_PATH for details."

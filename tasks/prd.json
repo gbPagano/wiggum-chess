@@ -33,8 +33,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added a fixed iteration phase sequence and concise progress helpers so each iteration prints the full phase order once, then prints the current phase and remaining phases before propose, implement, validate, benchmark, and decide. Raw model output remains suppressed behind the phase logs introduced in US-001."
     },
     {
       "id": "US-003",
