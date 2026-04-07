@@ -22,8 +22,11 @@ WORKER_GUIDANCE="$REPO_ROOT/.claude/evolution/CLAUDE.md"
 BASELINE_VERSION=""
 OUTPUT_DIR="$REPO_ROOT/tasks/evolution-runs"
 MAX_ITERATIONS=10
+ACCEPTED_BASELINE_VERSION=""
+ACCEPTED_BASELINE_REF=""
 SESSION_SUMMARY_FILENAME="summary.md"
 ITERATIONS_DIRNAME="iterations"
+CANDIDATE_WORKSPACES_DIRNAME="candidate-workspaces"
 INITIAL_ITERATION_NUMBER=1
 ITERATION_STATE_FILENAME="iteration.json"
 HYPOTHESIS_FILENAME="hypothesis.md"
@@ -82,11 +85,65 @@ write_session_metadata() {
 
   cat <<EOF > "$metadata_path"
 baseline_version=$BASELINE_VERSION
+accepted_baseline_version=$ACCEPTED_BASELINE_VERSION
+accepted_baseline_ref=$ACCEPTED_BASELINE_REF
 max_iterations=$MAX_ITERATIONS
 session_id=$session_id
 session_dir=$session_dir
 summary_file=$SESSION_SUMMARY_FILENAME
 EOF
+}
+
+resolve_accepted_baseline_ref() {
+  if git -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
+    ACCEPTED_BASELINE_REF="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  else
+    ACCEPTED_BASELINE_REF="main"
+  fi
+
+  ACCEPTED_BASELINE_VERSION="$BASELINE_VERSION"
+}
+
+candidate_workspace_root() {
+  local session_dir="$1"
+
+  printf '%s/%s\n' "$session_dir" "$CANDIDATE_WORKSPACES_DIRNAME"
+}
+
+candidate_workspace_path() {
+  local session_dir="$1"
+  local iteration_number="$2"
+
+  printf '%s/%s\n' "$(candidate_workspace_root "$session_dir")" "$iteration_number"
+}
+
+candidate_branch_name() {
+  local iteration_number="$1"
+
+  printf 'wiggum-evolution/%s/iteration-%s\n' "$SESSION_ID" "$iteration_number"
+}
+
+remove_candidate_workspace() {
+  local candidate_dir="$1"
+
+  if [[ -d "$candidate_dir" ]]; then
+    git -C "$REPO_ROOT" worktree remove --force "$candidate_dir" >/dev/null 2>&1 || true
+    rm -rf "$candidate_dir"
+  fi
+}
+
+create_candidate_workspace() {
+  local candidate_dir="$1"
+  local baseline_ref="$2"
+
+  git -C "$REPO_ROOT" worktree add --detach "$candidate_dir" "$baseline_ref" >/dev/null 2>&1
+}
+
+create_candidate_branch() {
+  local candidate_dir="$1"
+  local candidate_branch="$2"
+
+  git -C "$candidate_dir" checkout -b "$candidate_branch" >/dev/null 2>&1
 }
 
 write_markdown_placeholder() {
@@ -103,23 +160,80 @@ $description
 EOF
 }
 
+setup_candidate_workspace() {
+  local session_dir="$1"
+  local iteration_number="$2"
+  local candidate_dir
+  local candidate_branch
+  local setup_status="ready"
+  local setup_error=""
+
+  candidate_dir="$(candidate_workspace_path "$session_dir" "$iteration_number")"
+  candidate_branch="$(candidate_branch_name "$iteration_number")"
+
+  mkdir -p "$(candidate_workspace_root "$session_dir")"
+  remove_candidate_workspace "$candidate_dir"
+
+  if create_candidate_workspace "$candidate_dir" "$ACCEPTED_BASELINE_REF"; then
+    if ! create_candidate_branch "$candidate_dir" "$candidate_branch"; then
+      setup_status="failed"
+      setup_error="failed to create candidate branch $candidate_branch"
+      remove_candidate_workspace "$candidate_dir"
+    fi
+  else
+    setup_status="failed"
+    setup_error="failed to create isolated git worktree at $candidate_dir from baseline $ACCEPTED_BASELINE_REF"
+    rm -rf "$candidate_dir"
+  fi
+
+  printf '%s|%s|%s|%s\n' "$candidate_dir" "$candidate_branch" "$setup_status" "$setup_error"
+}
+
 write_iteration_state() {
   local iteration_json_path="$1"
   local iteration_number="$2"
   local iteration_dir="$3"
+  local candidate_workspace_path="$4"
+  local candidate_branch="$5"
+  local candidate_setup_status="$6"
+  local candidate_setup_error="$7"
   local hypothesis_path="$iteration_dir/$HYPOTHESIS_FILENAME"
   local implementation_path="$iteration_dir/$IMPLEMENTATION_FILENAME"
   local benchmark_path="$iteration_dir/$BENCHMARK_FILENAME"
   local decision_path="$iteration_dir/$DECISION_FILENAME"
   local escaped_baseline_version
+  local escaped_baseline_ref
+  local escaped_candidate_workspace_path
+  local escaped_candidate_branch
+  local escaped_candidate_setup_status
+  local escaped_candidate_setup_error
+  local initial_state
 
-  escaped_baseline_version="$(json_escape "$BASELINE_VERSION")"
+  escaped_baseline_version="$(json_escape "$ACCEPTED_BASELINE_VERSION")"
+  escaped_baseline_ref="$(json_escape "$ACCEPTED_BASELINE_REF")"
+  escaped_candidate_workspace_path="$(json_escape "$candidate_workspace_path")"
+  escaped_candidate_branch="$(json_escape "$candidate_branch")"
+  escaped_candidate_setup_status="$(json_escape "$candidate_setup_status")"
+  escaped_candidate_setup_error="$(json_escape "$candidate_setup_error")"
+
+  initial_state="initialized"
+  if [[ "$candidate_setup_status" == "failed" ]]; then
+    initial_state="failed"
+  fi
 
   cat <<EOF > "$iteration_json_path"
 {
   "iteration": $iteration_number,
   "baselineVersion": "$escaped_baseline_version",
-  "state": "initialized",
+  "baselineRef": "$escaped_baseline_ref",
+  "state": "$initial_state",
+  "isolation": {
+    "type": "git-worktree",
+    "path": "$escaped_candidate_workspace_path",
+    "branch": "$escaped_candidate_branch",
+    "status": "$escaped_candidate_setup_status",
+    "setupError": "$escaped_candidate_setup_error"
+  },
   "artifacts": {
     "iterationJson": "$iteration_json_path",
     "hypothesis": "$hypothesis_path",
@@ -141,16 +255,38 @@ create_iteration_artifacts() {
   local implementation_path="$iteration_dir/$IMPLEMENTATION_FILENAME"
   local benchmark_path="$iteration_dir/$BENCHMARK_FILENAME"
   local decision_path="$iteration_dir/$DECISION_FILENAME"
+  local isolation_fields
+  local candidate_workspace_path
+  local candidate_branch
+  local candidate_setup_status
+  local candidate_setup_error
 
   mkdir -p "$iteration_dir"
 
-  write_iteration_state "$iteration_json_path" "$iteration_number" "$iteration_dir"
+  isolation_fields="$(setup_candidate_workspace "$session_dir" "$iteration_number")"
+  IFS='|' read -r candidate_workspace_path candidate_branch candidate_setup_status candidate_setup_error <<< "$isolation_fields"
+  LAST_CANDIDATE_WORKSPACE_PATH="$candidate_workspace_path"
+  LAST_CANDIDATE_WORKSPACE_STATUS="$candidate_setup_status"
+
+  write_iteration_state "$iteration_json_path" "$iteration_number" "$iteration_dir" "$candidate_workspace_path" "$candidate_branch" "$candidate_setup_status" "$candidate_setup_error"
   write_markdown_placeholder "$hypothesis_path" "Iteration $iteration_number Hypothesis" "Describe the selected improvement idea and why it should help."
   write_markdown_placeholder "$implementation_path" "Iteration $iteration_number Implementation" "Summarize candidate changes and list modified files."
   write_markdown_placeholder "$benchmark_path" "Iteration $iteration_number Benchmark" "Record benchmark settings, completed games, and summary metrics."
   write_markdown_placeholder "$decision_path" "Iteration $iteration_number Decision" "Record the final outcome and the reason for it."
 
-  printf '%s\n' "$iteration_dir"
+  if [[ "$candidate_setup_status" == "failed" ]]; then
+    cat <<EOF > "$decision_path"
+# Iteration $iteration_number Decision
+
+Status: failed
+
+Candidate workspace setup failed before proposal or implementation could begin.
+
+Reason: $candidate_setup_error
+EOF
+  fi
+
+  LAST_ITERATION_DIR="$iteration_dir"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -198,11 +334,13 @@ SESSION_DIR="$OUTPUT_DIR/$SESSION_ID"
 SESSION_SUMMARY_PATH="$SESSION_DIR/$SESSION_SUMMARY_FILENAME"
 SESSION_METADATA_PATH="$SESSION_DIR/session.env"
 
+resolve_accepted_baseline_ref
 mkdir -p "$SESSION_DIR"
 write_session_summary_placeholder "$SESSION_SUMMARY_PATH"
 write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
 
-INITIAL_ITERATION_DIR="$(create_iteration_artifacts "$SESSION_DIR" "$INITIAL_ITERATION_NUMBER")"
+create_iteration_artifacts "$SESSION_DIR" "$INITIAL_ITERATION_NUMBER"
+INITIAL_ITERATION_DIR="$LAST_ITERATION_DIR"
 INITIAL_ITERATION_STATE_PATH="$INITIAL_ITERATION_DIR/$ITERATION_STATE_FILENAME"
 
 echo "Starting Wiggum evolution loop"
@@ -213,7 +351,10 @@ echo "Session ID: $SESSION_ID"
 echo "Session directory: $SESSION_DIR"
 echo "Session summary: $SESSION_SUMMARY_PATH"
 echo "Session metadata: $SESSION_METADATA_PATH"
+
 echo "Initial iteration directory: $INITIAL_ITERATION_DIR"
 echo "Initial iteration state: $INITIAL_ITERATION_STATE_PATH"
+echo "Initial candidate workspace: $LAST_CANDIDATE_WORKSPACE_PATH"
+echo "Initial candidate workspace status: $LAST_CANDIDATE_WORKSPACE_STATUS"
 echo
-echo "Session artifact root and initial iteration skeleton are ready. Future stories will populate iteration phases and loop control."
+echo "Each iteration starts from an isolated candidate worktree. If setup fails, the iteration is marked failed and the baseline remains unchanged."

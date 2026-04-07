@@ -91,6 +91,34 @@ tasks/evolution-runs/20260406T185545Z/
 - `evolution-decide` reads implementation and benchmark artifacts, writes `decision.md`, and updates `iteration.json` with the final state.
 - The orchestration script alone controls whether to continue, promote, discard, or stop.
 
+### Isolated candidate workspace contract
+
+- Every iteration creates a reversible git worktree at `tasks/evolution-runs/<session-id>/candidate-workspaces/<N>/` or the configured output directory equivalent.
+- The candidate worktree is created from the latest accepted baseline reference, not from the last attempted candidate.
+- `iteration.json` records the isolation metadata under `isolation`, including `type`, `path`, `branch`, `status`, and `setupError`.
+- If worktree or branch setup fails, the iteration enters the `failed` state immediately, `decision.md` records the setup failure, and the accepted baseline remains unchanged.
+- Candidate branches use the format `wiggum-evolution/<session-id>/iteration-<N>` so each attempt is auditable and removable without affecting the accepted baseline.
+- Because implementation happens inside the isolated worktree, rejected candidates can be discarded without leaking changes into the promoted baseline.
+
+### Isolation metadata example
+
+```json
+{
+  "baselineVersion": "v0.1",
+  "baselineRef": "<accepted-baseline-ref>",
+  "state": "initialized",
+  "isolation": {
+    "type": "git-worktree",
+    "path": "tasks/evolution-runs/<session-id>/candidate-workspaces/1",
+    "branch": "wiggum-evolution/<session-id>/iteration-1",
+    "status": "ready",
+    "setupError": ""
+  }
+}
+```
+
+The `baselineRef` field is the authoritative source for which accepted baseline an iteration started from.
+
 ## 4. User Stories
 
 ### US-001: Add orchestration script skeleton

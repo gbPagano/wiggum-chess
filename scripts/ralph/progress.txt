@@ -189,6 +189,7 @@
 - The test `gen_files::magics::name` intentionally has `assert!(false)` — it's a dev scratchpad, always fails, not a regression
 - Run tests with `--skip gen_files::magics::name` to exclude it; all other tests should pass
 - `cargo build --workspace`, `cargo test --workspace`, `cargo bench --bench perft -p chesslib` are the key quality checks
+- Evolution loop iterations record isolation metadata in `iteration.json` under `baselineRef` plus `isolation.{type,path,branch,status,setupError}`; future loop phases should treat those fields as the source of truth for candidate workspace state
 - Build-time code generation: add new tables by creating `gen_files/foo.rs`, exporting from `gen_files/mod.rs`, calling `write_foo(&mut f)?` in `build.rs`, and adding accessor functions in `magic.rs` (which includes the generated file via `include!(concat!(env!("OUT_DIR"), "/magic_file.rs"))`)
 - BitBoard: use `get_squares()` iterator to enumerate set bits; no `Sub` trait — can't do `bb - BitBoard(1)` in safe code
 - Zobrist keys are in `ZOBRIST_PIECES[piece*128 + color*64 + sq]`, `ZOBRIST_CASTLING[0..4]` (WK,WQ,BK,BQ), `ZOBRIST_EN_PASSANT[file]`, `ZOBRIST_SIDE`
@@ -383,4 +384,26 @@ Started: Sun Apr  5 22:30:19 PDT 2026
 - **Learnings for future iterations:**
   - The benchmark skill should record build failures as `failed` state so the decision skill can distinguish infrastructure failures from candidate performance issues.
   - If the first benchmark result is weak, the skill should note this in `benchmark.md` so the decision skill knows evidence may be insufficient rather than silently accepting an inconclusive result.
+---
+
+## 2026-04-07 03:20:00 UTC - US-008
+- Verified `.claude/skills/evolution-decide/SKILL.md` already exists and meets all acceptance criteria
+- Skill contract: reads `implementation.md` and `benchmark.md`, evaluates against acceptance policy, writes `decision.md`, updates `iteration.json` with one of four allowed final states (accepted, rejected, inconclusive, failed)
+- All quality checks pass: `bash -n scripts/evolution-loop.sh`, `cargo build --workspace`, 118 tests pass
+- Files changed: `.claude/skills/evolution-decide/SKILL.md` (pre-existing, verified), `tasks/prd.json` (marked passes: true)
+- **Learnings for future iterations:**
+  - US-008 SKILL.md was already present from a prior session — the PRD just needed the passes flag flipped. Always check if files already exist before assuming work is needed.
+  - The four allowed final states (accepted/rejected/inconclusive/failed) in the decide skill mirror the outcome behaviors already documented in `.claude/evolution/CLAUDE.md` worker guidance.
+---
+
+## 2026-04-07 05:05:56 UTC - US-009
+- Added isolated candidate workspace setup to `scripts/evolution-loop.sh` using per-iteration git worktrees and candidate branches derived from the latest accepted baseline ref
+- `iteration.json` now records `baselineRef` plus `isolation.type`, `isolation.path`, `isolation.branch`, `isolation.status`, and `isolation.setupError`; setup failures immediately mark the iteration `failed` and write a failure `decision.md`
+- Documented the isolation contract and metadata shape in `tasks/prd-wiggum-evolution-loop.md`
+- Verified the script by running it against a temporary output directory and confirming it created `candidate-workspaces/1`, `iterations/1`, and the expected isolation metadata
+- Quality checks passed: `bash -n scripts/evolution-loop.sh`, `cargo build --workspace`, `cargo test --workspace -- --skip gen_files::magics::name`
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd-wiggum-evolution-loop.md`, `tasks/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Avoid command substitutions around shell functions that need to export state back to the caller; use globals like `LAST_ITERATION_DIR` only when the function runs in the current shell
+  - Python is not guaranteed to be available as `python`; for shell scripts in this repo, prefer pure bash data flow when possible rather than shelling out to parse files just written by the same process
 ---

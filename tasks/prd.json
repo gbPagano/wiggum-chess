@@ -120,7 +120,7 @@
       "title": "Add decision skill skeleton",
       "description": "As a developer, I want a dedicated decision skill so that iteration outcomes are deterministic and auditable.",
       "acceptanceCriteria": [
-        "Create claude/skills/evolution-decide/ with the files needed for a Claude Code skill",
+        "Create .claude/skills/evolution-decide/ with the files needed for a Claude Code skill",
         "The skill contract says it reads implementation.md and benchmark.md and writes decision.md",
         "The skill contract says it updates iteration.json with one final state",
         "The allowed final states are documented as: accepted, rejected, inconclusive, failed",
@@ -144,8 +144,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented isolated candidate git worktree setup in scripts/evolution-loop.sh. Each iteration now records baselineRef plus isolation metadata (type, path, branch, status, setupError) in iteration.json, marks the iteration failed if workspace setup fails, and creates candidate workspaces from the latest accepted baseline reference instead of the last attempted candidate; documented the isolation contract in tasks/prd-wiggum-evolution-loop.md."
     },
     {
       "id": "US-010",
