@@ -477,11 +477,20 @@ The orchestration script must reference this discard policy when describing iter
 **Description:** As a developer, I want a final summary file so that I can review the outcome of the session quickly.
 
 **Acceptance Criteria:**
-- [ ] The session writes a final summary artifact at the end of the run.
-- [ ] The summary lists accepted versions, rejected attempts, and the stop reason.
-- [ ] The summary includes pointers to per-iteration artifacts.
-- [ ] The summary file path is documented in the project.
-- [ ] The orchestration script writes the summary on both normal stop and early stop.
+- [x] The session writes a final summary artifact at the end of the run.
+- [x] The summary lists accepted versions, rejected attempts, and the stop reason.
+- [x] The summary includes pointers to per-iteration artifacts.
+- [x] The summary file path is documented in the project.
+- [x] The orchestration script writes the summary on both normal stop and early stop.
+
+### Final session summary contract
+
+- The final session summary artifact is written to `tasks/evolution-runs/<session-id>/summary.md`.
+- The orchestration script must rewrite `summary.md` when the session stops, whether it stops on the normal `max_iterations` boundary or an earlier stop condition such as `no_hypothesis` or infrastructure failure budget exhaustion.
+- The summary must include the session id, starting baseline version, final accepted baseline version/ref, completed iteration count, and the final stop reason.
+- The summary must list accepted versions and rejected iteration numbers in a quick-scan outcomes section.
+- The summary must include per-iteration pointers to `iteration.json`, `hypothesis.md`, `implementation.md`, `correctness/results.md`, `benchmark.md`, and `decision.md` so a user can jump directly into the detailed artifacts.
+- If no iterations were created, the summary should state that explicitly rather than leaving the artifact empty.
 
 ## 5. Functional Requirements
 

@@ -256,8 +256,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented final session summary generation in scripts/evolution-loop.sh so summary.md is rewritten on all stop paths with session metadata, accepted versions, rejected attempts, stop reason, and per-iteration artifact pointers; documented the contract in tasks/prd-wiggum-evolution-loop.md."
     }
   ]
 }

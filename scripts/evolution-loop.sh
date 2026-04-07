@@ -142,12 +142,122 @@ write_session_summary_placeholder() {
   cat <<EOF > "$summary_path"
 # Wiggum Evolution Session Summary
 
-- Session id:
-- Baseline version:
-- Max iterations:
-- Session directory:
-- Status: initialized
+Status: pending final session summary.
 EOF
+}
+
+write_session_summary_final() {
+  local summary_path="$1"
+  local session_dir="$2"
+  local completed_iterations="$3"
+  local stop_reason="$4"
+  local stop_reason_details="$5"
+  local accepted_baseline_version="$6"
+  local accepted_baseline_ref="$7"
+
+  python3 - <<'PY' "$summary_path" "$session_dir" "$SESSION_ID" "$BASELINE_VERSION" "$MAX_ITERATIONS" "$completed_iterations" "$stop_reason" "$stop_reason_details" "$accepted_baseline_version" "$accepted_baseline_ref"
+import json
+import os
+import sys
+
+(
+    summary_path,
+    session_dir,
+    session_id,
+    baseline_version,
+    max_iterations,
+    completed_iterations,
+    stop_reason,
+    stop_reason_details,
+    accepted_baseline_version,
+    accepted_baseline_ref,
+) = sys.argv[1:]
+
+iterations_dir = os.path.join(session_dir, 'iterations')
+entries = []
+accepted_versions = []
+rejected_attempts = []
+
+if os.path.isdir(iterations_dir):
+    for name in sorted(os.listdir(iterations_dir), key=lambda value: int(value) if value.isdigit() else value):
+        iteration_dir = os.path.join(iterations_dir, name)
+        iteration_json = os.path.join(iteration_dir, 'iteration.json')
+        if not os.path.isfile(iteration_json):
+            continue
+
+        with open(iteration_json, 'r', encoding='utf-8') as handle:
+            data = json.load(handle)
+
+        outcome = data.get('state', 'unknown')
+        decision = data.get('decision', {}) or {}
+        promotion = decision.get('promotion', {}) or {}
+        promoted_version = decision.get('promotedVersion') or promotion.get('promotedVersion') or ''
+        summary = {
+            'iteration': data.get('iteration', name),
+            'outcome': outcome,
+            'promoted_version': promoted_version,
+            'hypothesis': os.path.relpath(os.path.join(iteration_dir, 'hypothesis.md'), session_dir),
+            'implementation': os.path.relpath(os.path.join(iteration_dir, 'implementation.md'), session_dir),
+            'correctness': os.path.relpath(os.path.join(iteration_dir, 'correctness', 'results.md'), session_dir),
+            'benchmark': os.path.relpath(os.path.join(iteration_dir, 'benchmark.md'), session_dir),
+            'decision': os.path.relpath(os.path.join(iteration_dir, 'decision.md'), session_dir),
+            'iteration_json': os.path.relpath(iteration_json, session_dir),
+        }
+        entries.append(summary)
+
+        if outcome == 'accepted':
+            accepted_versions.append(promoted_version or data.get('baselineVersion', 'unknown'))
+        if outcome == 'rejected':
+            rejected_attempts.append(str(data.get('iteration', name)))
+
+lines = [
+    '# Wiggum Evolution Session Summary',
+    '',
+    '## Session',
+    f'- Session id: {session_id}',
+    f'- Baseline version: {baseline_version}',
+    f'- Final accepted baseline version: {accepted_baseline_version}',
+    f'- Final accepted baseline ref: {accepted_baseline_ref}',
+    f'- Max iterations: {max_iterations}',
+    f'- Completed iterations: {completed_iterations}',
+    f'- Session directory: {session_dir}',
+    f'- Summary file: {summary_path}',
+    f'- Stop reason: {stop_reason}',
+]
+
+if stop_reason_details:
+    lines.append(f'- Stop details: {stop_reason_details}')
+
+lines.extend([
+    '',
+    '## Outcomes',
+    '- Accepted versions: ' + (', '.join(accepted_versions) if accepted_versions else 'none'),
+    '- Rejected attempts: ' + (', '.join(rejected_attempts) if rejected_attempts else 'none'),
+    '',
+    '## Iteration artifacts',
+])
+
+if entries:
+    for entry in entries:
+        lines.extend([
+            f"### Iteration {entry['iteration']} — {entry['outcome']}",
+            f"- iteration.json: `{entry['iteration_json']}`",
+            f"- hypothesis: `{entry['hypothesis']}`",
+            f"- implementation: `{entry['implementation']}`",
+            f"- correctness: `{entry['correctness']}`",
+            f"- benchmark: `{entry['benchmark']}`",
+            f"- decision: `{entry['decision']}`",
+        ])
+        if entry['promoted_version']:
+            lines.append(f"- promoted version: `{entry['promoted_version']}`")
+        lines.append('')
+else:
+    lines.append('- No iteration artifacts were created.')
+    lines.append('')
+
+with open(summary_path, 'w', encoding='utf-8') as handle:
+    handle.write('\n'.join(lines).rstrip() + '\n')
+PY
 }
 
 write_session_metadata() {
@@ -1109,6 +1219,15 @@ if [[ -z "$STOP_REASON" ]]; then
   STOP_REASON_DETAILS="$LAST_COMPLETED_ITERATION iterations completed without another stop condition"
 fi
 
+write_session_summary_final \
+  "$SESSION_SUMMARY_PATH" \
+  "$SESSION_DIR" \
+  "$LAST_COMPLETED_ITERATION" \
+  "$STOP_REASON" \
+  "$STOP_REASON_DETAILS" \
+  "$ACCEPTED_BASELINE_VERSION" \
+  "$ACCEPTED_BASELINE_REF"
+
 echo
 echo "Evolution loop stopped."
 echo "Stop reason: $STOP_REASON"
@@ -1118,3 +1237,4 @@ fi
 echo "Completed iterations: $LAST_COMPLETED_ITERATION"
 echo "Accepted baseline version: $ACCEPTED_BASELINE_VERSION"
 echo "Accepted baseline ref: $ACCEPTED_BASELINE_REF"
+echo "Session summary written to: $SESSION_SUMMARY_PATH"
