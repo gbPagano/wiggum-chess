@@ -30,6 +30,11 @@ Note: `gen_files::magics::name` is an intentional developer scratchpad test with
 - `chess-runner/` — Binary crate depending on chesslib
 - `Cargo.toml` — Workspace root (profiles defined here)
 
+### Benchmarking Reports
+
+- `scripts/benchmark-version.sh` post-processes the last appended `results.csv` row to add the Stockfish level suffix (1500/2000/2500/max), because `chess-runner match` records only the opponent engine's UCI-reported name in CSV output.
+- If release binaries fail to start on the local machine because of GLIBC mismatch, use the freshly built debug binaries in `target/debug/` for local benchmarking and report generation.
+
 ### Build-time Code Generation (`chesslib/src/build.rs`, `chesslib/src/gen_files/`)
 
 The build script generates lookup tables into `$OUT_DIR/magic_file.rs`, which is `include!()`'d by `chesslib/src/magic.rs`. Generated tables include: magic numbers for sliding pieces, rays, between/line bitboards, knight/king/pawn move tables, and chessboard utility constants. The `src/gen_files/` modules contain the generation logic and are compiled separately for the build script (they re-declare shared types like `bitboard`, `square`, etc.).

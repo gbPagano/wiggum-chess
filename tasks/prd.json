@@ -1,167 +1,154 @@
 {
   "project": "chess-ic",
-  "branchName": "ralph/chesslib-workspace",
-  "description": "Chess engine with material+minimax evaluation, Stockfish benchmarking, CSV match logging, and evolution tracking reports",
+  "branchName": "ralph/wiggum-engine-evolution",
+  "description": "Wiggum Engine v0.1 — verbose flag, engine rename, version tracking, SPRT comparison, Stockfish benchmarking, and version-report command",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Download and configure Stockfish",
-      "description": "As a developer, I want a script to download Stockfish so I can use it as a benchmark engine.",
+      "title": "Rename MaterialEngine to Wiggum Engine",
+      "description": "As a developer, I want the engine consistently named 'Wiggum Engine' so that match logs and UCI GUIs display the correct identity.",
       "acceptanceCriteria": [
-        "Shell script scripts/download-stockfish.sh downloads the Stockfish binary for Linux x86_64",
-        "Binary is placed at engines/stockfish and made executable",
-        "engines/ directory is added to .gitignore",
-        "Script is idempotent (skips download if binary already exists)",
-        "Running 'echo uci | engines/stockfish' outputs 'uciok'",
+        "Struct MaterialEngine in chess-engine/src/engine.rs renamed to WiggumEngine",
+        "name() returns 'Wiggum Engine v0.1'",
+        "UCI binary (chess-engine/src/main.rs) responds to 'uci' with 'id name Wiggum Engine v0.1' and 'id author chess-ic'",
+        "CLI --about text updated from 'MaterialEngine' to 'Wiggum Engine'",
+        "All tests referencing MaterialEngine or material_engine updated to WiggumEngine",
+        "cargo test --workspace passes",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": ""
+      "notes": "PRD US-011. Pure rename — no logic changes."
     },
     {
       "id": "US-002",
-      "title": "Validate chess-runner match series with Stockfish",
-      "description": "As a developer, I want to confirm chess-runner runs a multi-game match correctly with real UCI engines.",
+      "title": "Add --verbose flag to chess-runner match command",
+      "description": "As a developer, I want to control chess-runner output verbosity so that I can run quiet batch matches or verbose single-game debugging.",
       "acceptanceCriteria": [
-        "Running chess-runner --engine1 engines/stockfish --engine2 engines/stockfish --games 2 --time 5000 completes without errors",
-        "Colors alternate correctly between games",
-        "Final summary correctly tallies wins and draws",
-        "No panics or protocol errors during the match",
+        "New --verbose flag added to MatchArgs in chess-runner/src/main.rs",
+        "Without --verbose: each game prints exactly one line 'Game N/Total: <result> | Score: W-L-D' and a final summary block; board and move lines are suppressed",
+        "With --verbose: existing behavior preserved — board diagram and move line printed on every move, game result printed at end of each game",
+        "PrintObserver is replaced or refactored to support both modes (e.g. two structs or a verbose: bool field)",
+        "The current always-verbose PrintObserver is removed; verbose is opt-in",
+        "Running chess-runner match --engine1 X --engine2 Y --games 3 without --verbose produces exactly 3 result lines plus 1 summary block",
+        "cargo test --workspace passes",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Depends on US-001 for Stockfish binary. This is a validation story — fix any bugs found in chess-runner or chesslib."
+      "notes": "PRD US-010. No dependency on US-001."
     },
     {
       "id": "US-003",
-      "title": "Create chess-engine crate skeleton",
-      "description": "As a developer, I want a new chess-engine crate in the workspace as a dedicated place for our custom engine.",
+      "title": "Create chess-engine/versions/ folder structure",
+      "description": "As a developer, I want a dedicated versioned folder structure so I can track what changed and how each version performed over time.",
       "acceptanceCriteria": [
-        "New chess-engine/ directory with Cargo.toml, src/lib.rs, and src/main.rs",
-        "chess-engine added to workspace members in root Cargo.toml",
-        "Cargo.toml depends on chesslib (path = '../chesslib')",
-        "src/lib.rs has a placeholder module structure (pub mod eval; pub mod search; pub mod engine;) with empty modules",
-        "src/main.rs has a minimal main() that prints the engine name",
-        "cargo build -p chess-engine compiles without errors",
+        "Directory chess-engine/versions/v0.1/ exists",
+        "File chess-engine/versions/v0.1/CHANGES.md exists and documents: initial implementation, material evaluation + negamax depth-4, no alpha-beta",
+        "File chess-engine/versions/README.md exists and explains the folder convention: one subfolder per version, each with CHANGES.md and report.md",
+        "A .gitkeep placeholder exists in chess-engine/versions/v0.1/ if no report.md exists yet",
         "Typecheck passes"
       ],
       "priority": 3,
       "passes": true,
-      "notes": ""
+      "notes": "PRD US-012. Pure file/folder creation — no code changes."
     },
     {
       "id": "US-004",
-      "title": "Implement material evaluation function",
-      "description": "As a developer, I want an evaluation function based on piece values so the engine can score positions.",
+      "title": "Add set_option method to UciEngine in chesslib",
+      "description": "As a developer, I want to send arbitrary UCI setoption commands to a subprocess engine so I can configure Stockfish skill levels from the match runner.",
       "acceptanceCriteria": [
-        "Function evaluate(board: &Board) -> i32 in chess-engine/src/eval.rs",
-        "Returns centipawn score from side-to-move's perspective",
-        "Piece values: Pawn=100, Knight=320, Bishop=330, Rook=500, Queen=900",
-        "Positive when side-to-move has material advantage, negative when behind",
-        "Checkmate detected (no legal moves + in check) returns -30000 (losing side perspective)",
-        "Stalemate detected (no legal moves + not in check) returns 0",
-        "Test: starting position evaluates to 0",
-        "Test: position missing a white queen evaluates negative for white",
-        "Test: known checkmate position returns extreme value",
-        "Test: known stalemate position returns 0",
+        "UciEngine in chesslib/src/uci_engine.rs gains a public async method: pub async fn set_option(&mut self, name: &str, value: &str) -> Result<()>",
+        "Method sends 'setoption name <name> value <value>\\n' to engine stdin and flushes",
+        "No response is expected (UCI spec: setoption has no reply); method returns after flush",
+        "The Engine trait in chesslib/src/engine.rs is NOT modified — set_option is a concrete method on UciEngine only",
+        "Mock engine in uci_engine.rs tests already silently ignores unknown commands (verify this is the case)",
+        "Unit test added: sends setoption name Skill Level value 10 to mock engine without error",
+        "cargo test --workspace passes",
         "Typecheck passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Depends on US-003 for crate skeleton"
+      "notes": "PRD US-017. Prerequisite for US-007 (benchmark script). The mock engine uses a wildcard case that ignores unknown commands — confirm before writing the test."
     },
     {
       "id": "US-005",
-      "title": "Implement negamax search",
-      "description": "As a developer, I want a negamax search so the engine can look ahead and choose the best move.",
+      "title": "Implement SPRT subcommand in chess-runner",
+      "description": "As a developer, I want a SPRT-based match mode so I can efficiently determine whether a new engine version is an improvement without running an arbitrary fixed number of games.",
       "acceptanceCriteria": [
-        "Function search(board: &Board, depth: u8) -> (ChessMove, i32) in chess-engine/src/search.rs",
-        "Uses negamax formulation (recursive, negates child scores)",
-        "At depth 0, returns the material evaluation from eval.rs",
-        "Returns the best legal move and its score for any non-terminal position",
-        "Test: finds mate-in-1 (e.g. queen can deliver checkmate in one move)",
-        "Test: avoids hanging a queen when a safe alternative exists",
-        "Test: returns a valid legal move from the starting position",
+        "New subcommand 'chess-runner sprt' added with args: --engine1, --engine2, --time (default 10000), --inc (default 100), --elo0 (default 0), --elo1 (default 5), --alpha (default 0.05), --beta (default 0.05), --timeout (default 5000), optional --output (CSV path)",
+        "LLR is computed after each completed game using the trinomial (W/D/L) model: score = (wins + 0.5*draws) / total; elo_diff = -400 * log10(1/score - 1); LLR approximation tracks wins/draws/losses separately",
+        "Full LLR formula: LLR = W*ln(p1_w/p0_w) + D*ln(p1_d/p0_d) + L*ln(p1_l/p0_l) where p0/p1 are expected W/D/L probabilities under H0 (elo0) and H1 (elo1) using the logistic Elo model",
+        "LLR bounds: lower = ln(beta / (1 - alpha)), upper = ln((1 - beta) / alpha)",
+        "After each game, prints one line: '[Game N] LLR: X.XX / [lower, upper] | W:x D:x L:x'",
+        "Match stops automatically when LLR crosses either bound",
+        "Final output states: 'SPRT Result: H1 accepted (improvement confirmed)' or 'SPRT Result: H0 accepted (no improvement detected)'",
+        "If --output provided, appends one row to a sprt_results.csv with columns: timestamp, engine1_name, engine2_name, games_played, wins, draws, losses, elo0, elo1, sprt_result",
+        "Creates sprt_results.csv with header if it does not exist",
+        "Unit test: LLR boundary values for alpha=0.05 beta=0.05 are approximately [-2.944, 2.944]",
+        "Unit test: LLR computation with known W/D/L counts returns expected value",
+        "cargo test --workspace passes",
         "Typecheck passes"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Depends on US-004 for evaluation function"
+      "notes": "PRD US-013. Colors alternate each game pair (same as match subcommand). Handle the edge case where score=1.0 or score=0.0 to avoid log(0) — clamp to a small epsilon."
     },
     {
       "id": "US-006",
-      "title": "Implement Engine trait (in-process MaterialEngine)",
-      "description": "As a developer, I want MaterialEngine to implement the Engine trait so it can run in-process with the match runner.",
+      "title": "Add version-report subcommand to chess-runner",
+      "description": "As a developer, I want a version-report command that generates a rich markdown report for a specific engine version so I have a self-contained snapshot of its performance.",
       "acceptanceCriteria": [
-        "Struct MaterialEngine in chess-engine/src/engine.rs that holds a configurable depth (default 4)",
-        "Implements chesslib::engine::Engine trait (async_trait)",
-        "name() returns 'MaterialEngine v0.1'",
-        "go() calls the negamax search with the configured depth",
-        "Integration test: MaterialEngine vs MaterialEngine completes a game via Match::run() without panicking",
-        "Integration test: game result is a valid GameResult variant (not Ongoing)",
+        "New subcommand 'chess-runner version-report' with args: --version (e.g. 'v0.1'), --engine-name (optional, e.g. 'Wiggum Engine v0.1'), --matches-csv (path to regular match CSV), --sprt-csv (optional path to sprt_results.csv), --output (markdown output path)",
+        "Reads matches CSV and filters rows where engine1_name or engine2_name contains --engine-name (or --version if --engine-name not provided)",
+        "Generated markdown includes: H1 header with version name and generation date; summary table with columns: Opponent, Games, Wins, Draws, Losses, Win%; overall win rate across all opponents; best matchup (highest win%); worst matchup (lowest win%)",
+        "If --sprt-csv is provided, adds a SPRT Results section: table with columns: Opponent, Games, W, D, L, Result",
+        "Ends with an empty '## Notes' section for manual annotation",
+        "If --output path does not exist, creates it (including parent dirs)",
+        "Handles missing or empty CSVs gracefully with a message in the markdown",
+        "cargo test --workspace passes",
         "Typecheck passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Depends on US-005 for search. Add async-trait and tokio as dependencies."
+      "notes": "PRD US-015. Depends on US-005 for SPRT CSV format. The --engine-name matching should be case-insensitive substring match to handle name variations."
     },
     {
       "id": "US-007",
-      "title": "UCI protocol loop in chess-engine binary",
-      "description": "As a developer, I want chess-engine to run as a UCI binary so it works with chess-runner and external tools.",
+      "title": "Benchmark shell script for new engine versions",
+      "description": "As a developer, I want a shell script that automates benchmarking a new engine version against Stockfish at multiple skill levels so I get consistent, reproducible results.",
       "acceptanceCriteria": [
-        "src/main.rs reads lines from stdin and implements UCI protocol",
-        "Responds to 'uci' with 'id name MaterialEngine v0.1', 'id author chess-ic', and 'uciok'",
-        "Responds to 'isready' with 'readyok'",
-        "Handles 'position startpos moves e2e4 e7e5 ...' — builds Board by applying moves",
-        "Handles 'position fen <fen> moves ...' — builds Board from FEN then applies moves",
-        "Handles 'go wtime W btime B winc WI binc BI' — runs search and responds with 'bestmove <uci_move>'",
-        "Handles 'ucinewgame' (resets internal state) and 'quit' (exits process)",
-        "Accepts --depth <N> CLI flag to set search depth (default 4)",
-        "Works as engine in chess-runner: chess-runner --engine1 ./target/release/chess-engine --engine2 engines/stockfish --games 1 --time 60000",
-        "Typecheck passes"
+        "Script at scripts/benchmark-version.sh is created and executable (chmod +x)",
+        "Script accepts flags: --version (e.g. v0.1), --engine (path to engine binary), --prev-engine (optional, path to previous version binary), --stockfish (path to stockfish binary), --games (default 100), --output-dir (default chess-engine/versions/<version>)",
+        "If --prev-engine is provided, runs 'chess-runner sprt --engine1 <engine> --engine2 <prev-engine> --time 10000 --inc 100' and saves output",
+        "Runs 'chess-runner match' (not SPRT) for each of four Stockfish difficulty levels: 1500, 2000, 2500, max",
+        "For rated levels (1500/2000/2500): sets UCI_LimitStrength=true and UCI_Elo=<N> on Stockfish using setoption before the match — note: chess-runner does not yet support passing setoption args; the script must use a wrapper or document this as a known limitation if not supported",
+        "For max: sets UCI_LimitStrength=false",
+        "Uses time control 10s + 0.1s inc for all matches",
+        "Appends all match results to --output-dir/results.csv using chess-runner --output flag",
+        "Prints a summary to stdout when all matches complete",
+        "Script has a usage comment block at the top explaining all flags",
+        "Typecheck passes (N/A for shell — verify script has no syntax errors with bash -n scripts/benchmark-version.sh)"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "Depends on US-006. Use clap for CLI flags. UCI parsing is synchronous stdin line reading."
+      "notes": "PRD US-014. Depends on US-004 (set_option) and US-005 (sprt subcommand). IMPORTANT: chess-runner match does not support passing setoption to engines. The benchmark script should use a thin wrapper script per Stockfish level (e.g. a wrapper that sends setoption before UCI handshake) OR document this as a limitation. The simplest approach: create wrapper shell scripts like scripts/stockfish-1500.sh that exec stockfish but intercept uci/setoption."
     },
     {
       "id": "US-008",
-      "title": "CSV match result logging in chess-runner",
-      "description": "As a developer, I want chess-runner to log match results to a CSV file for tracking over time.",
+      "title": "Generate and commit v0.1 benchmark report",
+      "description": "As a developer, I want to run the benchmark for v0.1 and commit the report so we have a baseline for measuring future improvements.",
       "acceptanceCriteria": [
-        "New --output <path> flag on chess-runner CLI",
-        "After a match completes, appends one row to the CSV with: timestamp (ISO 8601), engine1_name, engine2_name, games_played, engine1_wins, engine2_wins, draws, engine1_win_rate (as decimal 0.0-1.0)",
-        "Engine names are read from the UCI 'id name' response (not the file path)",
-        "Creates the file with header row if it doesn't exist",
-        "Appends without overwriting if file already exists",
-        "If --output is not specified, no CSV is written (backwards compatible)",
-        "Add csv crate as dependency to chess-runner",
+        "scripts/benchmark-version.sh runs successfully for v0.1 with the Stockfish binary at engines/stockfish",
+        "chess-runner version-report generates chess-engine/versions/v0.1/report.md",
+        "report.md contains: the version header, a summary table with results vs Stockfish at all four levels, overall win rate",
+        "chess-engine/versions/v0.1/report.md is committed to the repository",
+        "Any .gitkeep placeholder in chess-engine/versions/v0.1/ is removed once report.md exists",
         "Typecheck passes"
       ],
       "priority": 8,
       "passes": true,
-      "notes": "Depends on US-007 for engine names via UCI. Needs to query engine names before logging."
-    },
-    {
-      "id": "US-009",
-      "title": "Evolution report CLI command",
-      "description": "As a developer, I want a report command that reads the CSV and prints a text summary of engine progress.",
-      "acceptanceCriteria": [
-        "New subcommand: chess-runner report --input <csv_path>",
-        "Refactor chess-runner to use clap subcommands: 'match' (existing behavior) and 'report' (new)",
-        "Report displays a formatted text table with columns: date, engine1, engine2, games, wins, losses, draws, win_rate",
-        "Shows overall summary line: total games played, overall win rate, best matchup, worst matchup",
-        "If CSV has multiple entries for the same engine pair, shows trend arrow (up/down/stable)",
-        "Handles missing CSV file with message: 'No match history found at <path>'",
-        "Handles empty CSV (header only) with message: 'No match results recorded yet'",
-        "Typecheck passes"
-      ],
-      "priority": 9,
-      "passes": true,
-      "notes": "Depends on US-008 for CSV format. Uses the csv crate to read the file."
+      "notes": "PRD US-016. Depends on all prior stories. Requires engines/stockfish to be present. This story may require manual steps (running the script) — Ralph should run it and commit the output."
     }
   ]
 }

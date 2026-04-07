@@ -7,13 +7,13 @@ use chesslib::movegen::MoveGen;
 use crate::search::search;
 
 /// In-process chess engine using material evaluation and negamax search.
-pub struct MaterialEngine {
+pub struct WiggumEngine {
     depth: u8,
     last_game: Option<Game>,
 }
 
-impl MaterialEngine {
-    /// Create a new MaterialEngine with the given search depth.
+impl WiggumEngine {
+    /// Create a new WiggumEngine with the given search depth.
     pub fn new(depth: u8) -> Self {
         Self {
             depth,
@@ -22,16 +22,16 @@ impl MaterialEngine {
     }
 }
 
-impl Default for MaterialEngine {
+impl Default for WiggumEngine {
     fn default() -> Self {
         Self::new(4)
     }
 }
 
 #[async_trait]
-impl Engine for MaterialEngine {
+impl Engine for WiggumEngine {
     async fn name(&self) -> String {
-        "MaterialEngine v0.1".to_string()
+        "Wiggum Engine v0.1".to_string()
     }
 
     async fn new_game(&mut self) {
@@ -63,9 +63,9 @@ mod tests {
     use chesslib::match_runner::Match;
 
     #[tokio::test]
-    async fn material_engine_vs_self_completes_game() {
-        let white: Box<dyn Engine> = Box::new(MaterialEngine::new(2));
-        let black: Box<dyn Engine> = Box::new(MaterialEngine::new(2));
+    async fn wiggum_engine_vs_self_completes_game() {
+        let white: Box<dyn Engine> = Box::new(WiggumEngine::new(2));
+        let black: Box<dyn Engine> = Box::new(WiggumEngine::new(2));
         let mut m = Match::new(white, black);
         let result = m.run().await;
         assert_ne!(
@@ -76,9 +76,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn material_engine_result_is_valid_variant() {
-        let white: Box<dyn Engine> = Box::new(MaterialEngine::new(2));
-        let black: Box<dyn Engine> = Box::new(MaterialEngine::new(2));
+    async fn wiggum_engine_result_is_valid_variant() {
+        let white: Box<dyn Engine> = Box::new(WiggumEngine::new(2));
+        let black: Box<dyn Engine> = Box::new(WiggumEngine::new(2));
         let mut m = Match::new(white, black);
         let result = m.run().await;
         // Verify it's one of the valid terminal variants
