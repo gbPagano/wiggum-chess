@@ -4,14 +4,15 @@
 # Start a Wiggum engine evolution session.
 #
 # Usage:
-#   ./scripts/evolution-loop.sh --baseline-version <version> [--output-dir <path>] [--max-iterations <count>]
+#   ./scripts/evolution-loop.sh --baseline-version <version> [--output-dir <path>] [--max-iterations <count>] [--max-infra-failures <count>]
 #   ./scripts/evolution-loop.sh --help
 #
 # Options:
-#   --baseline-version  Required. Baseline engine version to evolve from.
-#   --output-dir        Session artifact root. Defaults to tasks/evolution-runs.
-#   --max-iterations    Maximum iterations to allow. Defaults to 10.
-#   --help              Print this help text.
+#   --baseline-version     Required. Baseline engine version to evolve from.
+#   --output-dir           Session artifact root. Defaults to tasks/evolution-runs.
+#   --max-iterations       Maximum iterations to allow. Defaults to 10.
+#   --max-infra-failures   Maximum failed iterations to tolerate before stopping. Defaults to 3.
+#   --help                 Print this help text.
 
 set -euo pipefail
 
@@ -20,10 +21,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORKER_GUIDANCE="$REPO_ROOT/.claude/evolution/CLAUDE.md"
 STATE_MACHINE_REFERENCE="$REPO_ROOT/tasks/prd-wiggum-evolution-loop.md"
 DISCARD_POLICY_REFERENCE="$REPO_ROOT/tasks/prd-wiggum-evolution-loop.md"
+CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 
 BASELINE_VERSION=""
 OUTPUT_DIR="$REPO_ROOT/tasks/evolution-runs"
 MAX_ITERATIONS=10
+MAX_INFRA_FAILURES=3
 ACCEPTED_BASELINE_VERSION=""
 ACCEPTED_BASELINE_REF=""
 SESSION_SUMMARY_FILENAME="summary.md"
@@ -38,7 +41,7 @@ DECISION_FILENAME="decision.md"
 CORRECTNESS_DIRNAME="correctness"
 
 usage() {
-  sed -n '1,13p' "$0"
+  sed -n '1,15p' "$0"
 }
 
 require_value() {
@@ -157,6 +160,7 @@ baseline_version=$BASELINE_VERSION
 accepted_baseline_version=$ACCEPTED_BASELINE_VERSION
 accepted_baseline_ref=$ACCEPTED_BASELINE_REF
 max_iterations=$MAX_ITERATIONS
+max_infra_failures=$MAX_INFRA_FAILURES
 session_id=$session_id
 session_dir=$session_dir
 summary_file=$SESSION_SUMMARY_FILENAME
@@ -241,6 +245,147 @@ correctness_results_path() {
   printf '%s/results.md\n' "$(correctness_dir_path "$iteration_dir")"
 }
 
+current_iteration_state() {
+  local iteration_json_path="$1"
+
+  python3 - <<'PY' "$iteration_json_path"
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+print(data.get('state', ''))
+PY
+}
+
+iteration_has_no_hypothesis() {
+  local iteration_json_path="$1"
+
+  python3 - <<'PY' "$iteration_json_path"
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+hypothesis = data.get('hypothesis', {}) or {}
+signals = {
+    data.get('state', ''),
+    str(hypothesis.get('state', '')),
+    str(hypothesis.get('status', '')),
+    str(hypothesis.get('stopSignal', '')),
+}
+print('yes' if 'no_hypothesis' in signals else 'no')
+PY
+}
+
+current_promoted_version() {
+  local iteration_json_path="$1"
+
+  python3 - <<'PY' "$iteration_json_path"
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+decision = data.get('decision', {}) or {}
+promotion = decision.get('promotion', {}) or {}
+promoted_version = decision.get('promotedVersion') or promotion.get('promotedVersion') or ''
+print(promoted_version)
+PY
+}
+
+record_phase_failure() {
+  local iteration_json_path="$1"
+  local decision_path="$2"
+  local benchmark_path="$3"
+  local phase_name="$4"
+  local failure_reason="$5"
+
+  python3 - <<'PY' "$iteration_json_path" "$phase_name" "$failure_reason"
+import json
+import sys
+
+iteration_json_path, phase_name, failure_reason = sys.argv[1:]
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+data['state'] = 'failed'
+data.setdefault('stateMachine', {})['currentPhase'] = 'failed'
+
+data.setdefault('decision', {})
+data['decision']['outcome'] = 'failed'
+data['decision']['reasoning'] = failure_reason
+data['decision']['evidence'] = [phase_name]
+
+if phase_name == 'propose':
+    data['hypothesis'] = {
+        'status': 'failed',
+        'summary': 'Hypothesis generation failed.',
+        'failureReason': failure_reason,
+        'targetMetrics': [],
+        'buildsOn': [],
+    }
+    data.setdefault('benchmark', {})
+    data['benchmark']['status'] = 'skipped'
+    data['benchmark']['skippedReason'] = 'proposal phase failed'
+elif phase_name == 'implement':
+    data['implementation'] = {
+        'summary': 'Implementation phase failed before a candidate was completed.',
+        'failureReason': failure_reason,
+        'changedFiles': [],
+    }
+    data.setdefault('benchmark', {})
+    data['benchmark']['status'] = 'skipped'
+    data['benchmark']['skippedReason'] = 'implementation phase failed'
+elif phase_name == 'benchmark':
+    data['benchmark'] = {
+        'status': 'failed',
+        'failureReason': failure_reason,
+        'sufficientForPromotion': False,
+    }
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
+
+  if [[ "$phase_name" == "propose" || "$phase_name" == "implement" ]]; then
+    cat <<EOF > "$benchmark_path"
+# Iteration Benchmark
+
+Status: skipped
+
+Benchmark execution is skipped because the $phase_name phase failed.
+
+Reason: $failure_reason
+EOF
+  elif [[ "$phase_name" == "benchmark" ]]; then
+    cat <<EOF > "$benchmark_path"
+# Iteration Benchmark
+
+Status: failed
+
+Benchmark execution failed.
+
+Reason: $failure_reason
+EOF
+  fi
+
+  cat <<EOF > "$decision_path"
+# Iteration Decision
+
+Status: failed
+
+The $phase_name phase failed.
+
+Reason: $failure_reason
+EOF
+}
+
 record_correctness_failure() {
   local iteration_json_path="$1"
   local decision_path="$2"
@@ -253,21 +398,20 @@ record_correctness_failure() {
   local failed_checks=()
   local current_state
 
-  current_state="$(python3 - <<'PY' "$iteration_json_path"
-import json
-import sys
-
-with open(sys.argv[1], 'r', encoding='utf-8') as handle:
-    data = json.load(handle)
-
-print(data.get('state', ''))
-PY
-)"
+  current_state="$(current_iteration_state "$iteration_json_path")"
 
   if [[ "$current_state" == "implemented" ]]; then
     update_iteration_state "$iteration_json_path" "implemented" "validating" "correctness gate start"
-  elif [[ "$current_state" != "validating" ]]; then
-    echo "Invalid iteration state transition for correctness gate failure: expected 'implemented' or 'validating', found '$current_state'" >&2
+    current_state="validating"
+  fi
+
+  if [[ "$current_state" == "validating" ]]; then
+    update_iteration_state "$iteration_json_path" "validating" "deciding" "correctness failure decision handoff"
+    current_state="deciding"
+  fi
+
+  if [[ "$current_state" != "deciding" ]]; then
+    echo "Invalid iteration state transition for correctness gate failure: expected 'implemented', 'validating', or 'deciding', found '$current_state'" >&2
     exit 1
   fi
 
@@ -465,7 +609,6 @@ run_correctness_gate() {
     return 0
   fi
 
-  update_iteration_state "$iteration_json_path" "validating" "deciding" "correctness failure decision handoff"
   record_correctness_failure "$iteration_json_path" "$decision_path" "$benchmark_path" "$correctness_results_path" "$candidate_workspace_path" "$bash_check_status" "$cargo_build_status" "$cargo_test_status"
   return 1
 }
@@ -525,7 +668,6 @@ write_iteration_state() {
   correctness_results="$(correctness_results_path "$iteration_dir")"
 
   mkdir -p "$correctness_dir"
-
 
   escaped_baseline_version="$(json_escape "$ACCEPTED_BASELINE_VERSION")"
   escaped_baseline_ref="$(json_escape "$ACCEPTED_BASELINE_REF")"
@@ -682,6 +824,150 @@ EOF
   LAST_DECISION_PATH="$decision_path"
 }
 
+run_claude_skill() {
+  local skill_name="$1"
+  local candidate_workspace_path="$2"
+  local iteration_dir="$3"
+  local iteration_json_path="$4"
+
+  (
+    cd "$candidate_workspace_path" &&
+      "$CLAUDE_BIN" --dangerously-skip-permissions --add-dir "$SESSION_DIR" --add-dir "$REPO_ROOT" --print <<EOF
+/$skill_name
+
+Run only this iteration phase.
+
+- Repository root: $candidate_workspace_path
+- Session directory: $SESSION_DIR
+- Iteration directory: $iteration_dir
+- Iteration state file: $iteration_json_path
+- Session metadata file: $SESSION_METADATA_PATH
+- Worker guidance: $WORKER_GUIDANCE
+
+Read and update the iteration artifacts at the paths recorded in iteration.json.
+If you cannot complete the phase, record the failure in the appropriate iteration artifact and iteration.json.
+If no valid next hypothesis exists during /evolution-propose, record a stop signal in iteration.json using hypothesis.status = "no_hypothesis" and explain it in hypothesis.md.
+EOF
+  )
+}
+
+candidate_workspace_has_changes() {
+  local candidate_workspace_path="$1"
+
+  if ! git -C "$candidate_workspace_path" diff --quiet --ignore-submodules --; then
+    return 0
+  fi
+
+  if ! git -C "$candidate_workspace_path" diff --cached --quiet --ignore-submodules --; then
+    return 0
+  fi
+
+  if [[ -n "$(git -C "$candidate_workspace_path" ls-files --others --exclude-standard)" ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+promote_candidate_workspace() {
+  local candidate_workspace_path="$1"
+  local iteration_json_path="$2"
+  local iteration_number="$3"
+  local promoted_version
+
+  if candidate_workspace_has_changes "$candidate_workspace_path"; then
+    git -C "$candidate_workspace_path" add -A
+    git -C "$candidate_workspace_path" commit -m "chore: accept evolution iteration $iteration_number" >/dev/null 2>&1
+  fi
+
+  ACCEPTED_BASELINE_REF="$(git -C "$candidate_workspace_path" rev-parse HEAD)"
+  promoted_version="$(current_promoted_version "$iteration_json_path")"
+  if [[ -n "$promoted_version" ]]; then
+    ACCEPTED_BASELINE_VERSION="$promoted_version"
+  fi
+
+  write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
+}
+
+run_iteration() {
+  local iteration_number="$1"
+  local iteration_state
+  local no_hypothesis_signal
+
+  create_iteration_artifacts "$SESSION_DIR" "$iteration_number"
+
+  if [[ "$LAST_CANDIDATE_WORKSPACE_STATUS" != "ready" ]]; then
+    return 0
+  fi
+
+  update_iteration_state "$LAST_ITERATION_STATE_PATH" "initialized" "proposing" "proposal phase start"
+  if ! run_claude_skill "evolution-propose" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "propose" "Claude skill execution failed during the propose phase."
+    return 0
+  fi
+
+  no_hypothesis_signal="$(iteration_has_no_hypothesis "$LAST_ITERATION_STATE_PATH")"
+  if [[ "$no_hypothesis_signal" == "yes" ]]; then
+    STOP_REASON="no valid next hypothesis could be generated"
+    STOP_REASON_DETAILS="iteration $iteration_number returned a no_hypothesis stop signal"
+    remove_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH"
+    return 0
+  fi
+
+  iteration_state="$(current_iteration_state "$LAST_ITERATION_STATE_PATH")"
+  if [[ "$iteration_state" != "proposed" ]]; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "propose" "Proposal phase completed without writing state 'proposed'."
+    return 0
+  fi
+
+  update_iteration_state "$LAST_ITERATION_STATE_PATH" "proposed" "implementing" "implementation phase start"
+  if ! run_claude_skill "evolution-implement" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Claude skill execution failed during the implementation phase."
+    return 0
+  fi
+
+  iteration_state="$(current_iteration_state "$LAST_ITERATION_STATE_PATH")"
+  if [[ "$iteration_state" == "failed" ]]; then
+    return 0
+  fi
+
+  if [[ "$iteration_state" != "implemented" ]]; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Implementation phase completed without writing state 'implemented'."
+    return 0
+  fi
+
+  if ! run_correctness_gate "$LAST_ITERATION_STATE_PATH" "$LAST_CORRECTNESS_RESULTS_PATH" "$LAST_BENCHMARK_PATH" "$LAST_DECISION_PATH" "$LAST_CANDIDATE_WORKSPACE_PATH"; then
+    return 0
+  fi
+
+  iteration_state="$(current_iteration_state "$LAST_ITERATION_STATE_PATH")"
+  if [[ "$iteration_state" != "implemented" ]]; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "benchmark" "Correctness gate returned an unexpected state before benchmarking."
+    return 0
+  fi
+
+  if ! run_claude_skill "evolution-benchmark" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "benchmark" "Claude skill execution failed during the benchmark phase."
+    return 0
+  fi
+
+  iteration_state="$(current_iteration_state "$LAST_ITERATION_STATE_PATH")"
+  if [[ "$iteration_state" == "failed" ]]; then
+    return 0
+  fi
+
+  if [[ "$iteration_state" != "benchmarked" ]]; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "benchmark" "Benchmark phase completed without writing state 'benchmarked'."
+    return 0
+  fi
+
+  update_iteration_state "$LAST_ITERATION_STATE_PATH" "benchmarked" "deciding" "decision phase start"
+  if ! run_claude_skill "evolution-decide" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Claude skill execution failed during the decision phase."
+    return 0
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --baseline-version)
@@ -697,6 +983,11 @@ while [[ $# -gt 0 ]]; do
     --max-iterations)
       require_value "$1" "${2-}"
       MAX_ITERATIONS="$2"
+      shift 2
+      ;;
+    --max-infra-failures)
+      require_value "$1" "${2-}"
+      MAX_INFRA_FAILURES="$2"
       shift 2
       ;;
     --help|-h)
@@ -722,42 +1013,108 @@ if ! [[ "$MAX_ITERATIONS" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
+if ! [[ "$MAX_INFRA_FAILURES" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Error: --max-infra-failures must be a positive integer." >&2
+  exit 1
+fi
+
+if ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
+  echo "Error: Claude CLI binary '$CLAUDE_BIN' was not found in PATH." >&2
+  exit 1
+fi
+
 SESSION_ID="$(session_id_now)"
 SESSION_DIR="$OUTPUT_DIR/$SESSION_ID"
 SESSION_SUMMARY_PATH="$SESSION_DIR/$SESSION_SUMMARY_FILENAME"
 SESSION_METADATA_PATH="$SESSION_DIR/session.env"
+STOP_REASON=""
+STOP_REASON_DETAILS=""
+INFRA_FAILURE_COUNT=0
+ITERATION_NUMBER=$INITIAL_ITERATION_NUMBER
+LAST_COMPLETED_ITERATION=0
 
 resolve_accepted_baseline_ref
 mkdir -p "$SESSION_DIR"
 write_session_summary_placeholder "$SESSION_SUMMARY_PATH"
 write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
 
-create_iteration_artifacts "$SESSION_DIR" "$INITIAL_ITERATION_NUMBER"
-INITIAL_ITERATION_DIR="$LAST_ITERATION_DIR"
-INITIAL_ITERATION_STATE_PATH="$LAST_ITERATION_STATE_PATH"
-INITIAL_CORRECTNESS_RESULTS_PATH="$LAST_CORRECTNESS_RESULTS_PATH"
-INITIAL_BENCHMARK_PATH="$LAST_BENCHMARK_PATH"
-INITIAL_DECISION_PATH="$LAST_DECISION_PATH"
-
-if [[ "$LAST_CANDIDATE_WORKSPACE_STATUS" == "ready" ]]; then
-  run_correctness_gate "$INITIAL_ITERATION_STATE_PATH" "$INITIAL_CORRECTNESS_RESULTS_PATH" "$INITIAL_BENCHMARK_PATH" "$INITIAL_DECISION_PATH" "$LAST_CANDIDATE_WORKSPACE_PATH" || true
-fi
-
 echo "Starting Wiggum evolution loop"
 echo "Baseline version: $BASELINE_VERSION"
 echo "Output directory: $OUTPUT_DIR"
 echo "Max iterations: $MAX_ITERATIONS"
+echo "Max infrastructure failures: $MAX_INFRA_FAILURES"
 echo "Session ID: $SESSION_ID"
 echo "Session directory: $SESSION_DIR"
 echo "Session summary: $SESSION_SUMMARY_PATH"
 echo "Session metadata: $SESSION_METADATA_PATH"
-
-echo "Initial iteration directory: $INITIAL_ITERATION_DIR"
-echo "Initial iteration state: $INITIAL_ITERATION_STATE_PATH"
-echo "Initial candidate workspace: $LAST_CANDIDATE_WORKSPACE_PATH"
-echo "Initial candidate workspace status: $LAST_CANDIDATE_WORKSPACE_STATUS"
-echo "Initial correctness artifact: $INITIAL_CORRECTNESS_RESULTS_PATH"
 echo
 echo "Each iteration starts from an isolated candidate worktree. Non-winning outcomes keep the accepted baseline unchanged, preserve iteration artifacts for audit, and leave the candidate worktree isolated until the discard step removes it."
 echo "Discard and restore policy reference: $DISCARD_POLICY_REFERENCE"
 echo "The orchestration flow runs configured correctness checks before benchmarking, and failed checks make the iteration ineligible for promotion."
+echo
+
+while (( ITERATION_NUMBER <= MAX_ITERATIONS )); do
+  echo "==============================================================="
+  echo "  Evolution iteration $ITERATION_NUMBER of $MAX_ITERATIONS"
+  echo "==============================================================="
+
+  run_iteration "$ITERATION_NUMBER"
+
+  LAST_COMPLETED_ITERATION=$ITERATION_NUMBER
+  CURRENT_ITERATION_STATE="$(current_iteration_state "$LAST_ITERATION_STATE_PATH")"
+
+  if [[ -n "$STOP_REASON" ]]; then
+    break
+  fi
+
+  case "$CURRENT_ITERATION_STATE" in
+    accepted)
+      if ! promote_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_STATE_PATH" "$ITERATION_NUMBER"; then
+        record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Accepted candidate could not be persisted as the next baseline."
+        CURRENT_ITERATION_STATE="failed"
+      else
+        INFRA_FAILURE_COUNT=0
+      fi
+      remove_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH"
+      ;;
+    rejected|inconclusive)
+      INFRA_FAILURE_COUNT=0
+      remove_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH"
+      ;;
+    failed)
+      INFRA_FAILURE_COUNT=$((INFRA_FAILURE_COUNT + 1))
+      remove_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH"
+      if (( INFRA_FAILURE_COUNT >= MAX_INFRA_FAILURES )); then
+        STOP_REASON="infrastructure failure limit reached"
+        STOP_REASON_DETAILS="$INFRA_FAILURE_COUNT failed iterations reached the configured limit of $MAX_INFRA_FAILURES"
+      fi
+      ;;
+    *)
+      INFRA_FAILURE_COUNT=$((INFRA_FAILURE_COUNT + 1))
+      remove_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH"
+      STOP_REASON="unexpected iteration state"
+      STOP_REASON_DETAILS="iteration $ITERATION_NUMBER ended in unsupported state '$CURRENT_ITERATION_STATE'"
+      ;;
+  esac
+
+  if [[ -n "$STOP_REASON" ]]; then
+    break
+  fi
+
+  ITERATION_NUMBER=$((ITERATION_NUMBER + 1))
+done
+
+if [[ -z "$STOP_REASON" ]]; then
+  STOP_REASON="max_iterations reached"
+  STOP_REASON_DETAILS="$LAST_COMPLETED_ITERATION iterations completed without another stop condition"
+fi
+
+echo
+echo "Evolution loop stopped."
+echo "Stop reason: $STOP_REASON"
+if [[ -n "$STOP_REASON_DETAILS" ]]; then
+  echo "Details: $STOP_REASON_DETAILS"
+fi
+echo "Completed iterations: $LAST_COMPLETED_ITERATION"
+echo "Accepted baseline version: $ACCEPTED_BASELINE_VERSION"
+echo "Accepted baseline ref: $ACCEPTED_BASELINE_REF"

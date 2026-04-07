@@ -10,6 +10,7 @@
 - When `iteration.json.state` changes, keep `stateMachine.currentPhase` in sync and fail fast on unexpected prior states instead of silently repairing invalid transitions.
 - Promoted engine versions are tracked in both workspace crate manifests and `chess-engine/versions/<tag>/`; keep release tags `v<major>.<minor>` aligned with Cargo semver `<major>.<minor>.0`.
 - Non-winning iterations must preserve `iterations/<N>/` artifacts for audit, keep the accepted baseline ref/version unchanged, and start the next attempt from the latest accepted baseline rather than the discarded candidate workspace.
+- The loop script should treat `failed` iterations as infrastructure-budget events, stop immediately on `no_hypothesis`, and only carry accepted candidates forward as the new baseline.
 
 - Branch: `ralph/wiggum-evolution-loop`
 - PRD: `tasks/prd-wiggum-evolution-loop.md`
@@ -118,4 +119,14 @@
 - **Learnings for future iterations:**
   - Treat discard as two separate concerns: remove or ignore the candidate workspace, but always preserve `iterations/<N>/` artifacts as the audit record.
   - Baseline restoration after a non-winning outcome is logical, not procedural: simply keep the accepted baseline ref/version authoritative and start the next iteration from that reference.
+---
+
+## 2026-04-06 23:05:00 PDT - US-015
+- Extended `scripts/evolution-loop.sh` into a full unattended iteration controller that creates per-iteration artifacts, invokes the propose/implement/benchmark/decide skills via the Claude CLI, runs the correctness gate, promotes accepted candidates, discards non-winning candidate workspaces, and continues until an explicit stop condition is reached.
+- Added loop stop controls for `--max-iterations`, `no_hypothesis`, and a configurable `--max-infra-failures` budget, plus session metadata updates when the accepted baseline changes.
+- Documented the loop-control and stop-condition contract in `tasks/prd-wiggum-evolution-loop.md` and marked US-015 complete in `tasks/prd.json`.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd-wiggum-evolution-loop.md`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Treat orchestration stop reasons as explicit session state (`max_iterations`, `no_hypothesis`, infra-failure budget) so the loop can stop deterministically without guessing from artifact contents.
+  - Promote accepted candidates by committing inside the isolated worktree and refreshing `session.env`; rejected, inconclusive, and failed candidates should never update the accepted baseline metadata.
 ---

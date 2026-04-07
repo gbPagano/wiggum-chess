@@ -240,8 +240,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extended scripts/evolution-loop.sh into a full unattended iteration controller that invokes the propose/implement/benchmark/decide skills, loops until an explicit stop reason, halts on no_hypothesis, and enforces a configurable infrastructure failure budget via --max-infra-failures; documented the loop-control contract in tasks/prd-wiggum-evolution-loop.md."
     },
     {
       "id": "US-016",

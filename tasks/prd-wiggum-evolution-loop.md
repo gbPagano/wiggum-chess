@@ -456,11 +456,22 @@ The orchestration script must reference this discard policy when describing iter
 **Description:** As a developer, I want the script to control iteration flow so that a full session can run unattended until a clear stop condition is reached.
 
 **Acceptance Criteria:**
-- [ ] The orchestration script continues automatically after each completed iteration unless a stop condition is reached.
-- [ ] The script stops when `max-iterations` is reached.
-- [ ] The script stops when no valid next hypothesis can be generated.
-- [ ] The script stops when configured infrastructure failure limits are exceeded.
-- [ ] `bash -n scripts/evolution-loop.sh` passes.
+- [x] The orchestration script continues automatically after each completed iteration unless a stop condition is reached.
+- [x] The script stops when `max-iterations` is reached.
+- [x] The script stops when no valid next hypothesis can be generated.
+- [x] The script stops when configured infrastructure failure limits are exceeded.
+- [x] `bash -n scripts/evolution-loop.sh` passes.
+
+### Loop control and stop-condition contract
+
+- After session initialization, the orchestration script owns the full iteration loop and continues automatically from one iteration to the next until an explicit stop condition is reached.
+- Each iteration runs in this order: create artifacts, propose, implement, run the correctness gate, benchmark, decide, then either promote or discard the candidate workspace.
+- `--max-iterations` is a hard session cap. When the completed iteration count reaches that limit without an earlier stop signal, the session stops with reason `max_iterations reached`.
+- `--max-infra-failures` sets the tolerated count of infrastructure-style failed iterations. Failures from candidate-workspace setup, skill invocation, correctness execution, unexpected orchestration state, or benchmark infrastructure count toward this budget.
+- If the propose phase records a `no_hypothesis` stop signal in `iteration.json`, the session stops immediately without starting another iteration.
+- `accepted`, `rejected`, and `inconclusive` iteration outcomes do not consume the infrastructure-failure budget; only `failed` iterations do.
+- After an `accepted` outcome, the orchestration script promotes the candidate to become the next accepted baseline ref/version before starting the next iteration.
+- After a non-winning outcome, the orchestration script removes the isolated candidate workspace, preserves `iterations/<N>/` artifacts, and starts the next iteration from the latest accepted baseline.
 
 ### US-016: Add final session summary artifact
 **Description:** As a developer, I want a final summary file so that I can review the outcome of the session quickly.
