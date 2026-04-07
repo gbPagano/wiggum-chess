@@ -17,6 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKER_GUIDANCE="$REPO_ROOT/.claude/evolution/CLAUDE.md"
 
 BASELINE_VERSION=""
 OUTPUT_DIR="$REPO_ROOT/tasks/evolution-runs"
