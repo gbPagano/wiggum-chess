@@ -10,6 +10,7 @@
 - Promotion persistence should copy the built candidate binary into `chess-engine/versions/<tag>/wiggum-engine` and then update both `iteration.json.decision.promotion` and `session.env` from that stored artifact path, so future iterations never depend on the candidate worktree or target layout.
 - Treat `session.env` `active_baseline_*` fields as the stable operator-facing alias for the current promoted baseline, and keep the final session summary's promotion history derived from per-iteration decision metadata so accepted baseline changes are auditable in order.
 - Stockfish follow-up for inconclusive direct benchmarks should use pre-seeded `iteration.json.stockfishComparison` metadata plus `stockfish-comparison/results.md`, including whether the stored baseline report exists, whether the follow-up changed the recommendation, and any explicit limitation.
+- Positive-signal promotion after inconclusive evidence is decision-owned and must be explicit: seed `iteration.json.stockfishComparison.positiveSignal`, and only let a decision promote with `benchmark.sufficientForPromotion = false` when both the structured evidence and `decision.md` repeat the exact positive-signal rationale.
 
 ## 2026-04-07 11:32:03 PDT - US-008
 - Added explicit `active_baseline_version`, `active_baseline_path`, and `active_baseline_binary` fields to `session.env`, keeping them synchronized with accepted baseline state so accepted promotions immediately become the next iteration's active baseline contract.
@@ -97,3 +98,13 @@ Started: 2026-04-07
   - Promotion should finalize artifact paths before deleting the candidate worktree; otherwise later baseline resolution can point at a binary that no longer exists.
   - Keep promotion metadata in both machine-readable `iteration.json` and human-readable `decision.md` so operators and later phases can audit exactly which stored binary became the new baseline.
 ---
+
+## 2026-04-07 14:38:38 PDT - US-010
+- Extended `scripts/evolution-loop.sh` so each iteration seeds `iteration.json.stockfishComparison.positiveSignal` and tightened the decision-phase worker instructions to treat positive-signal promotion as a narrow exception after both direct and Stockfish comparisons stay inconclusive.
+- Documented the positive-signal contract in the top-level project guidance and feature PRD, requiring the exact supporting evidence to be repeated in both `decision.md` and `iteration.json.decision.evidence` whenever an otherwise inconclusive candidate is promoted.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd-evolution-loop-enhancements.md`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - When an agent skill owns the final promotion call, orchestration should still pre-seed the machine-readable fields that make exception paths auditable instead of relying on free-form Markdown alone.
+  - If a decision can override the default benchmark policy, capture that override as an explicit contract in both the operator docs and the iteration artifact schema so later phases can validate it consistently.
+---
+

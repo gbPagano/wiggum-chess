@@ -1576,7 +1576,13 @@ write_iteration_state() {
     "resultsCsv": "$stockfish_comparison_csv",
     "sprtCsv": "$stockfish_comparison_sprt_csv",
     "changedRecommendation": false,
-    "limitation": ""
+    "limitation": "",
+    "positiveSignal": {
+      "evaluated": false,
+      "present": false,
+      "summary": "",
+      "evidence": []
+    }
   },
   "stateMachine": {
     "reference": "$STATE_MACHINE_REFERENCE",
@@ -1744,6 +1750,7 @@ During /evolution-propose, always set `ideas.proposalSource` in iteration.json t
 Implementation, benchmark, and decision phases must treat `iteration.json` as the source of truth for the proposal source metadata instead of inferring it from hypothesis text.
 Benchmark and decision phases must resolve the stored baseline engine from `iteration.json.baselinePath` and `iteration.json.baselineBinary` (or `session.env` `accepted_baseline_path` / `accepted_baseline_binary`) instead of relying on git refs.
 If the direct candidate-vs-baseline benchmark result is inconclusive, the benchmark and/or decision flow may use `iteration.json.stockfishComparison` plus the linked artifact path in `artifacts.stockfishComparison` to run or record an additional candidate-vs-Stockfish comparison. Reuse the stored baseline Stockfish report at `iteration.json.stockfishComparison.baselineReport` when available, write the candidate follow-up result in `benchmark.md` or `stockfish-comparison/results.md`, set `stockfishComparison.changedRecommendation`, and make `decision.md` state explicitly whether the Stockfish comparison changed the recommendation or could not be completed.
+If both the direct benchmark and the Stockfish comparison remain inconclusive, the decision phase must explicitly evaluate whether any positive signal remains. Record that judgment in `iteration.json.stockfishComparison.positiveSignal` with `evaluated`, `present`, `summary`, and `evidence`. This positive-signal path is the only exception that may allow an `accepted` outcome when `benchmark.sufficientForPromotion` is still false: only allow promotion from otherwise inconclusive evidence when `positiveSignal.present` is true, write the exact supporting evidence into `decision.md` and `iteration.json.decision.evidence`, and explain why promotion was allowed despite inconclusive match evidence; otherwise leave the candidate unpromoted.
 If you cannot complete the phase, record the failure in the appropriate iteration artifact and iteration.json.
 If no valid next hypothesis exists during /evolution-propose, record a stop signal in iteration.json using hypothesis.status = "no_hypothesis" and explain it in hypothesis.md.
 EOF

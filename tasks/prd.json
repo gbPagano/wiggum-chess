@@ -164,8 +164,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Extended the orchestration-owned stockfishComparison metadata with an explicit positiveSignal structure and tightened the worker prompt so the decision phase treats positive-signal promotion as a narrow exception: only after both benchmark layers remain inconclusive, with the exact supporting evidence repeated in iteration.json.decision.evidence and decision.md when promotion is allowed."
     },
     {
       "id": "US-011",
