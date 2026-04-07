@@ -373,3 +373,14 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - `.claude/skills/` writes require Bash with heredoc — the Write tool was denied for this dot-prefixed directory.
   - The skill skeleton pattern: YAML frontmatter with `name`, `description`, and user-invocable triggers, followed by markdown body with Inputs, What to Do, Format, Output Contract, and References sections.
 ---
+
+## 2026-04-06 20:20:00 PDT - US-007
+- Created `.claude/skills/evolution-benchmark/SKILL.md` with the benchmark skill skeleton.
+- Skill contract: reads iteration state, runs SPRT match series between candidate and baseline engines, writes `benchmark.md` with settings and results, updates `iteration.json` with benchmark status and metrics.
+- Explicitly requires minimum 10 completed games for screening validation.
+- Includes scope constraints (only run matches, no engine code changes, no git branch manipulation) and output contract.
+- Files changed: `.claude/skills/evolution-benchmark/SKILL.md`, `tasks/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - The benchmark skill should record build failures as `failed` state so the decision skill can distinguish infrastructure failures from candidate performance issues.
+  - If the first benchmark result is weak, the skill should note this in `benchmark.md` so the decision skill knows evidence may be insufficient rather than silently accepting an inconclusive result.
+---

@@ -112,8 +112,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created .claude/skills/evolution-benchmark/SKILL.md with YAML frontmatter and markdown body implementing the benchmark phase contract: reads iteration state, runs SPRT matches (min 10 games), writes benchmark.md, updates iteration.json with metrics. Explicitly requires minimum 10 completed games for screening validation."
     },
     {
       "id": "US-008",
