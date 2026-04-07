@@ -559,6 +559,79 @@ build_candidate_binary() {
   chmod +x "$candidate_binary_path"
 }
 
+persist_promoted_version_artifact() {
+  local iteration_json_path="$1"
+  local promoted_version="$2"
+  local candidate_binary_source="$3"
+  local version_dir
+  local version_binary
+
+  if [[ -z "$promoted_version" ]]; then
+    echo "Error: cannot persist promoted version artifact without a promoted version." >&2
+    return 1
+  fi
+
+  if [[ -z "$candidate_binary_source" || ! -f "$candidate_binary_source" ]]; then
+    echo "Error: candidate binary is missing and cannot be persisted: $candidate_binary_source" >&2
+    return 1
+  fi
+
+  version_dir="$(baseline_version_path "$promoted_version")"
+  version_binary="$(baseline_binary_path "$version_dir")"
+
+  mkdir -p "$version_dir"
+  cp "$candidate_binary_source" "$version_binary"
+  chmod +x "$version_binary"
+
+  python3 - <<'PY' "$iteration_json_path" "$promoted_version" "$version_dir" "$version_binary"
+import json
+import sys
+
+iteration_json_path, promoted_version, version_dir, version_binary = sys.argv[1:]
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+decision = data.setdefault('decision', {})
+promotion = decision.setdefault('promotion', {})
+promotion['promotedVersion'] = promoted_version
+promotion['versionPath'] = version_dir
+promotion['binaryName'] = 'wiggum-engine'
+promotion['binaryPath'] = version_binary
+decision['promotedVersion'] = promoted_version
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
+}
+
+record_promotion_artifact_in_decision() {
+  local decision_path="$1"
+  local promoted_version="$2"
+  local promoted_binary_path="$3"
+
+  python3 - <<'PY' "$decision_path" "$promoted_version" "$promoted_binary_path"
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+promoted_version = sys.argv[2]
+promoted_binary_path = sys.argv[3]
+text = path.read_text(encoding='utf-8')
+block = (
+    "\n## Promoted Artifact\n\n"
+    f"- Promoted version: `{promoted_version}`\n"
+    f"- Stored binary: `{promoted_binary_path}`\n"
+)
+
+if "## Promoted Artifact" in text:
+    path.write_text(text, encoding='utf-8')
+else:
+    path.write_text(text.rstrip() + "\n" + block, encoding='utf-8')
+PY
+}
+
 record_candidate_binary_metadata() {
   local iteration_json_path="$1"
   local implementation_path="$2"
@@ -967,6 +1040,21 @@ decision = data.get('decision', {}) or {}
 promotion = decision.get('promotion', {}) or {}
 promoted_version = decision.get('promotedVersion') or promotion.get('promotedVersion') or ''
 print(promoted_version)
+PY
+}
+
+current_candidate_binary() {
+  local iteration_json_path="$1"
+
+  python3 - <<'PY' "$iteration_json_path"
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+candidate = data.get('candidate', {}) or {}
+print(candidate.get('binaryPath', ''))
 PY
 }
 
@@ -1589,7 +1677,9 @@ promote_candidate_workspace() {
   local candidate_workspace_path="$1"
   local iteration_json_path="$2"
   local iteration_number="$3"
+  local decision_path="$4"
   local promoted_version
+  local candidate_binary_source
 
   if candidate_workspace_has_changes "$candidate_workspace_path"; then
     git -C "$candidate_workspace_path" add -A
@@ -1598,11 +1688,17 @@ promote_candidate_workspace() {
 
   ACCEPTED_BASELINE_SOURCE_REF="$(git -C "$candidate_workspace_path" rev-parse HEAD)"
   promoted_version="$(current_promoted_version "$iteration_json_path")"
+  candidate_binary_source="$(current_candidate_binary "$iteration_json_path")"
   if [[ -n "$promoted_version" ]]; then
+    if ! persist_promoted_version_artifact "$iteration_json_path" "$promoted_version" "$candidate_binary_source"; then
+      return 1
+    fi
+
     ACCEPTED_BASELINE_VERSION="$promoted_version"
     ACCEPTED_BASELINE_PATH="$(baseline_version_path "$ACCEPTED_BASELINE_VERSION")"
     ACCEPTED_BASELINE_BINARY="$(baseline_binary_path "$ACCEPTED_BASELINE_PATH")"
     IFS='|' read -r ACCEPTED_BASELINE_MAJOR ACCEPTED_BASELINE_MINOR <<< "$(parse_version_tag "$ACCEPTED_BASELINE_VERSION")"
+    record_promotion_artifact_in_decision "$decision_path" "$ACCEPTED_BASELINE_VERSION" "$ACCEPTED_BASELINE_BINARY"
   fi
 
   write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
@@ -1841,8 +1937,8 @@ while (( ITERATION_NUMBER <= MAX_ITERATIONS )); do
         record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Accepted iteration selected an idea from the ideas file but the checklist entry could not be marked as used."
         CURRENT_ITERATION_STATE="failed"
         INFRA_FAILURE_COUNT=$((INFRA_FAILURE_COUNT + 1))
-      elif ! promote_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_STATE_PATH" "$ITERATION_NUMBER"; then
-        record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Accepted candidate could not be persisted as the next baseline."
+      elif ! promote_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_STATE_PATH" "$ITERATION_NUMBER" "$LAST_DECISION_PATH"; then
+        record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Accepted candidate could not be persisted as the next baseline artifact."
         CURRENT_ITERATION_STATE="failed"
         INFRA_FAILURE_COUNT=$((INFRA_FAILURE_COUNT + 1))
       else

@@ -116,8 +116,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated scripts/evolution-loop.sh so accepted iterations persist the built candidate binary into chess-engine/versions/<promoted-version>/wiggum-engine, record the stored artifact path back into iteration.json decision.promotion metadata plus decision.md, and refresh session.env to use the promoted artifact path as the active baseline for later iterations instead of depending on Cargo target layout."
     },
     {
       "id": "US-008",
