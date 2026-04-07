@@ -11,6 +11,7 @@
 - Treat `session.env` `active_baseline_*` fields as the stable operator-facing alias for the current promoted baseline, and keep the final session summary's promotion history derived from per-iteration decision metadata so accepted baseline changes are auditable in order.
 - Stockfish follow-up for inconclusive direct benchmarks should use pre-seeded `iteration.json.stockfishComparison` metadata plus `stockfish-comparison/results.md`, including whether the stored baseline report exists, whether the follow-up changed the recommendation, and any explicit limitation.
 - Positive-signal promotion after inconclusive evidence is decision-owned and must be explicit: seed `iteration.json.stockfishComparison.positiveSignal`, and only let a decision promote with `benchmark.sufficientForPromotion = false` when both the structured evidence and `decision.md` repeat the exact positive-signal rationale.
+- Quiet-vs-verbose phase execution should branch only at the shell wrapper: keep default runs redirecting skill output to per-phase logs, and implement `--verbose` by teeing the exact same phase stream so logging artifacts and iteration semantics stay identical.
 
 ## 2026-04-07 11:32:03 PDT - US-008
 - Added explicit `active_baseline_version`, `active_baseline_path`, and `active_baseline_binary` fields to `session.env`, keeping them synchronized with accepted baseline state so accepted promotions immediately become the next iteration's active baseline contract.
@@ -106,5 +107,14 @@ Started: 2026-04-07
 - **Learnings for future iterations:**
   - When an agent skill owns the final promotion call, orchestration should still pre-seed the machine-readable fields that make exception paths auditable instead of relying on free-form Markdown alone.
   - If a decision can override the default benchmark policy, capture that override as an explicit contract in both the operator docs and the iteration artifact schema so later phases can validate it consistently.
+---
+
+## 2026-04-07 14:45:09 PDT - US-011
+- Added an optional `--verbose` flag to `scripts/evolution-loop.sh` and surfaced the selected mode in the startup summary so operators can explicitly request live phase output while debugging.
+- Updated phase execution to use `tee` in verbose mode, preserving the same per-phase log artifacts and quiet-mode iteration behavior for downstream auditing and decisions.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Add operator-facing debug verbosity at the phase runner boundary so artifact paths and downstream state handling remain identical between quiet and verbose runs.
+  - If a loop already captures phase logs, verbose mode should mirror that same stream instead of introducing a second logging path.
 ---
 

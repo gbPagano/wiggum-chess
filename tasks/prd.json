@@ -179,8 +179,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added a --verbose flag to scripts/evolution-loop.sh, kept the default quiet Ralph-style capture behavior unchanged, and routed verbose phase execution through tee so live skill output is visible while the same per-phase log artifacts are still written for audit and downstream decision handling."
     }
   ]
 }

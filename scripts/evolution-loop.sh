@@ -4,7 +4,7 @@
 # Start a Wiggum engine evolution session.
 #
 # Usage:
-#   ./scripts/evolution-loop.sh --baseline-version <version> [--ideas-file <path>] [--output-dir <path>] [--max-iterations <count>] [--max-infra-failures <count>]
+#   ./scripts/evolution-loop.sh --baseline-version <version> [--ideas-file <path>] [--output-dir <path>] [--max-iterations <count>] [--max-infra-failures <count>] [--verbose]
 #   ./scripts/evolution-loop.sh --help
 #
 # Options:
@@ -13,6 +13,7 @@
 #   --output-dir           Session artifact root. Defaults to tasks/evolution-runs.
 #   --max-iterations       Maximum iterations to allow. Defaults to 10.
 #   --max-infra-failures   Maximum failed iterations to tolerate before stopping. Defaults to 3.
+#   --verbose              Stream live phase skill output while still capturing logs.
 #   --help                 Print this help text.
 
 set -euo pipefail
@@ -31,6 +32,7 @@ IDEAS_FILE_PENDING_COUNT=0
 OUTPUT_DIR="$REPO_ROOT/tasks/evolution-runs"
 MAX_ITERATIONS=10
 MAX_INFRA_FAILURES=3
+VERBOSE=false
 ACCEPTED_BASELINE_VERSION=""
 ACCEPTED_BASELINE_PATH=""
 ACCEPTED_BASELINE_BINARY=""
@@ -988,10 +990,18 @@ run_logged_phase() {
   phase_log="$(phase_log_path "$iteration_dir" "$phase_name")"
   mkdir -p "$(phase_logs_dir_path "$iteration_dir")"
 
-  if run_claude_skill "$skill_name" "$candidate_workspace_path" "$iteration_dir" "$iteration_json_path" >"$phase_log" 2>&1; then
-    phase_status=0
+  if [[ "$VERBOSE" == "true" ]]; then
+    if run_claude_skill "$skill_name" "$candidate_workspace_path" "$iteration_dir" "$iteration_json_path" 2>&1 | tee "$phase_log"; then
+      phase_status=0
+    else
+      phase_status=$?
+    fi
   else
-    phase_status=$?
+    if run_claude_skill "$skill_name" "$candidate_workspace_path" "$iteration_dir" "$iteration_json_path" >"$phase_log" 2>&1; then
+      phase_status=0
+    else
+      phase_status=$?
+    fi
   fi
 
   iteration_result="$(current_iteration_result "$iteration_json_path")"
@@ -1940,6 +1950,10 @@ while [[ $# -gt 0 ]]; do
       MAX_INFRA_FAILURES="$2"
       shift 2
       ;;
+    --verbose)
+      VERBOSE=true
+      shift
+      ;;
     --help|-h)
       usage
       exit 0
@@ -2004,6 +2018,7 @@ fi
 echo "Output directory: $OUTPUT_DIR"
 echo "Max iterations: $MAX_ITERATIONS"
 echo "Max infrastructure failures: $MAX_INFRA_FAILURES"
+echo "Verbose mode: $VERBOSE"
 echo "Session ID: $SESSION_ID"
 echo "Session directory: $SESSION_DIR"
 echo "Session summary: $SESSION_SUMMARY_PATH"
