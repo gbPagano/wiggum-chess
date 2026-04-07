@@ -44,11 +44,10 @@ Determine the final outcome of the current iteration and persist the decision.
    - Key evidence cited from the benchmark results, including `policyStage`, completed games, and whether `benchmark.sufficientForPromotion` was satisfied
    - Any recommendations for future iterations
 
-4. **Update `iteration.json`** — Set the state to the final outcome:
-   - `"accepted"` — the candidate becomes the new baseline
-   - `"rejected"` — the candidate is discarded, baseline unchanged
-   - `"inconclusive"` — evidence insufficient, baseline unchanged
-   - `"failed"` — infrastructure or implementation failure, baseline unchanged
+4. **Update `iteration.json`** — Follow the canonical state-machine contract in `tasks/prd-wiggum-evolution-loop.md`:
+   - Enter the decision phase only from `benchmarked` by transitioning to `deciding` before choosing an outcome
+   - Set the final `state` to exactly one of `"accepted"`, `"rejected"`, `"inconclusive"`, or `"failed"`
+   - Keep `stateMachine.currentPhase` aligned with the final `state`
    - Add `decision` object with:
      - `outcome` — one of the allowed final states
      - `reasoning` — explanation of the decision
@@ -93,6 +92,8 @@ Suggestions for future iterations (e.g., "retry with more games", "explore relat
 | `inconclusive` | Evidence insufficient for clear decision | Unchanged |
 | `failed` | Implementation or benchmark infrastructure failure | Unchanged |
 
+The final-state rules come from the iteration state machine in `tasks/prd-wiggum-evolution-loop.md`. The decision phase must not skip directly from `implemented` to a final outcome.
+
 ---
 
 ## Scope Constraints
@@ -119,3 +120,4 @@ After this skill runs, the following must be true:
 - Evolution loop: `scripts/evolution-loop.sh`
 - Benchmarks: `scripts/benchmark-version.sh`
 - Benchmark policy: see US-011 benchmark policy contract
+- Iteration state machine: `tasks/prd-wiggum-evolution-loop.md`

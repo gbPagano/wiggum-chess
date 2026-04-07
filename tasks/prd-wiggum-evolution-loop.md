@@ -317,11 +317,64 @@ The `baselineRef` field is the authoritative source for which accepted baseline 
 **Description:** As a developer, I want a single iteration state machine so that script and skills agree on valid transitions.
 
 **Acceptance Criteria:**
-- [ ] The project documents valid iteration states and transitions.
-- [ ] `iteration.json` uses the documented state names.
-- [ ] The state machine distinguishes in-progress phase from final outcome.
-- [ ] Invalid transitions are treated as orchestration errors.
-- [ ] The state-machine rules are referenced by the orchestration script and decision skill.
+- [x] The project documents valid iteration states and transitions.
+- [x] `iteration.json` uses the documented state names.
+- [x] The state machine distinguishes in-progress phase from final outcome.
+- [x] Invalid transitions are treated as orchestration errors.
+- [x] The state-machine rules are referenced by the orchestration script and decision skill.
+
+### Iteration state machine contract
+
+The orchestration script is the authority for iteration state transitions. Skills may update iteration metadata for their phase, but they must not invent new state names or skip required transitions.
+
+#### In-progress states
+
+- `initialized` — iteration artifacts exist and isolation metadata has been written.
+- `proposing` — the propose phase is actively selecting a hypothesis.
+- `proposed` — `hypothesis.md` and hypothesis metadata have been written.
+- `implementing` — candidate code changes are being applied in the isolated workspace.
+- `implemented` — implementation finished and `implementation.md` is ready.
+- `validating` — orchestration-owned correctness checks are running.
+- `benchmarked` — benchmark artifacts and summary fields are complete and ready for the decision phase.
+- `deciding` — final outcome selection is in progress.
+
+#### Final outcome states
+
+- `accepted` — promotion evidence passed policy and the candidate becomes the new accepted baseline.
+- `rejected` — evidence is strong enough to discard the candidate while keeping the baseline unchanged.
+- `inconclusive` — the candidate finished evaluation but evidence is not strong enough for accept/reject.
+- `failed` — orchestration, isolation, correctness, implementation, or benchmark infrastructure failed.
+
+#### Valid transitions
+
+```text
+initialized -> proposing -> proposed -> implementing -> implemented -> validating
+validating -> implemented        # correctness passed; benchmark remains eligible
+validating -> failed             # correctness failed or orchestration error
+implemented -> benchmarked       # benchmark artifact complete and ready for decision
+benchmarked -> deciding -> accepted
+benchmarked -> deciding -> rejected
+benchmarked -> deciding -> inconclusive
+```
+
+A transition outside this graph is an orchestration error. The script must stop the iteration immediately rather than silently rewriting state.
+
+#### `iteration.json` requirements
+
+- `state` stores the authoritative current state using only the names listed above.
+- `stateMachine.reference` points to this contract so downstream tooling can resolve the canonical rules.
+- `stateMachine.currentPhase` mirrors `state` for explicit human-readable inspection.
+- `stateMachine.finalStates` lists `accepted`, `rejected`, `inconclusive`, and `failed`.
+
+#### Ownership rules
+
+- The orchestration script enforces transition validity before it writes orchestration-owned states such as `validating` and `failed`.
+- The decision phase must only write a final state after the iteration reaches `deciding`.
+- Any state mismatch between the expected prior state and the observed `iteration.json` value is treated as a hard orchestration error.
+
+The orchestration script references this contract via `STATE_MACHINE_REFERENCE`, and the decision skill must use the same state names and final-state rules.
+
+---
 
 ### US-013: Add versioning policy contract
 **Description:** As a developer, I want the version bump behavior defined clearly so that accepted candidates promote consistently.
@@ -384,6 +437,7 @@ The `baselineRef` field is the authoritative source for which accepted baseline 
 - FR-17: The harness must be documented well enough that a user can run the loop end to end from the repository.
 
 ## 6. Non-Goals (Out of Scope)
+
 
 - Building a generic autonomous coding platform unrelated to engine evolution.
 - Guaranteeing Elo gain on every single session.

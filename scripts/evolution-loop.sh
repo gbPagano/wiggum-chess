@@ -18,6 +18,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORKER_GUIDANCE="$REPO_ROOT/.claude/evolution/CLAUDE.md"
+STATE_MACHINE_REFERENCE="$REPO_ROOT/tasks/prd-wiggum-evolution-loop.md"
 
 BASELINE_VERSION=""
 OUTPUT_DIR="$REPO_ROOT/tasks/evolution-runs"
@@ -59,6 +60,72 @@ json_escape() {
   value=${value//$'\t'/\\t}
 
   printf '%s' "$value"
+}
+
+update_iteration_state() {
+  local iteration_json_path="$1"
+  local expected_state="$2"
+  local next_state="$3"
+  local error_context="$4"
+
+  python3 - <<'PY' "$iteration_json_path" "$expected_state" "$next_state" "$error_context"
+import json
+import sys
+
+iteration_json_path, expected_state, next_state, error_context = sys.argv[1:]
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+current_state = data.get('state')
+if current_state != expected_state:
+    raise SystemExit(
+        f"Invalid iteration state transition for {error_context}: expected {expected_state!r}, found {current_state!r}"
+    )
+
+data['state'] = next_state
+if 'stateMachine' in data:
+    data['stateMachine']['currentPhase'] = next_state
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
+}
+
+set_iteration_final_state() {
+  local iteration_json_path="$1"
+  local next_state="$2"
+  local error_context="$3"
+
+  python3 - <<'PY' "$iteration_json_path" "$next_state" "$error_context"
+import json
+import sys
+
+iteration_json_path, next_state, error_context = sys.argv[1:]
+final_states = {'accepted', 'rejected', 'inconclusive', 'failed'}
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+current_state = data.get('state')
+if current_state != 'deciding':
+    raise SystemExit(
+        f"Invalid iteration state transition for {error_context}: expected 'deciding', found {current_state!r}"
+    )
+if next_state not in final_states:
+    raise SystemExit(
+        f"Invalid final iteration state for {error_context}: {next_state!r}"
+    )
+
+data['state'] = next_state
+if 'stateMachine' in data:
+    data['stateMachine']['currentPhase'] = next_state
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
 }
 
 session_id_now() {
@@ -183,6 +250,25 @@ record_correctness_failure() {
   local cargo_build_status="$7"
   local cargo_test_status="$8"
   local failed_checks=()
+  local current_state
+
+  current_state="$(python3 - <<'PY' "$iteration_json_path"
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+print(data.get('state', ''))
+PY
+)"
+
+  if [[ "$current_state" == "implemented" ]]; then
+    update_iteration_state "$iteration_json_path" "implemented" "validating" "correctness gate start"
+  elif [[ "$current_state" != "validating" ]]; then
+    echo "Invalid iteration state transition for correctness gate failure: expected 'implemented' or 'validating', found '$current_state'" >&2
+    exit 1
+  fi
 
   if [[ "$bash_check_status" == "failed" ]]; then
     failed_checks+=("bash -n scripts/evolution-loop.sh")
@@ -196,6 +282,8 @@ record_correctness_failure() {
     failed_checks+=("cargo test --workspace -- --skip gen_files::magics::name")
   fi
 
+  set_iteration_final_state "$iteration_json_path" "failed" "correctness gate failure"
+
   python3 - <<'PY' "$iteration_json_path" "$candidate_workspace_path" "$bash_check_status" "$cargo_build_status" "$cargo_test_status"
 import json
 import sys
@@ -205,7 +293,6 @@ iteration_json_path, candidate_workspace_path, bash_check_status, cargo_build_st
 with open(iteration_json_path, 'r', encoding='utf-8') as handle:
     data = json.load(handle)
 
-data['state'] = 'failed'
 data['correctness'] = {
     'status': 'completed',
     'passed': False,
@@ -236,6 +323,7 @@ data['benchmark']['skippedReason'] = 'correctness gate failed'
 data.setdefault('decision', {})
 data['decision']['outcome'] = 'failed'
 data['decision']['reasoning'] = 'Configured correctness checks failed before benchmarking, so the candidate is ineligible for promotion.'
+data['stateMachine']['currentPhase'] = data['state']
 
 actionable_failures = [
     check['name'] for check in data['correctness']['checks'] if check['status'] == 'failed'
@@ -293,6 +381,8 @@ record_correctness_success() {
   local cargo_build_status="$5"
   local cargo_test_status="$6"
 
+  update_iteration_state "$iteration_json_path" "implemented" "validating" "correctness gate start"
+
   python3 - <<'PY' "$iteration_json_path" "$candidate_workspace_path" "$bash_check_status" "$cargo_build_status" "$cargo_test_status"
 import json
 import sys
@@ -302,6 +392,8 @@ iteration_json_path, candidate_workspace_path, bash_check_status, cargo_build_st
 with open(iteration_json_path, 'r', encoding='utf-8') as handle:
     data = json.load(handle)
 
+data['state'] = 'implemented'
+data['stateMachine']['currentPhase'] = data['state']
 data['correctness'] = {
     'status': 'completed',
     'passed': True,
@@ -372,6 +464,7 @@ run_correctness_gate() {
     return 0
   fi
 
+  update_iteration_state "$iteration_json_path" "validating" "deciding" "correctness failure decision handoff"
   record_correctness_failure "$iteration_json_path" "$decision_path" "$benchmark_path" "$correctness_results_path" "$candidate_workspace_path" "$bash_check_status" "$cargo_build_status" "$cargo_test_status"
   return 1
 }
@@ -464,6 +557,11 @@ write_iteration_state() {
     "benchmarkEligible": false,
     "checks": []
   },
+  "stateMachine": {
+    "reference": "$STATE_MACHINE_REFERENCE",
+    "currentPhase": "$initial_state",
+    "finalStates": ["accepted", "rejected", "inconclusive", "failed"]
+  },
   "artifacts": {
     "iterationJson": "$iteration_json_path",
     "hypothesis": "$hypothesis_path",
@@ -526,6 +624,8 @@ data['correctness'] = {
     'checks': [],
     'skippedReason': 'candidate workspace setup failed',
 }
+
+data['stateMachine']['currentPhase'] = data['state']
 
 data['benchmark'] = {
     'status': 'skipped',

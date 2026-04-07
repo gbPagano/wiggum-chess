@@ -66,13 +66,27 @@ Every iteration proceeds through the following phases in order. The orchestratio
 
 ## Iteration State Machine
 
-Valid states and transitions for `iteration.json`:
+The canonical state-machine contract lives in `tasks/prd-wiggum-evolution-loop.md` and is referenced by the orchestration script through `STATE_MACHINE_REFERENCE`.
+
+Use these `iteration.json.state` values only:
+
+- In-progress: `initialized`, `proposing`, `proposed`, `implementing`, `implemented`, `validating`, `benchmarked`, `deciding`
+- Final: `accepted`, `rejected`, `inconclusive`, `failed`
+
+Valid transitions:
 
 ```
-initialized -> proposing -> proposed -> implementing -> implemented -> validating -> [passed|failed] -> benchmarking -> benchmarked -> deciding -> [accepted|rejected|inconclusive|failed]
+initialized -> proposing -> proposed -> implementing -> implemented -> validating
+validating -> implemented
+validating -> failed
+implemented -> benchmarked
+benchmarked -> deciding -> [accepted|rejected|inconclusive]
+deciding -> failed
 ```
 
-The orchestration script and decision skill enforce these transitions. Invalid transitions are treated as orchestration errors.
+The orchestration script and decision skill enforce these transitions. Invalid transitions are treated as hard orchestration errors, not automatic recovery opportunities.
+
+`iteration.json.state` is the authoritative machine-readable value, and `iteration.json.stateMachine.currentPhase` should mirror it for easier inspection.
 
 ## File Layout
 
