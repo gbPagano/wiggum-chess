@@ -148,8 +148,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Seeded each iteration with explicit stockfishComparison artifact metadata, including baseline report availability, recommendation-change tracking, and a dedicated stockfish-comparison/results.md path, and exposed that artifact in the session summary so inconclusive benchmark follow-up has stable places to record extra candidate-vs-Stockfish evidence, recommendation changes, or limitations."
     },
     {
       "id": "US-010",

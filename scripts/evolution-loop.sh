@@ -41,6 +41,7 @@ SESSION_SUMMARY_FILENAME="summary.md"
 ITERATIONS_DIRNAME="iterations"
 CANDIDATE_WORKSPACES_DIRNAME="candidate-workspaces"
 PHASE_LOGS_DIRNAME="phase-logs"
+STOCKFISH_COMPARISON_DIRNAME="stockfish-comparison"
 INITIAL_ITERATION_NUMBER=1
 ITERATION_STATE_FILENAME="iteration.json"
 HYPOTHESIS_FILENAME="hypothesis.md"
@@ -220,6 +221,7 @@ if os.path.isdir(iterations_dir):
             'implementation': os.path.relpath(os.path.join(iteration_dir, 'implementation.md'), session_dir),
             'correctness': os.path.relpath(os.path.join(iteration_dir, 'correctness', 'results.md'), session_dir),
             'benchmark': os.path.relpath(os.path.join(iteration_dir, 'benchmark.md'), session_dir),
+            'stockfish_comparison': os.path.relpath(os.path.join(iteration_dir, 'stockfish-comparison', 'results.md'), session_dir),
             'decision': os.path.relpath(os.path.join(iteration_dir, 'decision.md'), session_dir),
             'iteration_json': os.path.relpath(iteration_json, session_dir),
         }
@@ -285,6 +287,7 @@ if entries:
             f"- implementation: `{entry['implementation']}`",
             f"- correctness: `{entry['correctness']}`",
             f"- benchmark: `{entry['benchmark']}`",
+            f"- stockfish comparison: `{entry['stockfish_comparison']}`",
             f"- decision: `{entry['decision']}`",
         ])
         if entry['promoted_version']:
@@ -715,12 +718,15 @@ write_session_metadata() {
   local escaped_candidate_version
   local escaped_baseline_path
   local escaped_baseline_binary
+  local stockfish_binary_path="$REPO_ROOT/engines/stockfish"
+  local escaped_stockfish_binary_path
 
   escaped_ideas_file="$(json_escape "$IDEAS_FILE_RESOLVED")"
   escaped_candidate_binary_path="$(json_escape "$LAST_CANDIDATE_BINARY_PATH")"
   escaped_candidate_version="$(json_escape "$LAST_CANDIDATE_VERSION")"
   escaped_baseline_path="$(json_escape "$ACCEPTED_BASELINE_PATH")"
   escaped_baseline_binary="$(json_escape "$ACCEPTED_BASELINE_BINARY")"
+  escaped_stockfish_binary_path="$(json_escape "$stockfish_binary_path")"
 
   cat <<EOF > "$metadata_path"
 baseline_version=$BASELINE_VERSION
@@ -737,6 +743,7 @@ candidate_binary_path=$escaped_candidate_binary_path
 ideas_file=$escaped_ideas_file
 ideas_file_pending_count=$IDEAS_FILE_PENDING_COUNT
 ideas_format=markdown-task-list
+stockfish_binary=$escaped_stockfish_binary_path
 max_iterations=$MAX_ITERATIONS
 max_infra_failures=$MAX_INFRA_FAILURES
 session_id=$session_id
@@ -1012,6 +1019,36 @@ correctness_results_path() {
   local iteration_dir="$1"
 
   printf '%s/results.md\n' "$(correctness_dir_path "$iteration_dir")"
+}
+
+stockfish_comparison_dir_path() {
+  local iteration_dir="$1"
+
+  printf '%s/%s\n' "$iteration_dir" "$STOCKFISH_COMPARISON_DIRNAME"
+}
+
+stockfish_comparison_results_path() {
+  local iteration_dir="$1"
+
+  printf '%s/results.md\n' "$(stockfish_comparison_dir_path "$iteration_dir")"
+}
+
+stockfish_comparison_csv_path() {
+  local iteration_dir="$1"
+
+  printf '%s/results.csv\n' "$(stockfish_comparison_dir_path "$iteration_dir")"
+}
+
+stockfish_comparison_sprt_csv_path() {
+  local iteration_dir="$1"
+
+  printf '%s/sprt_results.csv\n' "$(stockfish_comparison_dir_path "$iteration_dir")"
+}
+
+baseline_report_path() {
+  local version_tag="$1"
+
+  printf '%s/report.md\n' "$(baseline_version_path "$version_tag")"
 }
 
 current_iteration_state() {
@@ -1442,6 +1479,10 @@ write_iteration_state() {
   local escaped_phase_logs_dir
   local correctness_dir
   local correctness_results
+  local stockfish_comparison_dir
+  local stockfish_comparison_results
+  local stockfish_comparison_csv
+  local stockfish_comparison_sprt_csv
   local escaped_baseline_version
   local escaped_baseline_path
   local escaped_candidate_workspace_path
@@ -1451,14 +1492,22 @@ write_iteration_state() {
   local escaped_ideas_file_path
   local escaped_candidate_version
   local escaped_candidate_binary_path
+  local escaped_stockfish_binary
+  local escaped_baseline_report_path
+  local baseline_report_available=false
   local initial_state
 
   correctness_dir="$(correctness_dir_path "$iteration_dir")"
   correctness_results="$(correctness_results_path "$iteration_dir")"
   phase_logs_dir="$(phase_logs_dir_path "$iteration_dir")"
+  stockfish_comparison_dir="$(stockfish_comparison_dir_path "$iteration_dir")"
+  stockfish_comparison_results="$(stockfish_comparison_results_path "$iteration_dir")"
+  stockfish_comparison_csv="$(stockfish_comparison_csv_path "$iteration_dir")"
+  stockfish_comparison_sprt_csv="$(stockfish_comparison_sprt_csv_path "$iteration_dir")"
 
   mkdir -p "$correctness_dir"
   mkdir -p "$phase_logs_dir"
+  mkdir -p "$stockfish_comparison_dir"
 
   escaped_baseline_version="$(json_escape "$ACCEPTED_BASELINE_VERSION")"
   escaped_baseline_path="$(json_escape "$ACCEPTED_BASELINE_PATH")"
@@ -1470,6 +1519,11 @@ write_iteration_state() {
   escaped_ideas_file_path="$(json_escape "$IDEAS_FILE_RESOLVED")"
   escaped_candidate_version="$(json_escape "$LAST_CANDIDATE_VERSION")"
   escaped_candidate_binary_path="$(json_escape "$LAST_CANDIDATE_BINARY_PATH")"
+  escaped_stockfish_binary="$(json_escape "$REPO_ROOT/engines/stockfish")"
+  escaped_baseline_report_path="$(json_escape "$(baseline_report_path "$ACCEPTED_BASELINE_VERSION")")"
+  if [[ -f "$(baseline_report_path "$ACCEPTED_BASELINE_VERSION")" ]]; then
+    baseline_report_available=true
+  fi
 
   initial_state="initialized"
   if [[ "$candidate_setup_status" == "failed" ]]; then
@@ -1512,6 +1566,18 @@ write_iteration_state() {
     "benchmarkEligible": false,
     "checks": []
   },
+  "stockfishComparison": {
+    "status": "pending",
+    "baselineVersion": "$escaped_baseline_version",
+    "baselineReport": "$escaped_baseline_report_path",
+    "baselineReportAvailable": $baseline_report_available,
+    "stockfishBinary": "$escaped_stockfish_binary",
+    "results": "$stockfish_comparison_results",
+    "resultsCsv": "$stockfish_comparison_csv",
+    "sprtCsv": "$stockfish_comparison_sprt_csv",
+    "changedRecommendation": false,
+    "limitation": ""
+  },
   "stateMachine": {
     "reference": "$STATE_MACHINE_REFERENCE",
     "currentPhase": "$initial_state",
@@ -1524,6 +1590,7 @@ write_iteration_state() {
     "correctness": "$correctness_results",
     "benchmark": "$benchmark_path",
     "decision": "$decision_path",
+    "stockfishComparison": "$stockfish_comparison_results",
     "phaseLogsDir": "$escaped_phase_logs_dir",
     "phaseLogs": {
       "propose": "$(phase_log_path "$iteration_dir" "propose")",
@@ -1546,6 +1613,7 @@ create_iteration_artifacts() {
   local implementation_path="$iteration_dir/$IMPLEMENTATION_FILENAME"
   local benchmark_path="$iteration_dir/$BENCHMARK_FILENAME"
   local decision_path="$iteration_dir/$DECISION_FILENAME"
+  local stockfish_comparison_results
   local correctness_results
   local isolation_fields
   local candidate_workspace_path
@@ -1558,7 +1626,9 @@ create_iteration_artifacts() {
 
   mkdir -p "$iteration_dir"
   mkdir -p "$(correctness_dir_path "$iteration_dir")"
+  mkdir -p "$(stockfish_comparison_dir_path "$iteration_dir")"
   correctness_results="$(correctness_results_path "$iteration_dir")"
+  stockfish_comparison_results="$(stockfish_comparison_results_path "$iteration_dir")"
 
   isolation_fields="$(setup_candidate_workspace "$session_dir" "$iteration_number")"
   IFS='|' read -r candidate_workspace_path candidate_branch candidate_setup_status candidate_setup_error <<< "$isolation_fields"
@@ -1570,6 +1640,7 @@ create_iteration_artifacts() {
   write_markdown_placeholder "$implementation_path" "Iteration $iteration_number Implementation" "Summarize candidate changes and list modified files."
   write_markdown_placeholder "$correctness_results" "Iteration $iteration_number Correctness Gate" "Record configured correctness checks and whether benchmarking remains eligible."
   write_markdown_placeholder "$benchmark_path" "Iteration $iteration_number Benchmark" "Record benchmark settings, completed games, and summary metrics."
+  write_markdown_placeholder "$stockfish_comparison_results" "Iteration $iteration_number Stockfish Comparison" "Record any extra candidate-vs-Stockfish evidence used after an inconclusive direct benchmark, whether the stored baseline report was reused, whether the follow-up changed the recommendation, and why the follow-up was unavailable if it could not run."
   write_markdown_placeholder "$decision_path" "Iteration $iteration_number Decision" "Record the final outcome and the reason for it."
 
   if [[ "$candidate_setup_status" == "failed" ]]; then
@@ -1672,6 +1743,7 @@ If the ideas file field is empty, missing, or has zero pending checklist entries
 During /evolution-propose, always set `ideas.proposalSource` in iteration.json to either `user_ideas_file` or `self_proposed`. If you selected a checklist idea, also set `ideas.selectedIdea` to the exact checklist text and state the source clearly in hypothesis.md. If you self-propose, clear `ideas.selectedIdea` to an empty string and still state the source in hypothesis.md.
 Implementation, benchmark, and decision phases must treat `iteration.json` as the source of truth for the proposal source metadata instead of inferring it from hypothesis text.
 Benchmark and decision phases must resolve the stored baseline engine from `iteration.json.baselinePath` and `iteration.json.baselineBinary` (or `session.env` `accepted_baseline_path` / `accepted_baseline_binary`) instead of relying on git refs.
+If the direct candidate-vs-baseline benchmark result is inconclusive, the benchmark and/or decision flow may use `iteration.json.stockfishComparison` plus the linked artifact path in `artifacts.stockfishComparison` to run or record an additional candidate-vs-Stockfish comparison. Reuse the stored baseline Stockfish report at `iteration.json.stockfishComparison.baselineReport` when available, write the candidate follow-up result in `benchmark.md` or `stockfish-comparison/results.md`, set `stockfishComparison.changedRecommendation`, and make `decision.md` state explicitly whether the Stockfish comparison changed the recommendation or could not be completed.
 If you cannot complete the phase, record the failure in the appropriate iteration artifact and iteration.json.
 If no valid next hypothesis exists during /evolution-propose, record a stop signal in iteration.json using hypothesis.status = "no_hypothesis" and explain it in hypothesis.md.
 EOF

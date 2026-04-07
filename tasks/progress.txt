@@ -9,6 +9,7 @@
 - Baseline resolution for the evolution loop is also orchestration-owned: expose `accepted_baseline_path` / `accepted_baseline_binary` in `session.env` and `baselinePath` / `baselineBinary` in `iteration.json`, while keeping any git ref only as internal setup state for creating candidate worktrees.
 - Promotion persistence should copy the built candidate binary into `chess-engine/versions/<tag>/wiggum-engine` and then update both `iteration.json.decision.promotion` and `session.env` from that stored artifact path, so future iterations never depend on the candidate worktree or target layout.
 - Treat `session.env` `active_baseline_*` fields as the stable operator-facing alias for the current promoted baseline, and keep the final session summary's promotion history derived from per-iteration decision metadata so accepted baseline changes are auditable in order.
+- Stockfish follow-up for inconclusive direct benchmarks should use pre-seeded `iteration.json.stockfishComparison` metadata plus `stockfish-comparison/results.md`, including whether the stored baseline report exists, whether the follow-up changed the recommendation, and any explicit limitation.
 
 ## 2026-04-07 11:32:03 PDT - US-008
 - Added explicit `active_baseline_version`, `active_baseline_path`, and `active_baseline_binary` fields to `session.env`, keeping them synchronized with accepted baseline state so accepted promotions immediately become the next iteration's active baseline contract.
@@ -19,6 +20,14 @@
   - Promotion history is best reconstructed from per-iteration decision metadata at summary time so ordered accepted baselines stay auditable without extra session-level bookkeeping.
 ---
 
+## 2026-04-07 14:05:51 PDT - US-009
+- Extended `scripts/evolution-loop.sh` so each iteration now seeds `stockfishComparison` metadata with baseline report availability, recommendation-change tracking, and a dedicated `stockfish-comparison/results.md` artifact for extra candidate-vs-Stockfish evidence after inconclusive direct benchmarks.
+- Updated the session summary output and top-level project guidance so the extra Stockfish comparison artifact is part of the stable iteration contract and can be audited alongside benchmark and decision artifacts.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Inconclusive benchmark follow-up works best when the orchestration layer pre-allocates both machine-readable metadata and human-readable artifact paths before benchmark/decision skills run.
+  - Store whether the baseline Stockfish report exists as explicit iteration metadata so later phases can record a missing-reference limitation without re-discovering it ad hoc.
+---
 
 ## 2026-04-07 10:40:36 PDT - US-005
 - Added orchestration-owned candidate versioning to `scripts/evolution-loop.sh`, including proposal-source-based tag selection, synchronized Cargo manifest bumps across all three crates, candidate metadata in `session.env` / `iteration.json`, and a built debug artifact copied to `target/debug/wiggum-engine`.
