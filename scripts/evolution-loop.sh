@@ -33,6 +33,8 @@ MAX_ITERATIONS=10
 MAX_INFRA_FAILURES=3
 ACCEPTED_BASELINE_VERSION=""
 ACCEPTED_BASELINE_REF=""
+ACCEPTED_BASELINE_MAJOR=0
+ACCEPTED_BASELINE_MINOR=0
 SESSION_SUMMARY_FILENAME="summary.md"
 ITERATIONS_DIRNAME="iterations"
 CANDIDATE_WORKSPACES_DIRNAME="candidate-workspaces"
@@ -52,6 +54,8 @@ LAST_PHASE_NAME=""
 LAST_PHASE_RESULT=""
 LAST_PHASE_LOG_RELATIVE_PATH=""
 LAST_PHASE_REMAINING_PHASES=""
+LAST_CANDIDATE_VERSION=""
+LAST_CANDIDATE_BINARY_PATH=""
 
 usage() {
   sed -n '1,15p' "$0"
@@ -409,18 +413,224 @@ resolve_ideas_file() {
   fi
 }
 
+parse_version_tag() {
+  local version_tag="$1"
+
+  python3 - <<'PY' "$version_tag"
+import re
+import sys
+
+version_tag = sys.argv[1]
+match = re.fullmatch(r'v(\d+)\.(\d+)', version_tag)
+if not match:
+    raise SystemExit(f"invalid version tag: {version_tag}")
+
+print(f"{match.group(1)}|{match.group(2)}")
+PY
+}
+
+candidate_version_for_source() {
+  local proposal_source="$1"
+  local current_major
+  local current_minor
+
+  IFS='|' read -r current_major current_minor <<< "$(parse_version_tag "$ACCEPTED_BASELINE_VERSION")"
+
+  if [[ "$proposal_source" == "user_ideas_file" ]]; then
+    printf 'v%s.0\n' "$((current_major + 1))"
+    return 0
+  fi
+
+  if [[ "$proposal_source" == "self_proposed" ]]; then
+    printf 'v%s.%s\n' "$current_major" "$((current_minor + 1))"
+    return 0
+  fi
+
+  echo "Error: unsupported proposal source for candidate versioning: $proposal_source" >&2
+  return 1
+}
+
+cargo_semver_from_version_tag() {
+  local version_tag="$1"
+  local major
+  local minor
+
+  IFS='|' read -r major minor <<< "$(parse_version_tag "$version_tag")"
+  printf '%s.%s.0\n' "$major" "$minor"
+}
+
+candidate_binary_path() {
+  local candidate_workspace_path="$1"
+
+  printf '%s/target/debug/wiggum-engine\n' "$candidate_workspace_path"
+}
+
+apply_candidate_manifest_versions() {
+  local candidate_workspace_path="$1"
+  local candidate_version_tag="$2"
+  local cargo_semver
+
+  cargo_semver="$(cargo_semver_from_version_tag "$candidate_version_tag")"
+
+  python3 - <<'PY' "$candidate_workspace_path" "$cargo_semver"
+import pathlib
+import re
+import sys
+
+candidate_workspace_path, cargo_semver = sys.argv[1:]
+manifest_paths = [
+    pathlib.Path(candidate_workspace_path) / 'chess-engine' / 'Cargo.toml',
+    pathlib.Path(candidate_workspace_path) / 'chess-runner' / 'Cargo.toml',
+    pathlib.Path(candidate_workspace_path) / 'chesslib' / 'Cargo.toml',
+]
+pattern = re.compile(r'^version = ".*"$', re.MULTILINE)
+
+for manifest_path in manifest_paths:
+    text = manifest_path.read_text(encoding='utf-8')
+    updated_text, replacements = pattern.subn(f'version = "{cargo_semver}"', text, count=1)
+    if replacements != 1:
+        raise SystemExit(f'failed to update package version in {manifest_path}')
+    manifest_path.write_text(updated_text, encoding='utf-8')
+PY
+}
+
+set_iteration_candidate_metadata() {
+  local iteration_json_path="$1"
+  local candidate_version_tag="$2"
+  local candidate_binary_path="$3"
+  local proposal_source="$4"
+
+  python3 - <<'PY' "$iteration_json_path" "$candidate_version_tag" "$candidate_binary_path" "$proposal_source"
+import json
+import sys
+
+iteration_json_path, candidate_version_tag, candidate_binary_path, proposal_source = sys.argv[1:]
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+candidate = data.setdefault('candidate', {})
+candidate['version'] = candidate_version_tag
+candidate['binaryName'] = 'wiggum-engine'
+candidate['binaryPath'] = candidate_binary_path
+candidate['versionBumpStrategy'] = 'major' if proposal_source == 'user_ideas_file' else 'minor'
+candidate['proposalSource'] = proposal_source
+candidate['built'] = False
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
+}
+
+prepare_candidate_versioning() {
+  local iteration_json_path="$1"
+  local candidate_workspace_path="$2"
+  local proposal_source="$3"
+  local candidate_version_tag
+  local candidate_binary
+
+  candidate_version_tag="$(candidate_version_for_source "$proposal_source")" || return 1
+  candidate_binary="$(candidate_binary_path "$candidate_workspace_path")"
+
+  apply_candidate_manifest_versions "$candidate_workspace_path" "$candidate_version_tag"
+  set_iteration_candidate_metadata "$iteration_json_path" "$candidate_version_tag" "$candidate_binary" "$proposal_source"
+
+  LAST_CANDIDATE_VERSION="$candidate_version_tag"
+  LAST_CANDIDATE_BINARY_PATH="$candidate_binary"
+}
+
+build_candidate_binary() {
+  local candidate_workspace_path="$1"
+  local candidate_binary_path="$2"
+  local source_binary_path="$candidate_workspace_path/target/debug/chess-engine"
+
+  if ! (cd "$candidate_workspace_path" && cargo build -p chess-engine >/dev/null 2>&1); then
+    return 1
+  fi
+
+  if [[ ! -x "$source_binary_path" ]]; then
+    return 1
+  fi
+
+  cp "$source_binary_path" "$candidate_binary_path"
+  chmod +x "$candidate_binary_path"
+}
+
+record_candidate_binary_metadata() {
+  local iteration_json_path="$1"
+  local implementation_path="$2"
+  local proposal_source="$3"
+  local candidate_version_tag="$4"
+  local candidate_binary_path="$5"
+  local version_bump_strategy="minor"
+
+  if [[ "$proposal_source" == "user_ideas_file" ]]; then
+    version_bump_strategy="major"
+  fi
+
+  python3 - <<'PY' "$iteration_json_path" "$candidate_version_tag" "$candidate_binary_path"
+import json
+import sys
+
+iteration_json_path, candidate_version_tag, candidate_binary_path = sys.argv[1:]
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+candidate = data.setdefault('candidate', {})
+candidate['version'] = candidate_version_tag
+candidate['binaryName'] = 'wiggum-engine'
+candidate['binaryPath'] = candidate_binary_path
+candidate['built'] = True
+
+implementation = data.setdefault('implementation', {})
+implementation['candidateVersion'] = candidate_version_tag
+implementation['candidateBinary'] = candidate_binary_path
+implementation['candidateBinaryName'] = 'wiggum-engine'
+
+changed_files = implementation.setdefault('changedFiles', [])
+for manifest_path in ['chess-engine/Cargo.toml', 'chess-runner/Cargo.toml', 'chesslib/Cargo.toml']:
+    if manifest_path not in changed_files:
+        changed_files.append(manifest_path)
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
+
+  cat <<EOF >> "$implementation_path"
+
+## Candidate Version
+
+- Baseline version: $ACCEPTED_BASELINE_VERSION
+- Proposal source: $proposal_source
+- Version bump strategy: $version_bump_strategy
+- Candidate version: $candidate_version_tag
+- Candidate binary: `$candidate_binary_path`
+EOF
+}
+
 write_session_metadata() {
   local metadata_path="$1"
   local session_id="$2"
   local session_dir="$3"
   local escaped_ideas_file
+  local escaped_candidate_binary_path
+  local escaped_candidate_version
 
   escaped_ideas_file="$(json_escape "$IDEAS_FILE_RESOLVED")"
+  escaped_candidate_binary_path="$(json_escape "$LAST_CANDIDATE_BINARY_PATH")"
+  escaped_candidate_version="$(json_escape "$LAST_CANDIDATE_VERSION")"
 
   cat <<EOF > "$metadata_path"
 baseline_version=$BASELINE_VERSION
 accepted_baseline_version=$ACCEPTED_BASELINE_VERSION
 accepted_baseline_ref=$ACCEPTED_BASELINE_REF
+accepted_baseline_major=$ACCEPTED_BASELINE_MAJOR
+accepted_baseline_minor=$ACCEPTED_BASELINE_MINOR
+candidate_version=$escaped_candidate_version
+candidate_binary_path=$escaped_candidate_binary_path
 ideas_file=$escaped_ideas_file
 ideas_file_pending_count=$IDEAS_FILE_PENDING_COUNT
 ideas_format=markdown-task-list
@@ -440,6 +650,8 @@ resolve_accepted_baseline_ref() {
   fi
 
   ACCEPTED_BASELINE_VERSION="$BASELINE_VERSION"
+
+  IFS='|' read -r ACCEPTED_BASELINE_MAJOR ACCEPTED_BASELINE_MINOR <<< "$(parse_version_tag "$ACCEPTED_BASELINE_VERSION")"
 }
 
 candidate_workspace_root() {
@@ -1052,6 +1264,8 @@ write_iteration_state() {
   local escaped_candidate_setup_status
   local escaped_candidate_setup_error
   local escaped_ideas_file_path
+  local escaped_candidate_version
+  local escaped_candidate_binary_path
   local initial_state
 
   correctness_dir="$(correctness_dir_path "$iteration_dir")"
@@ -1069,6 +1283,8 @@ write_iteration_state() {
   escaped_candidate_setup_error="$(json_escape "$candidate_setup_error")"
   escaped_phase_logs_dir="$(json_escape "$phase_logs_dir")"
   escaped_ideas_file_path="$(json_escape "$IDEAS_FILE_RESOLVED")"
+  escaped_candidate_version="$(json_escape "$LAST_CANDIDATE_VERSION")"
+  escaped_candidate_binary_path="$(json_escape "$LAST_CANDIDATE_BINARY_PATH")"
 
   initial_state="initialized"
   if [[ "$candidate_setup_status" == "failed" ]]; then
@@ -1087,6 +1303,14 @@ write_iteration_state() {
     "proposalSource": "",
     "selectedIdea": "",
     "selectedIdeaMarkedUsed": false
+  },
+  "candidate": {
+    "version": "$escaped_candidate_version",
+    "binaryName": "wiggum-engine",
+    "binaryPath": "$escaped_candidate_binary_path",
+    "versionBumpStrategy": "",
+    "proposalSource": "",
+    "built": false
   },
   "state": "$initial_state",
   "isolation": {
@@ -1142,6 +1366,9 @@ create_iteration_artifacts() {
   local candidate_branch
   local candidate_setup_status
   local candidate_setup_error
+
+  LAST_CANDIDATE_VERSION=""
+  LAST_CANDIDATE_BINARY_PATH=""
 
   mkdir -p "$iteration_dir"
   mkdir -p "$(correctness_dir_path "$iteration_dir")"
@@ -1297,6 +1524,7 @@ promote_candidate_workspace() {
   promoted_version="$(current_promoted_version "$iteration_json_path")"
   if [[ -n "$promoted_version" ]]; then
     ACCEPTED_BASELINE_VERSION="$promoted_version"
+    IFS='|' read -r ACCEPTED_BASELINE_MAJOR ACCEPTED_BASELINE_MINOR <<< "$(parse_version_tag "$ACCEPTED_BASELINE_VERSION")"
   fi
 
   write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
@@ -1345,6 +1573,11 @@ run_iteration() {
     return 0
   fi
 
+  if ! prepare_candidate_versioning "$LAST_ITERATION_STATE_PATH" "$LAST_CANDIDATE_WORKSPACE_PATH" "$proposal_source"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Failed to compute or apply candidate version metadata before implementation."
+    return 0
+  fi
+
   print_phase_start "implement"
   update_iteration_state "$LAST_ITERATION_STATE_PATH" "proposed" "implementing" "implementation phase start"
   if ! run_logged_phase "implement" "evolution-implement" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
@@ -1361,6 +1594,13 @@ run_iteration() {
     record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Implementation phase completed without writing state 'implemented'. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
+
+  if ! build_candidate_binary "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_CANDIDATE_BINARY_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Implementation phase completed but the candidate binary could not be built at $LAST_CANDIDATE_BINARY_PATH."
+    return 0
+  fi
+
+  record_candidate_binary_metadata "$LAST_ITERATION_STATE_PATH" "$LAST_ITERATION_DIR/$IMPLEMENTATION_FILENAME" "$proposal_source" "$LAST_CANDIDATE_VERSION" "$LAST_CANDIDATE_BINARY_PATH"
 
   print_phase_start "validate"
   if ! run_correctness_gate "$LAST_ITERATION_STATE_PATH" "$LAST_CORRECTNESS_RESULTS_PATH" "$LAST_BENCHMARK_PATH" "$LAST_DECISION_PATH" "$LAST_CANDIDATE_WORKSPACE_PATH"; then

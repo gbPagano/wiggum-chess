@@ -5,6 +5,17 @@
 - Keep the loop's operator-facing phase list in one ordered sequence and derive both the full plan and remaining-phase output from it so progress text stays synchronized across iterations.
 - Optional propose inputs should be normalized by the loop before invoking the skill: record the resolved source in both `session.env` and `iteration.json`, but collapse empty Markdown checklist files back to the same self-propose path as no input.
 - When a proposal comes from an operator checklist, store the exact selected idea text plus `ideas.proposalSource` in `iteration.json`, then have the orchestration layer mark that checklist entry as `[x]` only after the iteration reaches a tested terminal outcome.
+- Candidate versioning belongs to the orchestration layer: once `ideas.proposalSource` is known, compute the tag there, sync all workspace Cargo versions, and persist the generated `target/debug/wiggum-engine` path into both `session.env` and `iteration.json` before benchmark/decision phases consume it.
+
+## 2026-04-07 10:40:36 PDT - US-005
+- Added orchestration-owned candidate versioning to `scripts/evolution-loop.sh`, including proposal-source-based tag selection, synchronized Cargo manifest bumps across all three crates, candidate metadata in `session.env` / `iteration.json`, and a built debug artifact copied to `target/debug/wiggum-engine`.
+- Made the engine UCI name derive from the Cargo package version in `chess-engine/src/lib.rs`, then reused that helper from both `chess-engine/src/main.rs` and `chess-engine/src/engine.rs` so benchmarked candidate builds advertise the computed version automatically.
+- Files changed: `CLAUDE.md`, `chess-engine/src/lib.rs`, `chess-engine/src/main.rs`, `chess-engine/src/engine.rs`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Keep candidate version selection in the orchestration layer, not inside Claude skills, so proposal provenance cleanly drives major/minor bump policy.
+  - Derive the UCI name from `CARGO_PKG_VERSION` in shared engine code so manifest version bumps automatically flow into both the binary handshake and in-process engine benchmarks.
+---
+
 
 Started: 2026-04-07
 ---

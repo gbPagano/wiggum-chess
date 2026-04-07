@@ -83,8 +83,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Made the engine UCI name derive from Cargo package version so candidate builds advertise their computed tag automatically, then taught scripts/evolution-loop.sh to compute candidate versions from ideas.proposalSource, synchronize chess-engine/chess-runner/chesslib manifest versions, build a renamed debug artifact at target/debug/wiggum-engine, and persist candidate version/binary metadata into session.env, iteration.json, and implementation.md before benchmarking."
     },
     {
       "id": "US-006",

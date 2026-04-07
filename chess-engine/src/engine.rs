@@ -31,7 +31,7 @@ impl Default for WiggumEngine {
 #[async_trait]
 impl Engine for WiggumEngine {
     async fn name(&self) -> String {
-        "Wiggum Engine v0.1".to_string()
+        crate::uci_engine_name()
     }
 
     async fn new_game(&mut self) {
