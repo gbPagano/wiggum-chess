@@ -56,23 +56,23 @@
       "title": "Add worker guidance file",
       "description": "As a developer, I want a dedicated worker instruction file so that the loop agent behaves consistently across iterations.",
       "acceptanceCriteria": [
-        "Create .claude/evolution/CLAUDE.md",
+        "Create claude/evolution/CLAUDE.md",
         "The file defines the phases: propose, implement, validate, decide, persist, repeat",
         "The file limits the worker to engine-evolution-relevant changes during an iteration",
         "The file defines expected behavior for accepted, rejected, failed, and inconclusive outcomes",
-        "The orchestration docs reference .claude/evolution/CLAUDE.md",
+        "The orchestration docs reference claude/evolution/CLAUDE.md",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "Created .claude/evolution/CLAUDE.md with worker guidance defining the 7-phase lifecycle (propose, implement, validate, decide, persist, repeat, loop), outcome behaviors, scope constraints, iteration state machine, and file layout. Added worker guidance reference to scripts/evolution-loop.sh."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
       "title": "Add propose skill skeleton",
       "description": "As a developer, I want a dedicated propose skill so that each iteration starts with one focused hypothesis.",
       "acceptanceCriteria": [
-        "Create .claude/skills/evolution-propose/ with the files needed for a Claude Code skill",
+        "Create claude/skills/evolution-propose/ with the files needed for a Claude Code skill",
         "The skill contract says it reads prior session artifacts and writes hypothesis.md",
         "The skill contract says it updates iteration.json with hypothesis metadata",
         "The skill contract says it returns a stop signal if no valid hypothesis exists",
@@ -80,15 +80,15 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Created .claude/skills/evolution-propose/SKILL.md with worker guidance defining the propose phase lifecycle, input/output contracts, hypothesis format, and stop-signal behavior."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
       "title": "Add implement skill skeleton",
       "description": "As a developer, I want a dedicated implement skill so that candidate changes are applied consistently from the selected hypothesis.",
       "acceptanceCriteria": [
-        "Create .claude/skills/evolution-implement/ with the files needed for a Claude Code skill",
+        "Create claude/skills/evolution-implement/ with the files needed for a Claude Code skill",
         "The skill contract says it reads hypothesis.md and writes implementation.md",
         "The skill contract says it records changed files in the implementation artifact",
         "The skill contract says it updates iteration.json with implementation status",
@@ -96,15 +96,15 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created .claude/skills/evolution-implement/SKILL.md with YAML frontmatter (name, description, triggers) and markdown body implementing the implement phase contract: reads hypothesis.md, applies changes, writes implementation.md, updates iteration.json."
     },
     {
       "id": "US-007",
       "title": "Add benchmark skill skeleton",
       "description": "As a developer, I want a dedicated benchmark skill so that every candidate is validated consistently against the current baseline.",
       "acceptanceCriteria": [
-        "Create .claude/skills/evolution-benchmark/ with the files needed for a Claude Code skill",
+        "Create claude/skills/evolution-benchmark/ with the files needed for a Claude Code skill",
         "The skill contract says it reads current iteration state and writes benchmark.md",
         "The skill contract says it updates iteration.json with benchmark status and summary metrics",
         "The skill contract explicitly requires at least one SPRT run with a minimum of 10 completed games",
@@ -120,7 +120,7 @@
       "title": "Add decision skill skeleton",
       "description": "As a developer, I want a dedicated decision skill so that iteration outcomes are deterministic and auditable.",
       "acceptanceCriteria": [
-        "Create .claude/skills/evolution-decide/ with the files needed for a Claude Code skill",
+        "Create claude/skills/evolution-decide/ with the files needed for a Claude Code skill",
         "The skill contract says it reads implementation.md and benchmark.md and writes decision.md",
         "The skill contract says it updates iteration.json with one final state",
         "The allowed final states are documented as: accepted, rejected, inconclusive, failed",
