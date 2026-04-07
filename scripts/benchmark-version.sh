@@ -93,6 +93,39 @@ mkdir -p "$OUTPUT_DIR"
 RESULTS_CSV="${OUTPUT_DIR}/results.csv"
 SPRT_CSV="${OUTPUT_DIR}/sprt_results.csv"
 
+# tag_last_match_row <csv_path> <label>
+#
+# chess-runner records the opponent's UCI name, which is identical for all
+# Stockfish skill levels. Tag the newest row so version-report can keep the
+# four benchmark levels separate.
+tag_last_match_row() {
+    local csv_path="$1"
+    local label="$2"
+
+    python3 - "$csv_path" "$label" <<'PY'
+import csv
+import sys
+
+path, label = sys.argv[1], sys.argv[2]
+
+with open(path, newline="") as f:
+    rows = list(csv.reader(f))
+
+if len(rows) < 2:
+    raise SystemExit(f"expected at least one result row in {path}")
+
+header = rows[0]
+engine2_idx = header.index("engine2_name")
+last = rows[-1]
+suffix = f" ({label})"
+if not last[engine2_idx].endswith(suffix):
+    last[engine2_idx] = f"{last[engine2_idx]}{suffix}"
+
+with open(path, "w", newline="") as f:
+    csv.writer(f).writerows(rows)
+PY
+}
+
 # ── Temporary wrapper scripts ─────────────────────────────────────────────────
 TMPDIR_WRAPPERS="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_WRAPPERS"' EXIT
@@ -193,6 +226,7 @@ run_match() {
         --inc "$INC_MS" \
         --games "$GAMES" \
         --output "$RESULTS_CSV"
+    tag_last_match_row "$RESULTS_CSV" "$label"
 }
 
 run_match "1500" "$WRAPPER_1500"

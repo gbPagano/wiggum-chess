@@ -147,7 +147,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "PRD US-016. Depends on all prior stories. Requires engines/stockfish to be present. This story may require manual steps (running the script) — Ralph should run it and commit the output."
     }
   ]

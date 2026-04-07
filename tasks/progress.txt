@@ -6,6 +6,7 @@
 - set_option on UciEngine: concrete method only, NOT on Engine trait; no reply expected per UCI spec
 - SPRT LLR uses trinomial model with draw_ratio estimated from actual results; probabilities clamped with EPS=1e-9 to avoid log(0)
 - sprt_bounds() and compute_llr() are pub fn so they can be unit tested from within the same file's #[cfg(test)] module
+- benchmark-version.sh must tag the just-appended results.csv row with the Stockfish level suffix because chess-runner records only the opponent UCI name
 
 ---
 
@@ -91,4 +92,15 @@
   - chess-runner match has no --setoption flag; FIFO-based wrapper is the cleanest workaround without modifying chess-runner
   - bash FIFO pattern: `mkfifo $FIFO_IN`, open with `exec 3>$FIFO_IN`, start engine reading from FIFO, write setoption via >&3 after intercepting 'uci'
   - cargo not available in this environment — shell script quality check is `bash -n` only
+---
+
+## 2026-04-07 00:03 UTC - US-008
+- Ran `scripts/benchmark-version.sh` for `v0.1` against `/workspace/engines/stockfish` using current debug binaries and generated `chess-engine/versions/v0.1/results.csv`
+- Generated `chess-engine/versions/v0.1/report.md` with results vs Stockfish 1500/2000/2500/max and removed the obsolete `.gitkeep`
+- Updated `scripts/benchmark-version.sh` so each appended CSV row is tagged with the Stockfish level suffix, allowing `version-report` to keep the four benchmark levels distinct
+- Files changed: scripts/benchmark-version.sh, chess-engine/versions/v0.1/results.csv, chess-engine/versions/v0.1/report.md, tasks/prd.json, tasks/progress.txt
+- **Learnings for future iterations:**
+  - The release `chess-runner` binary currently fails on this machine with `GLIBC_2.39` missing, so benchmarking had to use the freshly built debug binaries instead
+  - `chess-runner match` writes the engine's UCI-reported name to CSV, so benchmark scripts must post-process the last row if multiple Stockfish wrappers all identify as `Stockfish 17`
+  - The generated baseline shows `Wiggum Engine v0.1` lost all 8 sample games versus Stockfish across the four configured levels
 ---
