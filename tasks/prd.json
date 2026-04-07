@@ -48,8 +48,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented initial iteration artifact creation in scripts/evolution-loop.sh, including iterations/<N>/ placeholder files and an initialized iteration.json that records the iteration number, baseline version, state, and artifact paths; documented the layout in tasks/prd-wiggum-evolution-loop.md."
     },
     {
       "id": "US-004",

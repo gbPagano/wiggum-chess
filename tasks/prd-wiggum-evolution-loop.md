@@ -63,6 +63,25 @@ For iteration `N`, the script must create `tasks/evolution-runs/<session-id>/ite
 - `benchmark.md` — benchmark settings and results
 - `decision.md` — final outcome and reason
 
+The initial `iteration.json` written by the script must include at least:
+- `iteration` — numeric iteration number
+- `baselineVersion` — selected baseline version for this iteration
+- `state` — initial state set to `initialized`
+- `artifacts` — paths for `iterationJson`, `hypothesis`, `implementation`, `benchmark`, and `decision`
+
+### Iteration artifact example
+
+```text
+tasks/evolution-runs/20260406T185545Z/
+└── iterations/
+    └── 1/
+        ├── benchmark.md
+        ├── decision.md
+        ├── hypothesis.md
+        ├── implementation.md
+        └── iteration.json
+```
+
 ### Skill handoff contract
 
 - The script creates the iteration directory and initial `iteration.json`.

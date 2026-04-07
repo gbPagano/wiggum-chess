@@ -3,6 +3,7 @@
 ## Codebase Patterns
 - Evolution session ids should use a UTC timestamp in `YYYYMMDDTHHMMSSZ` format so artifact directories sort chronologically and stay deterministic within a run.
 - Session-level artifacts live at the session root: keep human-readable summary state in `summary.md` and selected shell inputs in `session.env`.
+- Iteration artifacts live under `iterations/<N>/` and should be created by the orchestration script before any skill runs so every phase can rely on stable file paths.
 - For shell-story quality gates here, validate with `bash -n scripts/evolution-loop.sh`, a workspace Cargo build, and `cargo test --workspace -- --skip gen_files::magics::name`.
 
 - Branch: `ralph/wiggum-evolution-loop`
@@ -31,3 +32,15 @@
   - Keep session metadata shell-friendly in `session.env` so later shell stories can source or inspect it without JSON tooling.
   - `cargo test --workspace -- --skip gen_files::magics::name` is the correct form for skipping the intentional failing scratchpad test.
 ---
+
+## 2026-04-06 19:24:54 PDT - US-003
+- Implemented initial iteration artifact creation in `scripts/evolution-loop.sh` for iteration `1` under `iterations/<N>/`.
+- Added placeholder files for `iteration.json`, `hypothesis.md`, `implementation.md`, `benchmark.md`, and `decision.md`, and initialized `iteration.json` with the iteration number, baseline version, state, and artifact paths.
+- Documented the iteration artifact layout and initial `iteration.json` contract in `tasks/prd-wiggum-evolution-loop.md`.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`, `tasks/prd-wiggum-evolution-loop.md`
+- **Learnings for future iterations:**
+  - Create iteration placeholders before any skill runs so later phases can assume the files already exist.
+  - Keep artifact paths inside `iteration.json` absolute when the shell script writes them so downstream steps can consume them without reconstructing paths.
+  - A simple `initialized` state is enough for the script-owned pre-skill handoff before the fuller state machine lands.
+---
+
