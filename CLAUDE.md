@@ -20,7 +20,7 @@ cargo bench --bench perft -p chesslib        # criterion perft benchmarks (depth
 cargo bench --bench alloc -p chesslib        # allocation benchmarks (divan)
 ```
 
-Note: `gen_files::magics::name` is an intentional developer scratchpad test with `assert!(false)` — always fails, skip with `--skip gen_files::magics::name`.
+Note: `gen_files::magics::name` is an intentional developer scratchpad test with `assert!(false)` — always fails. For full-workspace runs, skip it with `cargo test --workspace -- --skip gen_files::magics::name`.
 
 ## Architecture
 

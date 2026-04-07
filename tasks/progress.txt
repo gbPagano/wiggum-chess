@@ -1,106 +1,33 @@
+## Ralph Progress
+
 ## Codebase Patterns
-- chess-engine/src/engine.rs contains WiggumEngine struct (renamed from MaterialEngine in US-001)
-- cargo not available in shell PATH in this environment; use full path or verify via other means
-- All Rust quality checks (cargo test, cargo build) must be done via the cargo binary in PATH if available
-- UciEngine mock (shell script in tests) silently ignores unmatched commands — no explicit wildcard needed in case statement; unmatched patterns just continue the while loop
-- set_option on UciEngine: concrete method only, NOT on Engine trait; no reply expected per UCI spec
-- SPRT LLR uses trinomial model with draw_ratio estimated from actual results; probabilities clamped with EPS=1e-9 to avoid log(0)
-- sprt_bounds() and compute_llr() are pub fn so they can be unit tested from within the same file's #[cfg(test)] module
-- benchmark-version.sh must tag the just-appended results.csv row with the Stockfish level suffix because chess-runner records only the opponent UCI name
+- Evolution session ids should use a UTC timestamp in `YYYYMMDDTHHMMSSZ` format so artifact directories sort chronologically and stay deterministic within a run.
+- Session-level artifacts live at the session root: keep human-readable summary state in `summary.md` and selected shell inputs in `session.env`.
+- For shell-story quality gates here, validate with `bash -n scripts/evolution-loop.sh`, a workspace Cargo build, and `cargo test --workspace -- --skip gen_files::magics::name`.
+
+- Branch: `ralph/wiggum-evolution-loop`
+- PRD: `tasks/prd-wiggum-evolution-loop.md`
+- Status: in progress
 
 ---
 
-## 2026-04-06 - US-001
-- Renamed MaterialEngine to WiggumEngine in chess-engine/src/engine.rs
-- Updated name() to return 'Wiggum Engine v0.1'
-- Updated UCI main.rs to respond with correct id name/author
-- Updated all tests referencing the old name
-- Files changed: chess-engine/src/engine.rs, chess-engine/src/main.rs, and test files
-
----
-
-## 2026-04-06 - US-002
-- Added --verbose flag to MatchArgs in chess-runner/src/main.rs
-- Refactored PrintObserver to support quiet (default) and verbose modes
-- Without --verbose: prints one line per game + final summary
-- With --verbose: full board diagram and move output
-- Files changed: chess-runner/src/main.rs
-
----
-
-## 2026-04-06 - US-003
-- Created chess-engine/versions/ folder structure
-- chess-engine/versions/README.md: explains folder convention (one subfolder per version, each with CHANGES.md and report.md)
-- chess-engine/versions/v0.1/CHANGES.md: documents initial implementation (material eval, negamax depth-4, no alpha-beta)
-- chess-engine/versions/v0.1/.gitkeep: placeholder until report.md is generated
-- Files changed: chess-engine/versions/README.md, chess-engine/versions/v0.1/CHANGES.md, chess-engine/versions/v0.1/.gitkeep
+## 2026-04-06 18:55:45 PDT - US-001
+- Implemented `scripts/evolution-loop.sh` as the evolution session entrypoint skeleton.
+- Added `--baseline-version`, `--output-dir`, `--max-iterations`, and `--help` parsing with required-value validation.
+- Printed selected inputs before any iteration work starts and added a top-of-file usage/help block.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
 - **Learnings for future iterations:**
-  - cargo binary is not in PATH in this shell environment; quality checks via cargo not runnable directly
-  - US-003 was pure file creation — no code to typecheck or test
+  - Use repo-root-relative defaults in shell entrypoints so they work from any current working directory.
+  - For shell-story quality gates here, `bash -n scripts/evolution-loop.sh` plus a workspace Cargo build/test run is a safe validation set.
 ---
 
-## 2026-04-06 - US-004
-- Added `pub async fn set_option(&mut self, name: &str, value: &str) -> Result<()>` to UciEngine in chesslib/src/uci_engine.rs
-- Method sends `setoption name <name> value <value>` via existing `send_line` helper and returns after flush
-- Engine trait NOT modified — concrete method on UciEngine only
-- Unit test `test_set_option_sends_without_error` verifies mock engine handles setoption without error
-- Files changed: chesslib/src/uci_engine.rs
+## 2026-04-06 19:07:58 PDT - US-002
+- Implemented deterministic session-root creation in `scripts/evolution-loop.sh` using a UTC timestamp session id generated at startup.
+- Added session-level artifact placeholders: `summary.md` for the top-level summary and `session.env` for selected inputs (`baseline_version`, `max_iterations`, session metadata).
+- Documented the session-id format and root artifact layout in `tasks/prd-wiggum-evolution-loop.md`.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`, `tasks/prd-wiggum-evolution-loop.md`
 - **Learnings for future iterations:**
-  - The shell `case` statement in the mock engine has no wildcard — unmatched lines are simply ignored (loop continues), so setoption is already handled silently
-  - set_option follows same pattern as send_line — no response to read, just write + flush
----
-
-## 2026-04-06 - US-005
-- Added `chess-runner sprt` subcommand with args: --engine1, --engine2, --time, --inc, --elo0, --elo1, --alpha, --beta, --timeout, --output
-- Implemented `sprt_bounds(alpha, beta)` → (lower, upper) using ln(beta/(1-alpha)) and ln((1-beta)/alpha)
-- Implemented `compute_llr(wins, draws, losses, elo0, elo1)` using full trinomial model with draw_ratio from actual results
-- SPRT loop runs games alternating colors, prints `[Game N] LLR: X.XX / [lower, upper] | W:x D:x L:x` after each game
-- Stops when LLR crosses either bound; prints H1 accepted or H0 accepted verdict
-- write_sprt_csv() appends to sprt_results.csv (creates with header if needed)
-- Unit tests: sprt_bounds alpha=beta=0.05 → [-2.944, 2.944]; LLR positive when engine1 dominates; LLR near 0 for equal score
-- Files changed: chess-runner/src/main.rs
-- **Learnings for future iterations:**
-  - Trinomial SPRT requires draw_ratio estimated from actual results; when D=0, falls back to pure win/loss model
-  - The `pub fn` on sprt_bounds/compute_llr allows unit testing within same file's #[cfg(test)] module — no separate test binary needed
----
-
-## 2026-04-06 - US-006
-- Added `chess-runner version-report` subcommand with args: --version, --engine-name, --matches-csv, --sprt-csv (optional), --output
-- Reads matches CSV (engine1_name/engine2_name/games_played/wins/draws/losses format), filters by case-insensitive substring match on engine name
-- Aggregates per-opponent stats from target engine's perspective (handles both engine1 and engine2 positions)
-- Generates markdown with H1 header, generation date, summary table (Opponent/Games/Wins/Draws/Losses/Win%), overall stats, best/worst matchup
-- If --sprt-csv provided, adds SPRT Results section (Opponent/Games/W/D/L/Result table)
-- Ends with empty ## Notes section; creates parent directories if output path doesn't exist
-- Handles missing/empty CSVs gracefully with inline markdown notes
-- Files changed: chess-runner/src/main.rs
-- **Learnings for future iterations:**
-  - Rust allows struct definitions inside function bodies (used for SprtRow local struct)
-  - When both engine1 and engine2 could match the filter, handle both cases and flip wins/losses perspective accordingly
-  - Use `opponent_map.entry(opponent.clone()).or_insert(...)` pattern for aggregating per-opponent stats
----
-
-## 2026-04-06 - US-007
-- Created `scripts/benchmark-version.sh` (chmod +x, bash -n syntax check passes)
-- Script accepts: --version, --engine, --prev-engine (optional), --stockfish, --games (default 100), --output-dir (default chess-engine/versions/<version>)
-- Workaround for chess-runner setoption limitation: creates temporary FIFO-based wrapper scripts per Stockfish skill level that inject setoption commands after intercepting the 'uci' command
-- Skill level wrappers: stockfish-1500.sh (UCI_LimitStrength=true, UCI_Elo=1500), stockfish-2000.sh, stockfish-2500.sh, stockfish-max.sh (UCI_LimitStrength=false)
-- If --prev-engine provided, runs `chess-runner sprt` first and saves to <output-dir>/sprt_results.csv
-- All match results appended to <output-dir>/results.csv via --output flag
-- Temporary wrappers cleaned up via trap on EXIT
-- Files changed: scripts/benchmark-version.sh
-- **Learnings for future iterations:**
-  - chess-runner match has no --setoption flag; FIFO-based wrapper is the cleanest workaround without modifying chess-runner
-  - bash FIFO pattern: `mkfifo $FIFO_IN`, open with `exec 3>$FIFO_IN`, start engine reading from FIFO, write setoption via >&3 after intercepting 'uci'
-  - cargo not available in this environment — shell script quality check is `bash -n` only
----
-
-## 2026-04-07 00:03 UTC - US-008
-- Ran `scripts/benchmark-version.sh` for `v0.1` against `/workspace/engines/stockfish` using current debug binaries and generated `chess-engine/versions/v0.1/results.csv`
-- Generated `chess-engine/versions/v0.1/report.md` with results vs Stockfish 1500/2000/2500/max and removed the obsolete `.gitkeep`
-- Updated `scripts/benchmark-version.sh` so each appended CSV row is tagged with the Stockfish level suffix, allowing `version-report` to keep the four benchmark levels distinct
-- Files changed: scripts/benchmark-version.sh, chess-engine/versions/v0.1/results.csv, chess-engine/versions/v0.1/report.md, tasks/prd.json, tasks/progress.txt
-- **Learnings for future iterations:**
-  - The release `chess-runner` binary currently fails on this machine with `GLIBC_2.39` missing, so benchmarking had to use the freshly built debug binaries instead
-  - `chess-runner match` writes the engine's UCI-reported name to CSV, so benchmark scripts must post-process the last row if multiple Stockfish wrappers all identify as `Stockfish 17`
-  - The generated baseline shows `Wiggum Engine v0.1` lost all 8 sample games versus Stockfish across the four configured levels
+  - A single startup-generated session id is enough to keep artifact paths deterministic for the whole run.
+  - Keep session metadata shell-friendly in `session.env` so later shell stories can source or inspect it without JSON tooling.
+  - `cargo test --workspace -- --skip gen_files::magics::name` is the correct form for skipping the intentional failing scratchpad test.
 ---

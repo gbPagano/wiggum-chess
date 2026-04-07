@@ -1,154 +1,263 @@
 {
   "project": "chess-ic",
-  "branchName": "ralph/wiggum-engine-evolution",
-  "description": "Wiggum Engine v0.1 — verbose flag, engine rename, version tracking, SPRT comparison, Stockfish benchmarking, and version-report command",
+  "branchName": "ralph/wiggum-evolution-loop",
+  "description": "Build a Ralph-like autonomous harness for engine evolution with an orchestration script, explicit skill contracts, worker guidance, iteration artifacts, promotion, discard, and repeat-until-max-iterations flow.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Rename MaterialEngine to Wiggum Engine",
-      "description": "As a developer, I want the engine consistently named 'Wiggum Engine' so that match logs and UCI GUIs display the correct identity.",
+      "title": "Add evolution-loop orchestration script skeleton",
+      "description": "As a developer, I want one script entrypoint so that I can start an evolution session with one command.",
       "acceptanceCriteria": [
-        "Struct MaterialEngine in chess-engine/src/engine.rs renamed to WiggumEngine",
-        "name() returns 'Wiggum Engine v0.1'",
-        "UCI binary (chess-engine/src/main.rs) responds to 'uci' with 'id name Wiggum Engine v0.1' and 'id author chess-ic'",
-        "CLI --about text updated from 'MaterialEngine' to 'Wiggum Engine'",
-        "All tests referencing MaterialEngine or material_engine updated to WiggumEngine",
-        "cargo test --workspace passes",
+        "Create scripts/evolution-loop.sh",
+        "The script accepts --baseline-version, --output-dir, and --max-iterations",
+        "The script prints the selected inputs before any iteration starts",
+        "The script has a usage/help comment block at the top",
+        "bash -n scripts/evolution-loop.sh passes",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "PRD US-011. Pure rename — no logic changes."
+      "notes": "Implemented in scripts/evolution-loop.sh with argument parsing, help text, input echoing, and syntax-checked shell entrypoint."
     },
     {
       "id": "US-002",
-      "title": "Add --verbose flag to chess-runner match command",
-      "description": "As a developer, I want to control chess-runner output verbosity so that I can run quiet batch matches or verbose single-game debugging.",
+      "title": "Create session artifact root",
+      "description": "As a developer, I want a deterministic session directory so that each run has a stable home for artifacts.",
       "acceptanceCriteria": [
-        "New --verbose flag added to MatchArgs in chess-runner/src/main.rs",
-        "Without --verbose: each game prints exactly one line 'Game N/Total: <result> | Score: W-L-D' and a final summary block; board and move lines are suppressed",
-        "With --verbose: existing behavior preserved — board diagram and move line printed on every move, game result printed at end of each game",
-        "PrintObserver is replaced or refactored to support both modes (e.g. two structs or a verbose: bool field)",
-        "The current always-verbose PrintObserver is removed; verbose is opt-in",
-        "Running chess-runner match --engine1 X --engine2 Y --games 3 without --verbose produces exactly 3 result lines plus 1 summary block",
-        "cargo test --workspace passes",
+        "The script creates tasks/evolution-runs/<session-id>/ when a session starts",
+        "The session directory contains a top-level summary file placeholder",
+        "The session directory stores the selected baseline version and max-iterations",
+        "Document the session-id format in the project",
+        "bash -n scripts/evolution-loop.sh passes",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "PRD US-010. No dependency on US-001."
+      "notes": "Implemented session root creation in scripts/evolution-loop.sh with a UTC timestamp session id, summary.md placeholder, and session.env metadata file; documented the layout and session-id format in tasks/prd-wiggum-evolution-loop.md."
     },
     {
       "id": "US-003",
-      "title": "Create chess-engine/versions/ folder structure",
-      "description": "As a developer, I want a dedicated versioned folder structure so I can track what changed and how each version performed over time.",
+      "title": "Create iteration artifact skeleton",
+      "description": "As a developer, I want each iteration to have a fixed artifact layout so that skills and the script can communicate predictably.",
       "acceptanceCriteria": [
-        "Directory chess-engine/versions/v0.1/ exists",
-        "File chess-engine/versions/v0.1/CHANGES.md exists and documents: initial implementation, material evaluation + negamax depth-4, no alpha-beta",
-        "File chess-engine/versions/README.md exists and explains the folder convention: one subfolder per version, each with CHANGES.md and report.md",
-        "A .gitkeep placeholder exists in chess-engine/versions/v0.1/ if no report.md exists yet",
+        "For iteration N, the script creates iterations/<N>/ under the session directory",
+        "The iteration directory includes placeholders for iteration.json, hypothesis.md, implementation.md, benchmark.md, and decision.md",
+        "iteration.json includes at least: iteration number, baseline version, state, and artifact paths",
+        "Document the iteration artifact layout in the project",
+        "bash -n scripts/evolution-loop.sh passes",
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "PRD US-012. Pure file/folder creation — no code changes."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Add set_option method to UciEngine in chesslib",
-      "description": "As a developer, I want to send arbitrary UCI setoption commands to a subprocess engine so I can configure Stockfish skill levels from the match runner.",
+      "title": "Add worker guidance file",
+      "description": "As a developer, I want a dedicated worker instruction file so that the loop agent behaves consistently across iterations.",
       "acceptanceCriteria": [
-        "UciEngine in chesslib/src/uci_engine.rs gains a public async method: pub async fn set_option(&mut self, name: &str, value: &str) -> Result<()>",
-        "Method sends 'setoption name <name> value <value>\\n' to engine stdin and flushes",
-        "No response is expected (UCI spec: setoption has no reply); method returns after flush",
-        "The Engine trait in chesslib/src/engine.rs is NOT modified — set_option is a concrete method on UciEngine only",
-        "Mock engine in uci_engine.rs tests already silently ignores unknown commands (verify this is the case)",
-        "Unit test added: sends setoption name Skill Level value 10 to mock engine without error",
-        "cargo test --workspace passes",
+        "Create .claude/evolution/CLAUDE.md",
+        "The file defines the phases: propose, implement, validate, decide, persist, repeat",
+        "The file limits the worker to engine-evolution-relevant changes during an iteration",
+        "The file defines expected behavior for accepted, rejected, failed, and inconclusive outcomes",
+        "The orchestration docs reference .claude/evolution/CLAUDE.md",
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "PRD US-017. Prerequisite for US-007 (benchmark script). The mock engine uses a wildcard case that ignores unknown commands — confirm before writing the test."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Implement SPRT subcommand in chess-runner",
-      "description": "As a developer, I want a SPRT-based match mode so I can efficiently determine whether a new engine version is an improvement without running an arbitrary fixed number of games.",
+      "title": "Add propose skill skeleton",
+      "description": "As a developer, I want a dedicated propose skill so that each iteration starts with one focused hypothesis.",
       "acceptanceCriteria": [
-        "New subcommand 'chess-runner sprt' added with args: --engine1, --engine2, --time (default 10000), --inc (default 100), --elo0 (default 0), --elo1 (default 5), --alpha (default 0.05), --beta (default 0.05), --timeout (default 5000), optional --output (CSV path)",
-        "LLR is computed after each completed game using the trinomial (W/D/L) model: score = (wins + 0.5*draws) / total; elo_diff = -400 * log10(1/score - 1); LLR approximation tracks wins/draws/losses separately",
-        "Full LLR formula: LLR = W*ln(p1_w/p0_w) + D*ln(p1_d/p0_d) + L*ln(p1_l/p0_l) where p0/p1 are expected W/D/L probabilities under H0 (elo0) and H1 (elo1) using the logistic Elo model",
-        "LLR bounds: lower = ln(beta / (1 - alpha)), upper = ln((1 - beta) / alpha)",
-        "After each game, prints one line: '[Game N] LLR: X.XX / [lower, upper] | W:x D:x L:x'",
-        "Match stops automatically when LLR crosses either bound",
-        "Final output states: 'SPRT Result: H1 accepted (improvement confirmed)' or 'SPRT Result: H0 accepted (no improvement detected)'",
-        "If --output provided, appends one row to a sprt_results.csv with columns: timestamp, engine1_name, engine2_name, games_played, wins, draws, losses, elo0, elo1, sprt_result",
-        "Creates sprt_results.csv with header if it does not exist",
-        "Unit test: LLR boundary values for alpha=0.05 beta=0.05 are approximately [-2.944, 2.944]",
-        "Unit test: LLR computation with known W/D/L counts returns expected value",
-        "cargo test --workspace passes",
+        "Create .claude/skills/evolution-propose/ with the files needed for a Claude Code skill",
+        "The skill contract says it reads prior session artifacts and writes hypothesis.md",
+        "The skill contract says it updates iteration.json with hypothesis metadata",
+        "The skill contract says it returns a stop signal if no valid hypothesis exists",
+        "Skill files exist at the documented path",
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "PRD US-013. Colors alternate each game pair (same as match subcommand). Handle the edge case where score=1.0 or score=0.0 to avoid log(0) — clamp to a small epsilon."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Add version-report subcommand to chess-runner",
-      "description": "As a developer, I want a version-report command that generates a rich markdown report for a specific engine version so I have a self-contained snapshot of its performance.",
+      "title": "Add implement skill skeleton",
+      "description": "As a developer, I want a dedicated implement skill so that candidate changes are applied consistently from the selected hypothesis.",
       "acceptanceCriteria": [
-        "New subcommand 'chess-runner version-report' with args: --version (e.g. 'v0.1'), --engine-name (optional, e.g. 'Wiggum Engine v0.1'), --matches-csv (path to regular match CSV), --sprt-csv (optional path to sprt_results.csv), --output (markdown output path)",
-        "Reads matches CSV and filters rows where engine1_name or engine2_name contains --engine-name (or --version if --engine-name not provided)",
-        "Generated markdown includes: H1 header with version name and generation date; summary table with columns: Opponent, Games, Wins, Draws, Losses, Win%; overall win rate across all opponents; best matchup (highest win%); worst matchup (lowest win%)",
-        "If --sprt-csv is provided, adds a SPRT Results section: table with columns: Opponent, Games, W, D, L, Result",
-        "Ends with an empty '## Notes' section for manual annotation",
-        "If --output path does not exist, creates it (including parent dirs)",
-        "Handles missing or empty CSVs gracefully with a message in the markdown",
-        "cargo test --workspace passes",
+        "Create .claude/skills/evolution-implement/ with the files needed for a Claude Code skill",
+        "The skill contract says it reads hypothesis.md and writes implementation.md",
+        "The skill contract says it records changed files in the implementation artifact",
+        "The skill contract says it updates iteration.json with implementation status",
+        "Skill files exist at the documented path",
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "PRD US-015. Depends on US-005 for SPRT CSV format. The --engine-name matching should be case-insensitive substring match to handle name variations."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Benchmark shell script for new engine versions",
-      "description": "As a developer, I want a shell script that automates benchmarking a new engine version against Stockfish at multiple skill levels so I get consistent, reproducible results.",
+      "title": "Add benchmark skill skeleton",
+      "description": "As a developer, I want a dedicated benchmark skill so that every candidate is validated consistently against the current baseline.",
       "acceptanceCriteria": [
-        "Script at scripts/benchmark-version.sh is created and executable (chmod +x)",
-        "Script accepts flags: --version (e.g. v0.1), --engine (path to engine binary), --prev-engine (optional, path to previous version binary), --stockfish (path to stockfish binary), --games (default 100), --output-dir (default chess-engine/versions/<version>)",
-        "If --prev-engine is provided, runs 'chess-runner sprt --engine1 <engine> --engine2 <prev-engine> --time 10000 --inc 100' and saves output",
-        "Runs 'chess-runner match' (not SPRT) for each of four Stockfish difficulty levels: 1500, 2000, 2500, max",
-        "For rated levels (1500/2000/2500): sets UCI_LimitStrength=true and UCI_Elo=<N> on Stockfish using setoption before the match — note: chess-runner does not yet support passing setoption args; the script must use a wrapper or document this as a known limitation if not supported",
-        "For max: sets UCI_LimitStrength=false",
-        "Uses time control 10s + 0.1s inc for all matches",
-        "Appends all match results to --output-dir/results.csv using chess-runner --output flag",
-        "Prints a summary to stdout when all matches complete",
-        "Script has a usage comment block at the top explaining all flags",
-        "Typecheck passes (N/A for shell — verify script has no syntax errors with bash -n scripts/benchmark-version.sh)"
+        "Create .claude/skills/evolution-benchmark/ with the files needed for a Claude Code skill",
+        "The skill contract says it reads current iteration state and writes benchmark.md",
+        "The skill contract says it updates iteration.json with benchmark status and summary metrics",
+        "The skill contract explicitly requires at least one SPRT run with a minimum of 10 completed games",
+        "Skill files exist at the documented path",
+        "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "PRD US-014. Depends on US-004 (set_option) and US-005 (sprt subcommand). IMPORTANT: chess-runner match does not support passing setoption to engines. The benchmark script should use a thin wrapper script per Stockfish level (e.g. a wrapper that sends setoption before UCI handshake) OR document this as a limitation. The simplest approach: create wrapper shell scripts like scripts/stockfish-1500.sh that exec stockfish but intercept uci/setoption."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Generate and commit v0.1 benchmark report",
-      "description": "As a developer, I want to run the benchmark for v0.1 and commit the report so we have a baseline for measuring future improvements.",
+      "title": "Add decision skill skeleton",
+      "description": "As a developer, I want a dedicated decision skill so that iteration outcomes are deterministic and auditable.",
       "acceptanceCriteria": [
-        "scripts/benchmark-version.sh runs successfully for v0.1 with the Stockfish binary at engines/stockfish",
-        "chess-runner version-report generates chess-engine/versions/v0.1/report.md",
-        "report.md contains: the version header, a summary table with results vs Stockfish at all four levels, overall win rate",
-        "chess-engine/versions/v0.1/report.md is committed to the repository",
-        "Any .gitkeep placeholder in chess-engine/versions/v0.1/ is removed once report.md exists",
+        "Create .claude/skills/evolution-decide/ with the files needed for a Claude Code skill",
+        "The skill contract says it reads implementation.md and benchmark.md and writes decision.md",
+        "The skill contract says it updates iteration.json with one final state",
+        "The allowed final states are documented as: accepted, rejected, inconclusive, failed",
+        "Skill files exist at the documented path",
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "PRD US-016. Depends on all prior stories. Requires engines/stockfish to be present. This story may require manual steps (running the script) — Ralph should run it and commit the output."
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Add isolated candidate workspace setup",
+      "description": "As a developer, I want each candidate implemented in isolation so that rejected changes cannot leak into the accepted baseline.",
+      "acceptanceCriteria": [
+        "The orchestration flow creates an isolated candidate workspace, worktree, branch, or equivalent reversible environment for each iteration",
+        "The isolation path or identifier is stored in iteration.json",
+        "If setup fails, the iteration state becomes failed and the baseline remains unchanged",
+        "The next iteration starts from the latest accepted baseline, not the last attempted candidate",
+        "bash -n scripts/evolution-loop.sh passes",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Add correctness gate step",
+      "description": "As a developer, I want obviously broken candidates rejected before benchmark time is spent on them.",
+      "acceptanceCriteria": [
+        "The orchestration flow runs configured correctness checks before benchmarking",
+        "iteration.json records which checks ran and whether they passed",
+        "If correctness checks fail, no benchmark runs for that iteration",
+        "Failed correctness checks make the iteration ineligible for promotion",
+        "Document the correctness-gate behavior in the project",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Add benchmark policy contract",
+      "description": "As a developer, I want a documented validation policy so that promotion does not rely on ambiguous benchmark evidence.",
+      "acceptanceCriteria": [
+        "Document screening versus confirmation benchmark policy",
+        "Screening requires at least one SPRT run with a minimum of 10 completed games",
+        "The policy defines when stronger validation is required before promotion",
+        "The policy defines what benchmark summary fields must be written into iteration.json",
+        "Reference the benchmark policy from the benchmark and decision skills",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Add iteration state machine",
+      "description": "As a developer, I want a single iteration state machine so that script and skills agree on valid transitions.",
+      "acceptanceCriteria": [
+        "Document valid iteration states and transitions",
+        "iteration.json uses the documented state names",
+        "The state machine distinguishes in-progress phase from final outcome",
+        "Invalid transitions are treated as orchestration errors",
+        "Reference the state-machine rules from the orchestration script and decision skill",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Add versioning policy contract",
+      "description": "As a developer, I want the version bump behavior defined clearly so that accepted candidates promote consistently.",
+      "acceptanceCriteria": [
+        "Document where the engine version is stored",
+        "Document how an accepted iteration increments the version",
+        "Document the required promotion artifact contents",
+        "Document that rejected, failed, and inconclusive iterations do not bump the version",
+        "Reference the versioning policy from the decision flow",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Add discard and restore contract",
+      "description": "As a developer, I want a documented discard path so that non-winning candidates can be removed safely.",
+      "acceptanceCriteria": [
+        "Document how rejected, failed, and inconclusive candidates are discarded or isolated away",
+        "The discard path preserves iteration artifacts for audit",
+        "The discard path guarantees the accepted baseline remains unchanged",
+        "Document the next iteration start point after discard",
+        "Reference the discard policy from the orchestration script",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Add loop control and stop conditions",
+      "description": "As a developer, I want the script to control iteration flow so that a full session can run unattended until a clear stop condition is reached.",
+      "acceptanceCriteria": [
+        "The orchestration script continues automatically after each completed iteration unless a stop condition is reached",
+        "The script stops when max-iterations is reached",
+        "The script stops when no valid next hypothesis can be generated",
+        "The script stops when configured infrastructure failure limits are exceeded",
+        "bash -n scripts/evolution-loop.sh passes",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Add final session summary artifact",
+      "description": "As a developer, I want a final summary file so that I can review the outcome of the session quickly.",
+      "acceptanceCriteria": [
+        "The session writes a final summary artifact at the end of the run",
+        "The summary lists accepted versions, rejected attempts, and the stop reason",
+        "The summary includes pointers to per-iteration artifacts",
+        "Document the summary file path in the project",
+        "The orchestration script writes the summary on both normal stop and early stop",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
     }
   ]
 }
