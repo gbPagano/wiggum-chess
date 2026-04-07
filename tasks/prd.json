@@ -64,8 +64,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created .claude/evolution/CLAUDE.md with worker guidance defining the 7-phase lifecycle (propose, implement, validate, decide, persist, repeat, loop), outcome behaviors, scope constraints, iteration state machine, and file layout. Added worker guidance reference to scripts/evolution-loop.sh."
     },
     {
       "id": "US-005",
@@ -80,8 +80,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created .claude/skills/evolution-propose/SKILL.md with YAML frontmatter and markdown body implementing the propose phase contract: reads prior artifacts, writes hypothesis.md, updates iteration.json, returns stop signal if no valid hypothesis."
     },
     {
       "id": "US-006",
