@@ -160,8 +160,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added a correctness gate to scripts/evolution-loop.sh that runs bash syntax, cargo build, and workspace tests in the isolated candidate workspace, records pass/fail results plus benchmark eligibility in iteration.json, writes correctness/results.md, and skips benchmark/promotion on failure; documented the contract in the PRD and aligned benchmark/decision skills with the gate."
     },
     {
       "id": "US-011",

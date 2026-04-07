@@ -33,6 +33,7 @@ HYPOTHESIS_FILENAME="hypothesis.md"
 IMPLEMENTATION_FILENAME="implementation.md"
 BENCHMARK_FILENAME="benchmark.md"
 DECISION_FILENAME="decision.md"
+CORRECTNESS_DIRNAME="correctness"
 
 usage() {
   sed -n '1,13p' "$0"
@@ -160,6 +161,221 @@ $description
 EOF
 }
 
+correctness_dir_path() {
+  local iteration_dir="$1"
+
+  printf '%s/%s\n' "$iteration_dir" "$CORRECTNESS_DIRNAME"
+}
+
+correctness_results_path() {
+  local iteration_dir="$1"
+
+  printf '%s/results.md\n' "$(correctness_dir_path "$iteration_dir")"
+}
+
+record_correctness_failure() {
+  local iteration_json_path="$1"
+  local decision_path="$2"
+  local benchmark_path="$3"
+  local correctness_results_path="$4"
+  local candidate_workspace_path="$5"
+  local bash_check_status="$6"
+  local cargo_build_status="$7"
+  local cargo_test_status="$8"
+  local failed_checks=()
+
+  if [[ "$bash_check_status" == "failed" ]]; then
+    failed_checks+=("bash -n scripts/evolution-loop.sh")
+  fi
+
+  if [[ "$cargo_build_status" == "failed" ]]; then
+    failed_checks+=("cargo build --workspace")
+  fi
+
+  if [[ "$cargo_test_status" == "failed" ]]; then
+    failed_checks+=("cargo test --workspace -- --skip gen_files::magics::name")
+  fi
+
+  python3 - <<'PY' "$iteration_json_path" "$candidate_workspace_path" "$bash_check_status" "$cargo_build_status" "$cargo_test_status"
+import json
+import sys
+
+iteration_json_path, candidate_workspace_path, bash_check_status, cargo_build_status, cargo_test_status = sys.argv[1:]
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+data['state'] = 'failed'
+data['correctness'] = {
+    'status': 'completed',
+    'passed': False,
+    'benchmarkEligible': False,
+    'checks': [
+        {
+            'name': 'bash -n scripts/evolution-loop.sh',
+            'status': bash_check_status,
+            'workspace': candidate_workspace_path,
+        },
+        {
+            'name': 'cargo build --workspace',
+            'status': cargo_build_status,
+            'workspace': candidate_workspace_path,
+        },
+        {
+            'name': 'cargo test --workspace -- --skip gen_files::magics::name',
+            'status': cargo_test_status,
+            'workspace': candidate_workspace_path,
+        },
+    ],
+}
+
+data.setdefault('benchmark', {})
+data['benchmark']['status'] = 'skipped'
+data['benchmark']['skippedReason'] = 'correctness gate failed'
+
+data.setdefault('decision', {})
+data['decision']['outcome'] = 'failed'
+data['decision']['reasoning'] = 'Configured correctness checks failed before benchmarking, so the candidate is ineligible for promotion.'
+
+actionable_failures = [
+    check['name'] for check in data['correctness']['checks'] if check['status'] == 'failed'
+]
+data['decision']['evidence'] = actionable_failures
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
+
+  cat <<EOF > "$correctness_results_path"
+# Iteration Correctness Gate
+
+Status: failed
+
+The configured correctness gate failed, so benchmark execution is skipped.
+
+## Checks
+
+- bash -n scripts/evolution-loop.sh: $bash_check_status
+- cargo build --workspace: $cargo_build_status
+- cargo test --workspace -- --skip gen_files::magics::name: $cargo_test_status
+EOF
+
+  cat <<EOF > "$benchmark_path"
+# Iteration Benchmark
+
+Status: skipped
+
+Benchmark execution is skipped because the correctness gate failed.
+EOF
+
+  cat <<EOF > "$decision_path"
+# Iteration Decision
+
+Status: failed
+
+The configured correctness gate failed before benchmarking, so the candidate is ineligible for promotion.
+
+## Failed checks
+$(for failed_check in "${failed_checks[@]}"; do printf -- '- %s\n' "$failed_check"; done)
+
+## Benchmark
+
+Skipped because the correctness gate did not pass.
+EOF
+}
+
+record_correctness_success() {
+  local iteration_json_path="$1"
+  local correctness_results_path="$2"
+  local candidate_workspace_path="$3"
+  local bash_check_status="$4"
+  local cargo_build_status="$5"
+  local cargo_test_status="$6"
+
+  python3 - <<'PY' "$iteration_json_path" "$candidate_workspace_path" "$bash_check_status" "$cargo_build_status" "$cargo_test_status"
+import json
+import sys
+
+iteration_json_path, candidate_workspace_path, bash_check_status, cargo_build_status, cargo_test_status = sys.argv[1:]
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+data['correctness'] = {
+    'status': 'completed',
+    'passed': True,
+    'benchmarkEligible': True,
+    'checks': [
+        {
+            'name': 'bash -n scripts/evolution-loop.sh',
+            'status': bash_check_status,
+            'workspace': candidate_workspace_path,
+        },
+        {
+            'name': 'cargo build --workspace',
+            'status': cargo_build_status,
+            'workspace': candidate_workspace_path,
+        },
+        {
+            'name': 'cargo test --workspace -- --skip gen_files::magics::name',
+            'status': cargo_test_status,
+            'workspace': candidate_workspace_path,
+        },
+    ],
+}
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
+
+  cat <<EOF > "$correctness_results_path"
+# Iteration Correctness Gate
+
+Status: passed
+
+All configured correctness checks passed. Benchmarking remains eligible.
+
+## Checks
+
+- bash -n scripts/evolution-loop.sh: $bash_check_status
+- cargo build --workspace: $cargo_build_status
+- cargo test --workspace -- --skip gen_files::magics::name: $cargo_test_status
+EOF
+}
+
+run_correctness_gate() {
+  local iteration_json_path="$1"
+  local correctness_results_path="$2"
+  local benchmark_path="$3"
+  local decision_path="$4"
+  local candidate_workspace_path="$5"
+  local bash_check_status="failed"
+  local cargo_build_status="failed"
+  local cargo_test_status="failed"
+
+  if bash -n "$candidate_workspace_path/scripts/evolution-loop.sh" >/dev/null 2>&1; then
+    bash_check_status="passed"
+  fi
+
+  if (cd "$candidate_workspace_path" && cargo build --workspace >/dev/null 2>&1); then
+    cargo_build_status="passed"
+  fi
+
+  if (cd "$candidate_workspace_path" && cargo test --workspace -- --skip gen_files::magics::name >/dev/null 2>&1); then
+    cargo_test_status="passed"
+  fi
+
+  if [[ "$bash_check_status" == "passed" && "$cargo_build_status" == "passed" && "$cargo_test_status" == "passed" ]]; then
+    record_correctness_success "$iteration_json_path" "$correctness_results_path" "$candidate_workspace_path" "$bash_check_status" "$cargo_build_status" "$cargo_test_status"
+    return 0
+  fi
+
+  record_correctness_failure "$iteration_json_path" "$decision_path" "$benchmark_path" "$correctness_results_path" "$candidate_workspace_path" "$bash_check_status" "$cargo_build_status" "$cargo_test_status"
+  return 1
+}
+
 setup_candidate_workspace() {
   local session_dir="$1"
   local iteration_number="$2"
@@ -201,6 +417,8 @@ write_iteration_state() {
   local implementation_path="$iteration_dir/$IMPLEMENTATION_FILENAME"
   local benchmark_path="$iteration_dir/$BENCHMARK_FILENAME"
   local decision_path="$iteration_dir/$DECISION_FILENAME"
+  local correctness_dir
+  local correctness_results
   local escaped_baseline_version
   local escaped_baseline_ref
   local escaped_candidate_workspace_path
@@ -208,6 +426,12 @@ write_iteration_state() {
   local escaped_candidate_setup_status
   local escaped_candidate_setup_error
   local initial_state
+
+  correctness_dir="$(correctness_dir_path "$iteration_dir")"
+  correctness_results="$(correctness_results_path "$iteration_dir")"
+
+  mkdir -p "$correctness_dir"
+
 
   escaped_baseline_version="$(json_escape "$ACCEPTED_BASELINE_VERSION")"
   escaped_baseline_ref="$(json_escape "$ACCEPTED_BASELINE_REF")"
@@ -234,10 +458,17 @@ write_iteration_state() {
     "status": "$escaped_candidate_setup_status",
     "setupError": "$escaped_candidate_setup_error"
   },
+  "correctness": {
+    "status": "pending",
+    "passed": false,
+    "benchmarkEligible": false,
+    "checks": []
+  },
   "artifacts": {
     "iterationJson": "$iteration_json_path",
     "hypothesis": "$hypothesis_path",
     "implementation": "$implementation_path",
+    "correctness": "$correctness_results",
     "benchmark": "$benchmark_path",
     "decision": "$decision_path"
   }
@@ -255,6 +486,7 @@ create_iteration_artifacts() {
   local implementation_path="$iteration_dir/$IMPLEMENTATION_FILENAME"
   local benchmark_path="$iteration_dir/$BENCHMARK_FILENAME"
   local decision_path="$iteration_dir/$DECISION_FILENAME"
+  local correctness_results
   local isolation_fields
   local candidate_workspace_path
   local candidate_branch
@@ -262,6 +494,8 @@ create_iteration_artifacts() {
   local candidate_setup_error
 
   mkdir -p "$iteration_dir"
+  mkdir -p "$(correctness_dir_path "$iteration_dir")"
+  correctness_results="$(correctness_results_path "$iteration_dir")"
 
   isolation_fields="$(setup_candidate_workspace "$session_dir" "$iteration_number")"
   IFS='|' read -r candidate_workspace_path candidate_branch candidate_setup_status candidate_setup_error <<< "$isolation_fields"
@@ -271,22 +505,80 @@ create_iteration_artifacts() {
   write_iteration_state "$iteration_json_path" "$iteration_number" "$iteration_dir" "$candidate_workspace_path" "$candidate_branch" "$candidate_setup_status" "$candidate_setup_error"
   write_markdown_placeholder "$hypothesis_path" "Iteration $iteration_number Hypothesis" "Describe the selected improvement idea and why it should help."
   write_markdown_placeholder "$implementation_path" "Iteration $iteration_number Implementation" "Summarize candidate changes and list modified files."
+  write_markdown_placeholder "$correctness_results" "Iteration $iteration_number Correctness Gate" "Record configured correctness checks and whether benchmarking remains eligible."
   write_markdown_placeholder "$benchmark_path" "Iteration $iteration_number Benchmark" "Record benchmark settings, completed games, and summary metrics."
   write_markdown_placeholder "$decision_path" "Iteration $iteration_number Decision" "Record the final outcome and the reason for it."
 
   if [[ "$candidate_setup_status" == "failed" ]]; then
+    python3 - <<'PY' "$iteration_json_path" "$candidate_workspace_path" "$candidate_setup_error"
+import json
+import sys
+
+iteration_json_path, candidate_workspace_path, candidate_setup_error = sys.argv[1:]
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+data['correctness'] = {
+    'status': 'skipped',
+    'passed': False,
+    'benchmarkEligible': False,
+    'checks': [],
+    'skippedReason': 'candidate workspace setup failed',
+}
+
+data['benchmark'] = {
+    'status': 'skipped',
+    'skippedReason': 'candidate workspace setup failed',
+}
+
+data['decision'] = {
+    'outcome': 'failed',
+    'reasoning': 'Candidate workspace setup failed before correctness checks or benchmarking could run.',
+    'evidence': [candidate_setup_error],
+}
+
+with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+    json.dump(data, handle, indent=2)
+    handle.write('\n')
+PY
+
+    cat <<EOF > "$correctness_results"
+# Iteration $iteration_number Correctness Gate
+
+Status: skipped
+
+Candidate workspace setup failed before correctness checks could run.
+
+Reason: $candidate_setup_error
+EOF
+
+    cat <<EOF > "$benchmark_path"
+# Iteration $iteration_number Benchmark
+
+Status: skipped
+
+Benchmark execution is skipped because the candidate workspace setup failed.
+
+Reason: $candidate_setup_error
+EOF
+
     cat <<EOF > "$decision_path"
 # Iteration $iteration_number Decision
 
 Status: failed
 
-Candidate workspace setup failed before proposal or implementation could begin.
+Candidate workspace setup failed before proposal, correctness validation, or benchmarking could begin.
 
 Reason: $candidate_setup_error
 EOF
   fi
 
   LAST_ITERATION_DIR="$iteration_dir"
+  LAST_ITERATION_STATE_PATH="$iteration_json_path"
+  LAST_CORRECTNESS_RESULTS_PATH="$correctness_results"
+  LAST_BENCHMARK_PATH="$benchmark_path"
+  LAST_DECISION_PATH="$decision_path"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -341,7 +633,14 @@ write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
 
 create_iteration_artifacts "$SESSION_DIR" "$INITIAL_ITERATION_NUMBER"
 INITIAL_ITERATION_DIR="$LAST_ITERATION_DIR"
-INITIAL_ITERATION_STATE_PATH="$INITIAL_ITERATION_DIR/$ITERATION_STATE_FILENAME"
+INITIAL_ITERATION_STATE_PATH="$LAST_ITERATION_STATE_PATH"
+INITIAL_CORRECTNESS_RESULTS_PATH="$LAST_CORRECTNESS_RESULTS_PATH"
+INITIAL_BENCHMARK_PATH="$LAST_BENCHMARK_PATH"
+INITIAL_DECISION_PATH="$LAST_DECISION_PATH"
+
+if [[ "$LAST_CANDIDATE_WORKSPACE_STATUS" == "ready" ]]; then
+  run_correctness_gate "$INITIAL_ITERATION_STATE_PATH" "$INITIAL_CORRECTNESS_RESULTS_PATH" "$INITIAL_BENCHMARK_PATH" "$INITIAL_DECISION_PATH" "$LAST_CANDIDATE_WORKSPACE_PATH" || true
+fi
 
 echo "Starting Wiggum evolution loop"
 echo "Baseline version: $BASELINE_VERSION"
@@ -356,5 +655,6 @@ echo "Initial iteration directory: $INITIAL_ITERATION_DIR"
 echo "Initial iteration state: $INITIAL_ITERATION_STATE_PATH"
 echo "Initial candidate workspace: $LAST_CANDIDATE_WORKSPACE_PATH"
 echo "Initial candidate workspace status: $LAST_CANDIDATE_WORKSPACE_STATUS"
+echo "Initial correctness artifact: $INITIAL_CORRECTNESS_RESULTS_PATH"
 echo
-echo "Each iteration starts from an isolated candidate worktree. If setup fails, the iteration is marked failed and the baseline remains unchanged."
+echo "Each iteration starts from an isolated candidate worktree. The orchestration flow runs configured correctness checks before benchmarking, and failed checks make the iteration ineligible for promotion."

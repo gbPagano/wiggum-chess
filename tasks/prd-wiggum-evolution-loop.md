@@ -60,6 +60,7 @@ For iteration `N`, the script must create `tasks/evolution-runs/<session-id>/ite
 - `iteration.json` — machine-readable iteration state
 - `hypothesis.md` — selected idea and rationale
 - `implementation.md` — implementation result and changed files summary
+- `correctness/results.md` — configured correctness checks and benchmark eligibility
 - `benchmark.md` — benchmark settings and results
 - `decision.md` — final outcome and reason
 
@@ -67,7 +68,8 @@ The initial `iteration.json` written by the script must include at least:
 - `iteration` — numeric iteration number
 - `baselineVersion` — selected baseline version for this iteration
 - `state` — initial state set to `initialized`
-- `artifacts` — paths for `iterationJson`, `hypothesis`, `implementation`, `benchmark`, and `decision`
+- `correctness` — gate status with `passed`, `benchmarkEligible`, and per-check results
+- `artifacts` — paths for `iterationJson`, `hypothesis`, `implementation`, `correctness`, `benchmark`, and `decision`
 
 ### Iteration artifact example
 
@@ -76,6 +78,8 @@ tasks/evolution-runs/20260406T185545Z/
 └── iterations/
     └── 1/
         ├── benchmark.md
+        ├── correctness/
+        │   └── results.md
         ├── decision.md
         ├── hypothesis.md
         ├── implementation.md
@@ -87,9 +91,63 @@ tasks/evolution-runs/20260406T185545Z/
 - The script creates the iteration directory and initial `iteration.json`.
 - `evolution-propose` reads prior session artifacts and writes `hypothesis.md` plus updated `iteration.json`.
 - `evolution-implement` reads `hypothesis.md`, applies the candidate in isolation, and writes `implementation.md` plus updated `iteration.json`.
-- `evolution-benchmark` reads current iteration state, runs validation, and writes `benchmark.md` plus updated `iteration.json`.
-- `evolution-decide` reads implementation and benchmark artifacts, writes `decision.md`, and updates `iteration.json` with the final state.
+- The orchestration script runs the configured correctness gate after implementation, writes `correctness/results.md`, and updates `iteration.json` with check results and benchmark eligibility.
+- `evolution-benchmark` reads current iteration state, runs validation only when `correctness.benchmarkEligible` is `true`, and writes `benchmark.md` plus updated `iteration.json`.
+- `evolution-decide` reads implementation and benchmark artifacts, treats correctness-gate failure as a `failed` outcome, writes `decision.md`, and updates `iteration.json` with the final state.
 - The orchestration script alone controls whether to continue, promote, discard, or stop.
+
+### Correctness gate contract
+
+- The orchestration flow runs configured correctness checks before any benchmark step.
+- The default configured checks are `bash -n scripts/evolution-loop.sh`, `cargo build --workspace`, and `cargo test --workspace -- --skip gen_files::magics::name` from the candidate workspace.
+- `iteration.json` records the correctness gate under `correctness` with `status`, `passed`, `benchmarkEligible`, and a `checks` array containing each command and its pass/fail result.
+- If any configured correctness check fails, `benchmark.md` is marked skipped, `decision.md` records a `failed` outcome, and the candidate is ineligible for promotion.
+- Successful correctness checks keep the iteration benchmark-eligible without promoting the candidate by themselves.
+
+### Correctness metadata example
+
+```json
+{
+  "state": "implemented",
+  "correctness": {
+    "status": "completed",
+    "passed": true,
+    "benchmarkEligible": true,
+    "checks": [
+      {
+        "name": "bash -n scripts/evolution-loop.sh",
+        "status": "passed"
+      },
+      {
+        "name": "cargo build --workspace",
+        "status": "passed"
+      },
+      {
+        "name": "cargo test --workspace -- --skip gen_files::magics::name",
+        "status": "passed"
+      }
+    ]
+  }
+}
+```
+
+A failed correctness gate must prevent benchmark execution for that iteration.
+
+### Iteration artifact example after correctness gate
+
+```text
+tasks/evolution-runs/20260406T185545Z/
+└── iterations/
+    └── 1/
+        ├── benchmark.md        # completed or skipped when correctness fails
+        ├── correctness/
+        │   └── results.md
+        ├── decision.md
+        ├── hypothesis.md
+        ├── implementation.md
+        └── iteration.json
+```
+
 
 ### Isolated candidate workspace contract
 

@@ -24,6 +24,7 @@ Determine the final outcome of the current iteration and persist the decision.
 - `hypothesis.md` in the current iteration directory — the proposed improvement
 - `implementation.md` in the current iteration directory — summary of candidate changes
 - `benchmark.md` in the current iteration directory — benchmark results
+- `correctness/results.md` in the current iteration directory — correctness-gate results and benchmark eligibility
 
 ---
 
@@ -35,7 +36,7 @@ Determine the final outcome of the current iteration and persist the decision.
    - **Accepted**: The implementation succeeded, the benchmark completed with at least 10 games, and the candidate shows a statistically meaningful improvement over the baseline per the acceptance policy.
    - **Rejected**: The implementation succeeded but the benchmark shows the candidate is weaker than or equivalent to the baseline. The candidate is discarded.
    - **Inconclusive**: The implementation succeeded but the benchmark evidence is insufficient for a clear accept/reject decision (e.g., too few games, weak signal, high variance). The candidate may be refined in a future iteration.
-   - **Failed**: The implementation or benchmark infrastructure failed (correctness gate failure, build error, benchmark crash). No evaluation of the candidate's merit is possible.
+   - **Failed**: The implementation, correctness gate, or benchmark infrastructure failed (build error, test failure, benchmark crash). No evaluation of the candidate's merit is possible.
 
 3. **Write `decision.md`** — Record the decision with:
    - The final outcome (accepted, rejected, inconclusive, failed)

@@ -29,7 +29,7 @@ Run benchmarks against the candidate engine changes and record the results.
 
 ## What to Do
 
-1. **Read Current State** — Open `iteration.json` to confirm the iteration is in the `implemented` state and ready for benchmarking. Open `hypothesis.md` and `implementation.md` to understand what was changed.
+1. **Read Current State** — Open `iteration.json` to confirm the iteration is in the `implemented` state and that `correctness.benchmarkEligible` is `true` before benchmarking. Open `hypothesis.md`, `implementation.md`, and `correctness/results.md` to understand what changed and whether the candidate passed the correctness gate.
 
 2. **Build Engines** — Ensure both the candidate and baseline engines compile:
    - Build the candidate from the current isolated workspace
