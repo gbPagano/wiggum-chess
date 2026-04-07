@@ -35,6 +35,7 @@ Note: `gen_files::magics::name` is an intentional developer scratchpad test with
 - `scripts/benchmark-version.sh` post-processes the last appended `results.csv` row to add the Stockfish level suffix (1500/2000/2500/max), because `chess-runner match` records only the opponent engine's UCI-reported name in CSV output.
 - If release binaries fail to start on the local machine because of GLIBC mismatch, use the freshly built debug binaries in `target/debug/` for local benchmarking and report generation.
 - Promoted engine versions are tracked in two synchronized places: `[package].version` in `chess-engine/Cargo.toml`, `chess-runner/Cargo.toml`, and `chesslib/Cargo.toml`, plus `chess-engine/versions/<tag>/` for release artifacts (`CHANGES.md`, `report.md`). Keep `v<major>.<minor>` tags aligned with Cargo semver `<major>.<minor>.0`.
+- `scripts/evolution-loop.sh` is responsible for normalizing optional propose-time inputs before invoking Claude skills. When using an operator-supplied ideas checklist, keep the canonical path in both `session.env` and `iteration.json`, but clear it entirely when the file has no unchecked `- [ ]` entries so the propose phase falls back to self-generated ideas without extra branching.
 
 ### Build-time Code Generation (`chesslib/src/build.rs`, `chesslib/src/gen_files/`)
 

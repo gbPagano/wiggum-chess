@@ -50,8 +50,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added an optional --ideas-file flag to scripts/evolution-loop.sh, normalized empty or fully-used checklist files back to the default self-propose flow, and recorded ideas-file metadata in both session.env and iteration.json so the propose phase can consume pending Markdown checklist ideas when available."
     },
     {
       "id": "US-004",

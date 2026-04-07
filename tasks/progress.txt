@@ -3,6 +3,7 @@
 ## Codebase Patterns
 - For evolution-loop phase execution, keep terminal output concise and write raw skill stdout/stderr to per-iteration log files under `iterations/<N>/phase-logs/`; record those paths in `iteration.json` so later phases and operators can inspect failures without banner noise.
 - Keep the loop's operator-facing phase list in one ordered sequence and derive both the full plan and remaining-phase output from it so progress text stays synchronized across iterations.
+- Optional propose inputs should be normalized by the loop before invoking the skill: record the resolved source in both `session.env` and `iteration.json`, but collapse empty Markdown checklist files back to the same self-propose path as no input.
 
 Started: 2026-04-07
 ---
@@ -23,4 +24,14 @@ Started: 2026-04-07
 - **Learnings for future iterations:**
   - Define operator-visible phase order in one canonical array so start-of-iteration and per-phase progress text cannot drift apart.
   - Include `validate` in the operator-visible phase plan even though it runs locally rather than through a Claude skill, because it explains the gap between implement and benchmark.
+---
+
+## 2026-04-07 09:34:46 PDT - US-003
+- Added an optional `--ideas-file` flag to `scripts/evolution-loop.sh` and resolved it into session metadata before the loop starts.
+- Recorded ideas-file details in `session.env` and `iteration.json`, and collapsed missing pending checklist items back to the default self-propose path so empty Markdown task lists behave like no file was provided.
+- Extended the per-phase worker prompt so the propose phase knows how to consume unchecked `- [ ] idea text` entries when an ideas file is available.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Normalize optional operator inputs in the orchestration layer first, then hand skills a simple contract through `session.env` and `iteration.json`.
+  - For checklist-backed idea sources, treat only unchecked `- [ ]` entries as pending ideas and ignore empty files by clearing the resolved input path.
 ---

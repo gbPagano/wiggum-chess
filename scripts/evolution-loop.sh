@@ -4,11 +4,12 @@
 # Start a Wiggum engine evolution session.
 #
 # Usage:
-#   ./scripts/evolution-loop.sh --baseline-version <version> [--output-dir <path>] [--max-iterations <count>] [--max-infra-failures <count>]
+#   ./scripts/evolution-loop.sh --baseline-version <version> [--ideas-file <path>] [--output-dir <path>] [--max-iterations <count>] [--max-infra-failures <count>]
 #   ./scripts/evolution-loop.sh --help
 #
 # Options:
 #   --baseline-version     Required. Baseline engine version to evolve from.
+#   --ideas-file           Optional Markdown checklist file of candidate ideas.
 #   --output-dir           Session artifact root. Defaults to tasks/evolution-runs.
 #   --max-iterations       Maximum iterations to allow. Defaults to 10.
 #   --max-infra-failures   Maximum failed iterations to tolerate before stopping. Defaults to 3.
@@ -24,6 +25,9 @@ DISCARD_POLICY_REFERENCE="$REPO_ROOT/tasks/prd-wiggum-evolution-loop.md"
 CLAUDE_BIN="${CLAUDE_BIN:-openclaude}"
 
 BASELINE_VERSION=""
+IDEAS_FILE=""
+IDEAS_FILE_RESOLVED=""
+IDEAS_FILE_PENDING_COUNT=0
 OUTPUT_DIR="$REPO_ROOT/tasks/evolution-runs"
 MAX_ITERATIONS=10
 MAX_INFRA_FAILURES=3
@@ -269,15 +273,72 @@ with open(summary_path, 'w', encoding='utf-8') as handle:
 PY
 }
 
+count_pending_ideas() {
+  local ideas_file_path="$1"
+
+  if [[ -z "$ideas_file_path" || ! -f "$ideas_file_path" ]]; then
+    printf '0\n'
+    return 0
+  fi
+
+  python3 - <<'PY' "$ideas_file_path"
+import re
+import sys
+
+ideas_file_path = sys.argv[1]
+pattern = re.compile(r'^\s*-\s*\[ \]\s+.+\S\s*$')
+count = 0
+
+with open(ideas_file_path, 'r', encoding='utf-8') as handle:
+    for line in handle:
+        if pattern.match(line):
+            count += 1
+
+print(count)
+PY
+}
+
+resolve_ideas_file() {
+  local raw_path="$1"
+
+  IDEAS_FILE_RESOLVED=""
+  IDEAS_FILE_PENDING_COUNT=0
+
+  if [[ -z "$raw_path" ]]; then
+    return 0
+  fi
+
+  if [[ "$raw_path" = /* ]]; then
+    IDEAS_FILE_RESOLVED="$raw_path"
+  else
+    IDEAS_FILE_RESOLVED="$REPO_ROOT/$raw_path"
+  fi
+
+  if [[ ! -f "$IDEAS_FILE_RESOLVED" ]]; then
+    echo "Error: --ideas-file was provided but the file does not exist: $IDEAS_FILE_RESOLVED" >&2
+    exit 1
+  fi
+
+  IDEAS_FILE_PENDING_COUNT="$(count_pending_ideas "$IDEAS_FILE_RESOLVED")"
+  if [[ "$IDEAS_FILE_PENDING_COUNT" == "0" ]]; then
+    IDEAS_FILE_RESOLVED=""
+  fi
+}
+
 write_session_metadata() {
   local metadata_path="$1"
   local session_id="$2"
   local session_dir="$3"
+  local escaped_ideas_file
+
+  escaped_ideas_file="$(json_escape "$IDEAS_FILE_RESOLVED")"
 
   cat <<EOF > "$metadata_path"
 baseline_version=$BASELINE_VERSION
 accepted_baseline_version=$ACCEPTED_BASELINE_VERSION
 accepted_baseline_ref=$ACCEPTED_BASELINE_REF
+ideas_file=$escaped_ideas_file
+ideas_file_pending_count=$IDEAS_FILE_PENDING_COUNT
 max_iterations=$MAX_ITERATIONS
 max_infra_failures=$MAX_INFRA_FAILURES
 session_id=$session_id
@@ -905,6 +966,7 @@ write_iteration_state() {
   local escaped_candidate_branch
   local escaped_candidate_setup_status
   local escaped_candidate_setup_error
+  local escaped_ideas_file_path
   local initial_state
 
   correctness_dir="$(correctness_dir_path "$iteration_dir")"
@@ -921,6 +983,7 @@ write_iteration_state() {
   escaped_candidate_setup_status="$(json_escape "$candidate_setup_status")"
   escaped_candidate_setup_error="$(json_escape "$candidate_setup_error")"
   escaped_phase_logs_dir="$(json_escape "$phase_logs_dir")"
+  escaped_ideas_file_path="$(json_escape "$IDEAS_FILE_RESOLVED")"
 
   initial_state="initialized"
   if [[ "$candidate_setup_status" == "failed" ]]; then
@@ -932,6 +995,11 @@ write_iteration_state() {
   "iteration": $iteration_number,
   "baselineVersion": "$escaped_baseline_version",
   "baselineRef": "$escaped_baseline_ref",
+  "ideas": {
+    "file": "$escaped_ideas_file_path",
+    "pendingCount": $IDEAS_FILE_PENDING_COUNT,
+    "format": "markdown-task-list"
+  },
   "state": "$initial_state",
   "isolation": {
     "type": "git-worktree",
@@ -1098,6 +1166,8 @@ Run only this iteration phase.
 - Worker guidance: $WORKER_GUIDANCE
 
 Read and update the iteration artifacts at the paths recorded in iteration.json.
+If iteration.json or session.env points to an ideas file, treat it as an optional propose-phase input. The file format is Markdown checklist entries like `- [ ] idea text`, and only unchecked entries are pending ideas.
+If the ideas file field is empty, missing, or has zero pending checklist entries, behave exactly like the default self-propose flow.
 If you cannot complete the phase, record the failure in the appropriate iteration artifact and iteration.json.
 If no valid next hypothesis exists during /evolution-propose, record a stop signal in iteration.json using hypothesis.status = "no_hypothesis" and explain it in hypothesis.md.
 EOF
@@ -1235,6 +1305,11 @@ while [[ $# -gt 0 ]]; do
       BASELINE_VERSION="$2"
       shift 2
       ;;
+    --ideas-file)
+      require_value "$1" "${2-}"
+      IDEAS_FILE="$2"
+      shift 2
+      ;;
     --output-dir)
       require_value "$1" "${2-}"
       OUTPUT_DIR="$2"
@@ -1278,6 +1353,8 @@ if ! [[ "$MAX_INFRA_FAILURES" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
+resolve_ideas_file "$IDEAS_FILE"
+
 if ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
   echo "Error: Claude CLI binary '$CLAUDE_BIN' was not found in PATH." >&2
   exit 1
@@ -1300,6 +1377,12 @@ write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
 
 echo "Starting Wiggum evolution loop"
 echo "Baseline version: $BASELINE_VERSION"
+if [[ -n "$IDEAS_FILE_RESOLVED" ]]; then
+  echo "Ideas file: $IDEAS_FILE_RESOLVED"
+  echo "Pending checklist ideas: $IDEAS_FILE_PENDING_COUNT"
+else
+  echo "Ideas file: none"
+fi
 echo "Output directory: $OUTPUT_DIR"
 echo "Max iterations: $MAX_ITERATIONS"
 echo "Max infrastructure failures: $MAX_INFRA_FAILURES"
