@@ -33,15 +33,15 @@ Determine the final outcome of the current iteration and persist the decision.
 1. **Read All Artifacts** — Open `implementation.md` and `benchmark.md` to review what was implemented and how it performed. Open `iteration.json` for the full context including hypothesis, state, and metrics.
 
 2. **Evaluate Against Acceptance Policy** — Determine the outcome based on:
-   - **Accepted**: The implementation succeeded, the benchmark completed with at least 10 games, and the candidate shows a statistically meaningful improvement over the baseline per the acceptance policy.
-   - **Rejected**: The implementation succeeded but the benchmark shows the candidate is weaker than or equivalent to the baseline. The candidate is discarded.
-   - **Inconclusive**: The implementation succeeded but the benchmark evidence is insufficient for a clear accept/reject decision (e.g., too few games, weak signal, high variance). The candidate may be refined in a future iteration.
+   - **Accepted**: The implementation succeeded, the benchmark evidence satisfies the documented policy, and `benchmark.sufficientForPromotion` is `true` with a statistically meaningful improvement over the baseline.
+   - **Rejected**: The implementation succeeded and benchmark evidence is strong enough to show the candidate is weaker than or equivalent to the baseline. The candidate is discarded.
+   - **Inconclusive**: The implementation succeeded but the benchmark evidence is insufficient for a clear accept/reject decision (for example: only screening evidence, weak signal, high variance, or confirmation still required). The candidate may be refined in a future iteration.
    - **Failed**: The implementation, correctness gate, or benchmark infrastructure failed (build error, test failure, benchmark crash). No evaluation of the candidate's merit is possible.
 
 3. **Write `decision.md`** — Record the decision with:
    - The final outcome (accepted, rejected, inconclusive, failed)
    - The reasoning for the decision
-   - Key evidence cited from the benchmark results
+   - Key evidence cited from the benchmark results, including `policyStage`, completed games, and whether `benchmark.sufficientForPromotion` was satisfied
    - Any recommendations for future iterations
 
 4. **Update `iteration.json`** — Set the state to the final outcome:
@@ -52,7 +52,7 @@ Determine the final outcome of the current iteration and persist the decision.
    - Add `decision` object with:
      - `outcome` — one of the allowed final states
      - `reasoning` — explanation of the decision
-     - `evidence` — key metrics that supported the decision
+     - `evidence` — key metrics that supported the decision, including benchmark policy fields used for the call
 
 ---
 

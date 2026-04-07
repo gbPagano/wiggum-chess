@@ -34,8 +34,9 @@ Every iteration proceeds through the following phases in order. The orchestratio
 ### 4. Benchmark
 
 - Run the benchmark suite against the candidate changes using the configured benchmark policy (see US-011 benchmark policy contract).
+- Start with screening evidence, and require stronger confirmation evidence before promotion when the screening signal is weak, early, or ambiguous.
 - Write `benchmark.md` with: benchmark settings, SPRT results, game count, and summary metrics.
-- Update `iteration.json` with benchmark status and the minimum required metrics (games_completed, sprt_result, score_per_game).
+- Update `iteration.json` with benchmark status plus the policy fields `benchmark.policyStage` and `benchmark.sufficientForPromotion`, along with the minimum required metrics (`gamesCompleted`, `sprtResult`, `scorePerGame`).
 
 ### 5. Decide
 

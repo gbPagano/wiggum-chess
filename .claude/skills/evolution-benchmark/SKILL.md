@@ -36,11 +36,11 @@ Run benchmarks against the candidate engine changes and record the results.
    - Identify the baseline engine binary or path from the session configuration
    - If builds fail, record the failure and mark benchmarking as failed
 
-3. **Run Benchmark Matches** — Execute match series between the candidate and baseline:
-   - Run at least one SPRT (Sequential Probability Ratio Test) match with a **minimum of 10 completed games**
+3. **Run Benchmark Matches** — Execute match series between the candidate and baseline using the documented benchmark policy:
+   - Start with a **screening** SPRT (Sequential Probability Ratio Test) run with a **minimum of 10 completed games**
    - Use the chess-runner match command or the equivalent orchestration benchmark command
    - Configure time controls appropriate for the engine type
-   - If the first result is weak or inconclusive, prefer stronger validation (more games or longer time control) before writing the final result
+   - If the screening result is weak, early, or otherwise ambiguous, run a **confirmation** benchmark with stronger evidence (more games, longer time control, or both) before claiming the result is sufficient for promotion
 
 4. **Write `benchmark.md`** — Record the benchmark outcome with:
    - Benchmark settings (time control, increment, opponent, game count)
@@ -52,9 +52,11 @@ Run benchmarks against the candidate engine changes and record the results.
 5. **Update `iteration.json`** — Patch the state and add benchmark metadata:
    - On success: set state to `"benchmarked"`, add `benchmark` object with:
      - `status` — `"completed"`
-     - `settings` — object with time_control, increment, games_requested
-     - `metrics` — object with games_completed, candidate_wins, baseline_wins, draws, elo_estimate, sprt_result, candidate_win_rate
-   - On partially completed or inconclusive runs: set state to `"benchmarked"`, include available metrics with notes
+     - `policyStage` — `"screening"` or `"confirmation"`
+     - `settings` — object with `timeControl`, `increment`, and `gamesRequested`
+     - `metrics` — object with `gamesCompleted`, `candidateWins`, `baselineWins`, `draws`, `candidateWinRate`, `scorePerGame`, `eloEstimate`, and `sprtResult`
+     - `sufficientForPromotion` — `true` only when the benchmark evidence satisfies the documented promotion policy
+   - On partially completed or inconclusive runs: set state to `"benchmarked"`, include available metrics with notes and leave `sufficientForPromotion` as `false`
    - On complete failure (no games finished): set state to `"failed"`, add `benchmark` object with `failureReason`
 
 ---
@@ -93,9 +95,10 @@ Any additional observations.
 
 ## Minimum Requirements
 
-- **At least 10 completed games** for screening SPRT validation
+- **At least 10 completed games** for the screening SPRT validation
+- Screening evidence alone is not automatically sufficient for promotion
+- If the screening result is weak, early, or otherwise ambiguous, run a confirmation benchmark and keep `benchmark.sufficientForPromotion` as `false` until the stronger evidence is complete
 - If fewer than 10 games complete due to infrastructure issues, mark the iteration as a benchmark failure
-- If the first benchmark result is too weak to confidently accept or reject, note this in `benchmark.md` so the decision skill knows evidence may be insufficient
 
 ---
 
@@ -114,7 +117,7 @@ After this skill runs, the following must be true:
 - `benchmark.md` exists in the iteration directory with benchmark results OR a failure reason
 - `iteration.json` has been updated with:
   - state set to `"benchmarked"` (completed) or `"failed"` (infrastructure failure)
-  - `benchmark` object with `status`, `metrics` (containing at minimum `games_completed` and `candidate_win_rate`), and optionally `settings` or `failureReason`
+  - `benchmark` object with `status`, `policyStage`, `settings`, `metrics`, and `sufficientForPromotion`, or `failureReason` on total failure
 
 ---
 

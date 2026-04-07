@@ -177,6 +177,30 @@ tasks/evolution-runs/20260406T185545Z/
 
 The `baselineRef` field is the authoritative source for which accepted baseline an iteration started from.
 
+### Benchmark policy contract
+
+- Every iteration that survives the correctness gate starts with a **screening benchmark**.
+- The screening benchmark must run **at least one SPRT match with a minimum of 10 completed games**.
+- A screening run may be enough to reject an obviously weaker candidate, but it is not automatically strong enough for promotion.
+- **Confirmation benchmarking is required before promotion** when the screening result is weak, early, or otherwise ambiguous. This includes cases where the SPRT output is inconclusive, the Elo estimate or score-per-game signal is near neutral, the completed game count is only at the minimum threshold, or benchmark anomalies reduce confidence.
+- Confirmation benchmarking should increase evidence strength by using more completed games, longer time control, or both.
+- `iteration.json` must store benchmark summary data under `benchmark` with, at minimum:
+  - `status`
+  - `policyStage` (`screening` or `confirmation`)
+  - `settings.timeControl`
+  - `settings.increment`
+  - `settings.gamesRequested`
+  - `metrics.gamesCompleted`
+  - `metrics.candidateWins`
+  - `metrics.baselineWins`
+  - `metrics.draws`
+  - `metrics.candidateWinRate`
+  - `metrics.scorePerGame`
+  - `metrics.eloEstimate`
+  - `metrics.sprtResult`
+  - `sufficientForPromotion` (`true` only when the configured policy says the evidence is strong enough)
+- The benchmark skill is responsible for writing these benchmark summary fields, and the decision skill must read them when deciding whether the iteration can be `accepted`, `rejected`, `inconclusive`, or `failed`.
+
 ## 4. User Stories
 
 ### US-001: Add orchestration script skeleton

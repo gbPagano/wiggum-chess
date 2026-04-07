@@ -176,8 +176,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Documented the screening-versus-confirmation benchmark policy in tasks/prd-wiggum-evolution-loop.md, including required iteration.json benchmark summary fields and the sufficientForPromotion gate; updated the evolution-benchmark and evolution-decide skill contracts to reference and apply the policy."
     },
     {
       "id": "US-012",
