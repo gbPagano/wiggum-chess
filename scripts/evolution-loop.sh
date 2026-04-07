@@ -298,6 +298,90 @@ print(count)
 PY
 }
 
+current_proposal_source() {
+  local iteration_json_path="$1"
+
+  python3 - <<'PY' "$iteration_json_path"
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+ideas = data.get('ideas', {}) or {}
+print(ideas.get('proposalSource', ''))
+PY
+}
+
+current_selected_idea() {
+  local iteration_json_path="$1"
+
+  python3 - <<'PY' "$iteration_json_path"
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+ideas = data.get('ideas', {}) or {}
+print(ideas.get('selectedIdea', ''))
+PY
+}
+
+mark_selected_idea_used() {
+  local iteration_json_path="$1"
+
+  python3 - <<'PY' "$iteration_json_path"
+import json
+import re
+import sys
+
+iteration_json_path = sys.argv[1]
+checklist_pattern = re.compile(r'^(\s*-\s*)\[ \](\s+)(.+\S\s*)$')
+pending_pattern = re.compile(r'^\s*-\s*\[ \]\s+.+\S\s*$')
+
+with open(iteration_json_path, 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+ideas = data.get('ideas', {}) or {}
+ideas_file = ideas.get('file', '')
+proposal_source = ideas.get('proposalSource', '')
+selected_idea = ideas.get('selectedIdea', '')
+
+if proposal_source != 'user_ideas_file' or not ideas_file or not selected_idea:
+    print('skipped')
+    raise SystemExit(0)
+
+with open(ideas_file, 'r', encoding='utf-8') as handle:
+    lines = handle.readlines()
+
+updated_lines = []
+matched = False
+for line in lines:
+    match = checklist_pattern.match(line)
+    if not matched and match and match.group(3).strip() == selected_idea.strip():
+        updated_lines.append(f"{match.group(1)}[x]{match.group(2)}{match.group(3).rstrip()}\n")
+        matched = True
+    else:
+        updated_lines.append(line)
+
+if matched:
+    with open(ideas_file, 'w', encoding='utf-8') as handle:
+        handle.writelines(updated_lines)
+
+pending_count = sum(1 for line in updated_lines if pending_pattern.match(line))
+ideas['pendingCount'] = pending_count
+ideas['selectedIdeaMarkedUsed'] = matched
+if matched:
+    data['ideas'] = ideas
+    with open(iteration_json_path, 'w', encoding='utf-8') as handle:
+        json.dump(data, handle, indent=2)
+        handle.write('\n')
+
+print('updated' if matched else 'missing')
+PY
+}
+
 resolve_ideas_file() {
   local raw_path="$1"
 
@@ -339,6 +423,7 @@ accepted_baseline_version=$ACCEPTED_BASELINE_VERSION
 accepted_baseline_ref=$ACCEPTED_BASELINE_REF
 ideas_file=$escaped_ideas_file
 ideas_file_pending_count=$IDEAS_FILE_PENDING_COUNT
+ideas_format=markdown-task-list
 max_iterations=$MAX_ITERATIONS
 max_infra_failures=$MAX_INFRA_FAILURES
 session_id=$session_id
@@ -998,7 +1083,10 @@ write_iteration_state() {
   "ideas": {
     "file": "$escaped_ideas_file_path",
     "pendingCount": $IDEAS_FILE_PENDING_COUNT,
-    "format": "markdown-task-list"
+    "format": "markdown-task-list",
+    "proposalSource": "",
+    "selectedIdea": "",
+    "selectedIdeaMarkedUsed": false
   },
   "state": "$initial_state",
   "isolation": {
@@ -1168,6 +1256,8 @@ Run only this iteration phase.
 Read and update the iteration artifacts at the paths recorded in iteration.json.
 If iteration.json or session.env points to an ideas file, treat it as an optional propose-phase input. The file format is Markdown checklist entries like `- [ ] idea text`, and only unchecked entries are pending ideas.
 If the ideas file field is empty, missing, or has zero pending checklist entries, behave exactly like the default self-propose flow.
+During /evolution-propose, always set `ideas.proposalSource` in iteration.json to either `user_ideas_file` or `self_proposed`. If you selected a checklist idea, also set `ideas.selectedIdea` to the exact checklist text and state the source clearly in hypothesis.md. If you self-propose, clear `ideas.selectedIdea` to an empty string and still state the source in hypothesis.md.
+Implementation, benchmark, and decision phases must treat `iteration.json` as the source of truth for the proposal source metadata instead of inferring it from hypothesis text.
 If you cannot complete the phase, record the failure in the appropriate iteration artifact and iteration.json.
 If no valid next hypothesis exists during /evolution-propose, record a stop signal in iteration.json using hypothesis.status = "no_hypothesis" and explain it in hypothesis.md.
 EOF
@@ -1216,6 +1306,8 @@ run_iteration() {
   local iteration_number="$1"
   local iteration_state
   local no_hypothesis_signal
+  local proposal_source
+  local idea_mark_result
 
   create_iteration_artifacts "$SESSION_DIR" "$iteration_number"
 
@@ -1237,6 +1329,13 @@ run_iteration() {
     STOP_REASON="no valid next hypothesis could be generated"
     STOP_REASON_DETAILS="iteration $iteration_number returned a no_hypothesis stop signal"
     remove_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH"
+    return 0
+  fi
+
+  local proposal_source
+  proposal_source="$(current_proposal_source "$LAST_ITERATION_STATE_PATH")"
+  if [[ "$proposal_source" != "user_ideas_file" && "$proposal_source" != "self_proposed" ]]; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "propose" "Proposal phase completed without writing ideas.proposalSource as 'user_ideas_file' or 'self_proposed'. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
 
@@ -1412,16 +1511,48 @@ while (( ITERATION_NUMBER <= MAX_ITERATIONS )); do
 
   case "$CURRENT_ITERATION_STATE" in
     accepted)
-      if ! promote_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_STATE_PATH" "$ITERATION_NUMBER"; then
+      idea_mark_result="$(mark_selected_idea_used "$LAST_ITERATION_STATE_PATH")"
+      if [[ "$idea_mark_result" == "updated" ]]; then
+        IDEAS_FILE_PENDING_COUNT="$(count_pending_ideas "$IDEAS_FILE_RESOLVED")"
+      fi
+
+      if [[ "$idea_mark_result" == "missing" ]]; then
+        record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Accepted iteration selected an idea from the ideas file but the checklist entry could not be marked as used."
+        CURRENT_ITERATION_STATE="failed"
+        INFRA_FAILURE_COUNT=$((INFRA_FAILURE_COUNT + 1))
+      elif ! promote_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_STATE_PATH" "$ITERATION_NUMBER"; then
         record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Accepted candidate could not be persisted as the next baseline."
         CURRENT_ITERATION_STATE="failed"
+        INFRA_FAILURE_COUNT=$((INFRA_FAILURE_COUNT + 1))
       else
         INFRA_FAILURE_COUNT=0
       fi
+
       remove_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH"
+      if (( INFRA_FAILURE_COUNT >= MAX_INFRA_FAILURES )); then
+        STOP_REASON="infrastructure failure limit reached"
+        STOP_REASON_DETAILS="$INFRA_FAILURE_COUNT failed iterations reached the configured limit of $MAX_INFRA_FAILURES"
+      fi
       ;;
     rejected|inconclusive)
-      INFRA_FAILURE_COUNT=0
+      idea_mark_result="$(mark_selected_idea_used "$LAST_ITERATION_STATE_PATH")"
+      if [[ "$idea_mark_result" == "updated" ]]; then
+        IDEAS_FILE_PENDING_COUNT="$(count_pending_ideas "$IDEAS_FILE_RESOLVED")"
+        write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
+      fi
+
+      if [[ "$idea_mark_result" == "missing" ]]; then
+        record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Iteration selected an idea from the ideas file but the checklist entry could not be marked as used."
+        CURRENT_ITERATION_STATE="failed"
+        INFRA_FAILURE_COUNT=$((INFRA_FAILURE_COUNT + 1))
+        if (( INFRA_FAILURE_COUNT >= MAX_INFRA_FAILURES )); then
+          STOP_REASON="infrastructure failure limit reached"
+          STOP_REASON_DETAILS="$INFRA_FAILURE_COUNT failed iterations reached the configured limit of $MAX_INFRA_FAILURES"
+        fi
+      else
+        INFRA_FAILURE_COUNT=0
+      fi
+
       remove_candidate_workspace "$LAST_CANDIDATE_WORKSPACE_PATH"
       ;;
     failed)

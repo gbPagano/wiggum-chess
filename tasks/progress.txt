@@ -4,6 +4,7 @@
 - For evolution-loop phase execution, keep terminal output concise and write raw skill stdout/stderr to per-iteration log files under `iterations/<N>/phase-logs/`; record those paths in `iteration.json` so later phases and operators can inspect failures without banner noise.
 - Keep the loop's operator-facing phase list in one ordered sequence and derive both the full plan and remaining-phase output from it so progress text stays synchronized across iterations.
 - Optional propose inputs should be normalized by the loop before invoking the skill: record the resolved source in both `session.env` and `iteration.json`, but collapse empty Markdown checklist files back to the same self-propose path as no input.
+- When a proposal comes from an operator checklist, store the exact selected idea text plus `ideas.proposalSource` in `iteration.json`, then have the orchestration layer mark that checklist entry as `[x]` only after the iteration reaches a tested terminal outcome.
 
 Started: 2026-04-07
 ---
@@ -34,4 +35,14 @@ Started: 2026-04-07
 - **Learnings for future iterations:**
   - Normalize optional operator inputs in the orchestration layer first, then hand skills a simple contract through `session.env` and `iteration.json`.
   - For checklist-backed idea sources, treat only unchecked `- [ ]` entries as pending ideas and ignore empty files by clearing the resolved input path.
+---
+
+## 2026-04-07 10:02:11 PDT - US-004
+- Extended `scripts/evolution-loop.sh` so iteration artifacts now reserve `ideas.proposalSource`, `ideas.selectedIdea`, and `ideas.selectedIdeaMarkedUsed`, and the propose phase is required to write either `user_ideas_file` or `self_proposed` before the loop advances.
+- Updated the per-phase worker prompt so `hypothesis.md` must state the proposal source while later phases read the source of truth from `iteration.json`.
+- Added post-decision checklist bookkeeping so any selected operator idea is marked from `- [ ]` to `- [x]` only after the iteration reaches a tested terminal outcome, with the updated pending count written back into iteration metadata.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Proposal provenance belongs in machine-readable iteration metadata, not just narrative Markdown, because later phases need a stable contract.
+  - Mark curated ideas as used only after the iteration has been fully exercised; doing it at propose time would burn ideas that never made it through testing.
 ---

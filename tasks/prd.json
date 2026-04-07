@@ -66,8 +66,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added explicit proposal provenance fields in iteration.json, required the propose phase to record whether the hypothesis came from the ideas checklist or self-proposal, required hypothesis.md to state that source, and marked selected checklist ideas as used only after the iteration reached a tested terminal outcome."
     },
     {
       "id": "US-005",
