@@ -32,7 +32,9 @@ OUTPUT_DIR="$REPO_ROOT/tasks/evolution-runs"
 MAX_ITERATIONS=10
 MAX_INFRA_FAILURES=3
 ACCEPTED_BASELINE_VERSION=""
-ACCEPTED_BASELINE_REF=""
+ACCEPTED_BASELINE_PATH=""
+ACCEPTED_BASELINE_BINARY=""
+ACCEPTED_BASELINE_SOURCE_REF=""
 ACCEPTED_BASELINE_MAJOR=0
 ACCEPTED_BASELINE_MINOR=0
 SESSION_SUMMARY_FILENAME="summary.md"
@@ -170,9 +172,9 @@ write_session_summary_final() {
   local stop_reason="$4"
   local stop_reason_details="$5"
   local accepted_baseline_version="$6"
-  local accepted_baseline_ref="$7"
+  local accepted_baseline_path="$7"
 
-  python3 - <<'PY' "$summary_path" "$session_dir" "$SESSION_ID" "$BASELINE_VERSION" "$MAX_ITERATIONS" "$completed_iterations" "$stop_reason" "$stop_reason_details" "$accepted_baseline_version" "$accepted_baseline_ref"
+  python3 - <<'PY' "$summary_path" "$session_dir" "$SESSION_ID" "$BASELINE_VERSION" "$MAX_ITERATIONS" "$completed_iterations" "$stop_reason" "$stop_reason_details" "$accepted_baseline_version" "$accepted_baseline_path"
 import json
 import os
 import sys
@@ -187,7 +189,7 @@ import sys
     stop_reason,
     stop_reason_details,
     accepted_baseline_version,
-    accepted_baseline_ref,
+    accepted_baseline_path,
 ) = sys.argv[1:]
 
 iterations_dir = os.path.join(session_dir, 'iterations')
@@ -234,7 +236,7 @@ lines = [
     f'- Session id: {session_id}',
     f'- Baseline version: {baseline_version}',
     f'- Final accepted baseline version: {accepted_baseline_version}',
-    f'- Final accepted baseline ref: {accepted_baseline_ref}',
+    f'- Final accepted baseline path: {accepted_baseline_path}',
     f'- Max iterations: {max_iterations}',
     f'- Completed iterations: {completed_iterations}',
     f'- Session directory: {session_dir}',
@@ -618,15 +620,20 @@ write_session_metadata() {
   local escaped_ideas_file
   local escaped_candidate_binary_path
   local escaped_candidate_version
+  local escaped_baseline_path
+  local escaped_baseline_binary
 
   escaped_ideas_file="$(json_escape "$IDEAS_FILE_RESOLVED")"
   escaped_candidate_binary_path="$(json_escape "$LAST_CANDIDATE_BINARY_PATH")"
   escaped_candidate_version="$(json_escape "$LAST_CANDIDATE_VERSION")"
+  escaped_baseline_path="$(json_escape "$ACCEPTED_BASELINE_PATH")"
+  escaped_baseline_binary="$(json_escape "$ACCEPTED_BASELINE_BINARY")"
 
   cat <<EOF > "$metadata_path"
 baseline_version=$BASELINE_VERSION
 accepted_baseline_version=$ACCEPTED_BASELINE_VERSION
-accepted_baseline_ref=$ACCEPTED_BASELINE_REF
+accepted_baseline_path=$escaped_baseline_path
+accepted_baseline_binary=$escaped_baseline_binary
 accepted_baseline_major=$ACCEPTED_BASELINE_MAJOR
 accepted_baseline_minor=$ACCEPTED_BASELINE_MINOR
 candidate_version=$escaped_candidate_version
@@ -642,16 +649,83 @@ summary_file=$SESSION_SUMMARY_FILENAME
 EOF
 }
 
-resolve_accepted_baseline_ref() {
-  if git -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
-    ACCEPTED_BASELINE_REF="$(git -C "$REPO_ROOT" rev-parse HEAD)"
-  else
-    ACCEPTED_BASELINE_REF="main"
+baseline_version_path() {
+  local version_tag="$1"
+
+  printf '%s/chess-engine/versions/%s\n' "$REPO_ROOT" "$version_tag"
+}
+
+baseline_binary_path() {
+  local version_path="$1"
+
+  printf '%s/wiggum-engine\n' "$version_path"
+}
+
+resolve_accepted_baseline_artifacts() {
+  ACCEPTED_BASELINE_VERSION="$BASELINE_VERSION"
+  ACCEPTED_BASELINE_PATH="$(baseline_version_path "$ACCEPTED_BASELINE_VERSION")"
+  ACCEPTED_BASELINE_BINARY="$(baseline_binary_path "$ACCEPTED_BASELINE_PATH")"
+
+  if [[ ! -d "$ACCEPTED_BASELINE_PATH" ]]; then
+    echo "Error: baseline version directory does not exist: $ACCEPTED_BASELINE_PATH" >&2
+    exit 1
   fi
 
-  ACCEPTED_BASELINE_VERSION="$BASELINE_VERSION"
+  if [[ ! -f "$ACCEPTED_BASELINE_BINARY" ]]; then
+    echo "Error: baseline engine binary is missing: $ACCEPTED_BASELINE_BINARY" >&2
+    exit 1
+  fi
+
+  if [[ ! -x "$ACCEPTED_BASELINE_BINARY" ]]; then
+    chmod +x "$ACCEPTED_BASELINE_BINARY"
+  fi
+
+  if git -C "$REPO_ROOT" rev-parse --verify HEAD >/dev/null 2>&1; then
+    ACCEPTED_BASELINE_SOURCE_REF="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  else
+    ACCEPTED_BASELINE_SOURCE_REF="main"
+  fi
 
   IFS='|' read -r ACCEPTED_BASELINE_MAJOR ACCEPTED_BASELINE_MINOR <<< "$(parse_version_tag "$ACCEPTED_BASELINE_VERSION")"
+}
+
+seed_baseline_artifact_if_missing() {
+  local version_path="$1"
+  local binary_path="$2"
+  local source_binary="$REPO_ROOT/target/debug/chess-engine"
+
+  if [[ -f "$binary_path" ]]; then
+    return 0
+  fi
+
+  if [[ ! -x "$source_binary" ]]; then
+    return 1
+  fi
+
+  cp "$source_binary" "$binary_path"
+  chmod +x "$binary_path"
+}
+
+ensure_initial_baseline_artifact() {
+  local version_path
+  local binary_path
+
+  version_path="$(baseline_version_path "$BASELINE_VERSION")"
+  binary_path="$(baseline_binary_path "$version_path")"
+
+  if [[ "$BASELINE_VERSION" != "v0.1" ]]; then
+    return 0
+  fi
+
+  if [[ ! -d "$version_path" ]]; then
+    return 0
+  fi
+
+  seed_baseline_artifact_if_missing "$version_path" "$binary_path"
+}
+
+resolve_accepted_baseline_state() {
+  resolve_accepted_baseline_artifacts
 }
 
 candidate_workspace_root() {
@@ -1226,7 +1300,7 @@ setup_candidate_workspace() {
   mkdir -p "$(candidate_workspace_root "$session_dir")"
   remove_candidate_workspace "$candidate_dir"
 
-  if create_candidate_workspace "$candidate_dir" "$ACCEPTED_BASELINE_REF"; then
+  if create_candidate_workspace "$candidate_dir" "$ACCEPTED_BASELINE_SOURCE_REF"; then
     if ! create_candidate_branch "$candidate_dir" "$candidate_branch"; then
       setup_status="failed"
       setup_error="failed to create candidate branch $candidate_branch"
@@ -1234,7 +1308,7 @@ setup_candidate_workspace() {
     fi
   else
     setup_status="failed"
-    setup_error="failed to create isolated git worktree at $candidate_dir from baseline $ACCEPTED_BASELINE_REF"
+    setup_error="failed to create isolated git worktree at $candidate_dir from baseline source $ACCEPTED_BASELINE_SOURCE_REF"
     rm -rf "$candidate_dir"
   fi
 
@@ -1258,7 +1332,7 @@ write_iteration_state() {
   local correctness_dir
   local correctness_results
   local escaped_baseline_version
-  local escaped_baseline_ref
+  local escaped_baseline_path
   local escaped_candidate_workspace_path
   local escaped_candidate_branch
   local escaped_candidate_setup_status
@@ -1276,7 +1350,7 @@ write_iteration_state() {
   mkdir -p "$phase_logs_dir"
 
   escaped_baseline_version="$(json_escape "$ACCEPTED_BASELINE_VERSION")"
-  escaped_baseline_ref="$(json_escape "$ACCEPTED_BASELINE_REF")"
+  escaped_baseline_path="$(json_escape "$ACCEPTED_BASELINE_PATH")"
   escaped_candidate_workspace_path="$(json_escape "$candidate_workspace_path")"
   escaped_candidate_branch="$(json_escape "$candidate_branch")"
   escaped_candidate_setup_status="$(json_escape "$candidate_setup_status")"
@@ -1295,7 +1369,8 @@ write_iteration_state() {
 {
   "iteration": $iteration_number,
   "baselineVersion": "$escaped_baseline_version",
-  "baselineRef": "$escaped_baseline_ref",
+  "baselinePath": "$escaped_baseline_path",
+  "baselineBinary": "$(baseline_binary_path "$ACCEPTED_BASELINE_PATH")",
   "ideas": {
     "file": "$escaped_ideas_file_path",
     "pendingCount": $IDEAS_FILE_PENDING_COUNT,
@@ -1485,6 +1560,7 @@ If iteration.json or session.env points to an ideas file, treat it as an optiona
 If the ideas file field is empty, missing, or has zero pending checklist entries, behave exactly like the default self-propose flow.
 During /evolution-propose, always set `ideas.proposalSource` in iteration.json to either `user_ideas_file` or `self_proposed`. If you selected a checklist idea, also set `ideas.selectedIdea` to the exact checklist text and state the source clearly in hypothesis.md. If you self-propose, clear `ideas.selectedIdea` to an empty string and still state the source in hypothesis.md.
 Implementation, benchmark, and decision phases must treat `iteration.json` as the source of truth for the proposal source metadata instead of inferring it from hypothesis text.
+Benchmark and decision phases must resolve the stored baseline engine from `iteration.json.baselinePath` and `iteration.json.baselineBinary` (or `session.env` `accepted_baseline_path` / `accepted_baseline_binary`) instead of relying on git refs.
 If you cannot complete the phase, record the failure in the appropriate iteration artifact and iteration.json.
 If no valid next hypothesis exists during /evolution-propose, record a stop signal in iteration.json using hypothesis.status = "no_hypothesis" and explain it in hypothesis.md.
 EOF
@@ -1520,10 +1596,12 @@ promote_candidate_workspace() {
     git -C "$candidate_workspace_path" commit -m "chore: accept evolution iteration $iteration_number" >/dev/null 2>&1
   fi
 
-  ACCEPTED_BASELINE_REF="$(git -C "$candidate_workspace_path" rev-parse HEAD)"
+  ACCEPTED_BASELINE_SOURCE_REF="$(git -C "$candidate_workspace_path" rev-parse HEAD)"
   promoted_version="$(current_promoted_version "$iteration_json_path")"
   if [[ -n "$promoted_version" ]]; then
     ACCEPTED_BASELINE_VERSION="$promoted_version"
+    ACCEPTED_BASELINE_PATH="$(baseline_version_path "$ACCEPTED_BASELINE_VERSION")"
+    ACCEPTED_BASELINE_BINARY="$(baseline_binary_path "$ACCEPTED_BASELINE_PATH")"
     IFS='|' read -r ACCEPTED_BASELINE_MAJOR ACCEPTED_BASELINE_MINOR <<< "$(parse_version_tag "$ACCEPTED_BASELINE_VERSION")"
   fi
 
@@ -1693,6 +1771,7 @@ if ! [[ "$MAX_INFRA_FAILURES" =~ ^[1-9][0-9]*$ ]]; then
 fi
 
 resolve_ideas_file "$IDEAS_FILE"
+ensure_initial_baseline_artifact
 
 if ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
   echo "Error: Claude CLI binary '$CLAUDE_BIN' was not found in PATH." >&2
@@ -1709,13 +1788,15 @@ INFRA_FAILURE_COUNT=0
 ITERATION_NUMBER=$INITIAL_ITERATION_NUMBER
 LAST_COMPLETED_ITERATION=0
 
-resolve_accepted_baseline_ref
+resolve_accepted_baseline_state
 mkdir -p "$SESSION_DIR"
 write_session_summary_placeholder "$SESSION_SUMMARY_PATH"
 write_session_metadata "$SESSION_METADATA_PATH" "$SESSION_ID" "$SESSION_DIR"
 
 echo "Starting Wiggum evolution loop"
 echo "Baseline version: $BASELINE_VERSION"
+echo "Baseline path: $ACCEPTED_BASELINE_PATH"
+echo "Baseline binary: $ACCEPTED_BASELINE_BINARY"
 if [[ -n "$IDEAS_FILE_RESOLVED" ]]; then
   echo "Ideas file: $IDEAS_FILE_RESOLVED"
   echo "Pending checklist ideas: $IDEAS_FILE_PENDING_COUNT"
@@ -1830,7 +1911,7 @@ write_session_summary_final \
   "$STOP_REASON" \
   "$STOP_REASON_DETAILS" \
   "$ACCEPTED_BASELINE_VERSION" \
-  "$ACCEPTED_BASELINE_REF"
+  "$ACCEPTED_BASELINE_PATH"
 
 echo
 echo "Evolution loop stopped."
@@ -1840,5 +1921,6 @@ if [[ -n "$STOP_REASON_DETAILS" ]]; then
 fi
 echo "Completed iterations: $LAST_COMPLETED_ITERATION"
 echo "Accepted baseline version: $ACCEPTED_BASELINE_VERSION"
-echo "Accepted baseline ref: $ACCEPTED_BASELINE_REF"
+echo "Accepted baseline path: $ACCEPTED_BASELINE_PATH"
+echo "Accepted baseline binary: $ACCEPTED_BASELINE_BINARY"
 echo "Session summary written to: $SESSION_SUMMARY_PATH"

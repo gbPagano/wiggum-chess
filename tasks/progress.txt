@@ -6,6 +6,7 @@
 - Optional propose inputs should be normalized by the loop before invoking the skill: record the resolved source in both `session.env` and `iteration.json`, but collapse empty Markdown checklist files back to the same self-propose path as no input.
 - When a proposal comes from an operator checklist, store the exact selected idea text plus `ideas.proposalSource` in `iteration.json`, then have the orchestration layer mark that checklist entry as `[x]` only after the iteration reaches a tested terminal outcome.
 - Candidate versioning belongs to the orchestration layer: once `ideas.proposalSource` is known, compute the tag there, sync all workspace Cargo versions, and persist the generated `target/debug/wiggum-engine` path into both `session.env` and `iteration.json` before benchmark/decision phases consume it.
+- Baseline resolution for the evolution loop is also orchestration-owned: expose `accepted_baseline_path` / `accepted_baseline_binary` in `session.env` and `baselinePath` / `baselineBinary` in `iteration.json`, while keeping any git ref only as internal setup state for creating candidate worktrees.
 
 ## 2026-04-07 10:40:36 PDT - US-005
 - Added orchestration-owned candidate versioning to `scripts/evolution-loop.sh`, including proposal-source-based tag selection, synchronized Cargo manifest bumps across all three crates, candidate metadata in `session.env` / `iteration.json`, and a built debug artifact copied to `target/debug/wiggum-engine`.
@@ -18,6 +19,15 @@
 
 
 Started: 2026-04-07
+---
+
+## 2026-04-07 11:27:00 PDT - US-006
+- Changed `scripts/evolution-loop.sh` to resolve the active baseline from `chess-engine/versions/<tag>/wiggum-engine`, fail fast when the version directory or stored binary is missing, and write baseline artifact paths into both `session.env` and `iteration.json`.
+- Kept git commit resolution internal-only for candidate worktree creation, updated worker guidance to consume baseline artifact paths, and seeded `chess-engine/versions/v0.1/wiggum-engine` from the existing debug build so the first baseline satisfies the new contract.
+- Files changed: `CLAUDE.md`, `chess-engine/versions/v0.1/wiggum-engine`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Treat baseline version directories as the operator-facing source of truth; any git ref should stay an internal implementation detail for worktree setup only.
+  - When tightening artifact contracts, seed the current baseline forward if needed so the new fail-fast checks do not strand the only promotable starting point.
 ---
 
 ## 2026-04-07 09:10:01 PDT - US-001

@@ -100,8 +100,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Resolved baseline selection through chess-engine/versions/<tag>/ instead of exposing git refs, required a stored wiggum-engine binary in the version directory, recorded accepted_baseline_path/accepted_baseline_binary in session.env plus baselinePath/baselineBinary in iteration.json, and seeded the initial v0.1 artifact so the new fail-fast path has a valid baseline binary."
     },
     {
       "id": "US-007",
