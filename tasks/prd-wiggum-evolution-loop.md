@@ -412,6 +412,24 @@ The promoted version directory under `chess-engine/versions/<new-tag>/` is expec
 
 The decision flow is responsible for applying this contract when it determines whether a candidate can be promoted.
 
+### Discard and restore contract
+
+Non-winning iterations (`rejected`, `failed`, and `inconclusive`) must follow a discard path that removes the candidate from the promotion path without erasing the audit trail.
+
+- Candidate code changes stay isolated inside the per-iteration worktree at `tasks/evolution-runs/<session-id>/candidate-workspaces/<N>/` until the orchestration discard step removes that worktree or otherwise detaches it from future baseline selection.
+- The accepted baseline remains the authority for future work: discarding a non-winning candidate must not change `accepted_baseline_ref`, `accepted_baseline_version`, workspace crate versions, or any promoted `chess-engine/versions/<tag>/` directory.
+- Iteration artifacts under `iterations/<N>/` are always preserved for audit, including `iteration.json`, `hypothesis.md`, `implementation.md`, `correctness/results.md`, `benchmark.md`, and `decision.md`, even when the candidate workspace is discarded.
+- The next iteration starts from the latest accepted baseline reference recorded by the orchestration script, not from the discarded candidate branch or worktree.
+- A discarded candidate branch or worktree remains optional audit evidence only; it must never become an implicit baseline for the next iteration.
+
+#### Discard outcome expectations
+
+- `rejected` — benchmark evidence was strong enough to discard the candidate. The candidate workspace can be removed after the decision, while all iteration artifacts remain in place.
+- `failed` — infrastructure, correctness, or benchmark execution failed. The candidate workspace can be removed once the failure is recorded, while all iteration artifacts remain in place for diagnosis.
+- `inconclusive` — evidence was insufficient for promotion. The baseline still remains unchanged, and the candidate workspace must stay isolated from future iterations unless a later explicit revisit chooses to inspect it.
+
+The orchestration script must reference this discard policy when describing iteration handling so users can verify that removal of non-winning candidates is safe and auditable.
+
 ---
 
 ### US-013: Add versioning policy contract
@@ -428,11 +446,11 @@ The decision flow is responsible for applying this contract when it determines w
 **Description:** As a developer, I want a documented discard path so that non-winning candidates can be removed safely.
 
 **Acceptance Criteria:**
-- [ ] The project documents how rejected, failed, and inconclusive candidates are discarded or isolated away.
-- [ ] The discard path preserves iteration artifacts for audit.
-- [ ] The discard path guarantees the accepted baseline remains unchanged.
-- [ ] The next iteration start point after discard is documented.
-- [ ] The discard policy is referenced by the orchestration script.
+- [x] The project documents how rejected, failed, and inconclusive candidates are discarded or isolated away.
+- [x] The discard path preserves iteration artifacts for audit.
+- [x] The discard path guarantees the accepted baseline remains unchanged.
+- [x] The next iteration start point after discard is documented.
+- [x] The discard policy is referenced by the orchestration script.
 
 ### US-015: Add loop control and stop conditions
 **Description:** As a developer, I want the script to control iteration flow so that a full session can run unattended until a clear stop condition is reached.

@@ -224,8 +224,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Documented the discard-and-restore contract in tasks/prd-wiggum-evolution-loop.md, covering how rejected/failed/inconclusive candidates stay isolated from the accepted baseline while iteration artifacts remain preserved for audit; updated scripts/evolution-loop.sh to reference the discard policy explicitly in its startup output."
     },
     {
       "id": "US-015",
