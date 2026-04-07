@@ -21,7 +21,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORKER_GUIDANCE="$REPO_ROOT/.claude/evolution/CLAUDE.md"
 STATE_MACHINE_REFERENCE="$REPO_ROOT/tasks/prd-wiggum-evolution-loop.md"
 DISCARD_POLICY_REFERENCE="$REPO_ROOT/tasks/prd-wiggum-evolution-loop.md"
-CLAUDE_BIN="${CLAUDE_BIN:-claude}"
+CLAUDE_BIN="${CLAUDE_BIN:-openclaude}"
 
 BASELINE_VERSION=""
 OUTPUT_DIR="$REPO_ROOT/tasks/evolution-runs"
@@ -32,6 +32,7 @@ ACCEPTED_BASELINE_REF=""
 SESSION_SUMMARY_FILENAME="summary.md"
 ITERATIONS_DIRNAME="iterations"
 CANDIDATE_WORKSPACES_DIRNAME="candidate-workspaces"
+PHASE_LOGS_DIRNAME="phase-logs"
 INITIAL_ITERATION_NUMBER=1
 ITERATION_STATE_FILENAME="iteration.json"
 HYPOTHESIS_FILENAME="hypothesis.md"
@@ -39,6 +40,12 @@ IMPLEMENTATION_FILENAME="implementation.md"
 BENCHMARK_FILENAME="benchmark.md"
 DECISION_FILENAME="decision.md"
 CORRECTNESS_DIRNAME="correctness"
+LAST_PHASE_LOG_PATH=""
+LAST_PHASE_EXIT_STATUS=0
+LAST_PHASE_SKILL_NAME=""
+LAST_PHASE_NAME=""
+LAST_PHASE_RESULT=""
+LAST_PHASE_LOG_RELATIVE_PATH=""
 
 usage() {
   sed -n '1,15p' "$0"
@@ -341,6 +348,80 @@ Status: pending
 
 $description
 EOF
+}
+
+phase_logs_dir_path() {
+  local iteration_dir="$1"
+
+  printf '%s/%s\n' "$iteration_dir" "$PHASE_LOGS_DIRNAME"
+}
+
+phase_log_path() {
+  local iteration_dir="$1"
+  local phase_name="$2"
+
+  printf '%s/%s.log\n' "$(phase_logs_dir_path "$iteration_dir")" "$phase_name"
+}
+
+phase_log_relative_path() {
+  local iteration_dir="$1"
+  local phase_name="$2"
+
+  python3 - <<'PY' "$SESSION_DIR" "$(phase_log_path "$iteration_dir" "$phase_name")"
+import os
+import sys
+
+session_dir, phase_log_path = sys.argv[1:]
+print(os.path.relpath(phase_log_path, session_dir))
+PY
+}
+
+current_iteration_result() {
+  local iteration_json_path="$1"
+
+  python3 - <<'PY' "$iteration_json_path"
+import json
+import sys
+
+with open(sys.argv[1], 'r', encoding='utf-8') as handle:
+    data = json.load(handle)
+
+print(data.get('state', ''))
+PY
+}
+
+run_logged_phase() {
+  local phase_name="$1"
+  local skill_name="$2"
+  local candidate_workspace_path="$3"
+  local iteration_dir="$4"
+  local iteration_json_path="$5"
+  local phase_log
+  local phase_status=0
+  local iteration_result
+
+  phase_log="$(phase_log_path "$iteration_dir" "$phase_name")"
+  mkdir -p "$(phase_logs_dir_path "$iteration_dir")"
+
+  if run_claude_skill "$skill_name" "$candidate_workspace_path" "$iteration_dir" "$iteration_json_path" >"$phase_log" 2>&1; then
+    phase_status=0
+  else
+    phase_status=$?
+  fi
+
+  iteration_result="$(current_iteration_result "$iteration_json_path")"
+
+  LAST_PHASE_LOG_PATH="$phase_log"
+  LAST_PHASE_EXIT_STATUS="$phase_status"
+  LAST_PHASE_SKILL_NAME="$skill_name"
+  LAST_PHASE_NAME="$phase_name"
+  LAST_PHASE_RESULT="$iteration_result"
+  LAST_PHASE_LOG_RELATIVE_PATH="$(phase_log_relative_path "$iteration_dir" "$phase_name")"
+
+  echo "Phase $phase_name result: ${iteration_result:-unknown}"
+  echo "Phase $phase_name log: $LAST_PHASE_LOG_RELATIVE_PATH"
+
+  return "$phase_status"
 }
 
 correctness_dir_path() {
@@ -764,6 +845,8 @@ write_iteration_state() {
   local implementation_path="$iteration_dir/$IMPLEMENTATION_FILENAME"
   local benchmark_path="$iteration_dir/$BENCHMARK_FILENAME"
   local decision_path="$iteration_dir/$DECISION_FILENAME"
+  local phase_logs_dir
+  local escaped_phase_logs_dir
   local correctness_dir
   local correctness_results
   local escaped_baseline_version
@@ -776,8 +859,10 @@ write_iteration_state() {
 
   correctness_dir="$(correctness_dir_path "$iteration_dir")"
   correctness_results="$(correctness_results_path "$iteration_dir")"
+  phase_logs_dir="$(phase_logs_dir_path "$iteration_dir")"
 
   mkdir -p "$correctness_dir"
+  mkdir -p "$phase_logs_dir"
 
   escaped_baseline_version="$(json_escape "$ACCEPTED_BASELINE_VERSION")"
   escaped_baseline_ref="$(json_escape "$ACCEPTED_BASELINE_REF")"
@@ -785,6 +870,7 @@ write_iteration_state() {
   escaped_candidate_branch="$(json_escape "$candidate_branch")"
   escaped_candidate_setup_status="$(json_escape "$candidate_setup_status")"
   escaped_candidate_setup_error="$(json_escape "$candidate_setup_error")"
+  escaped_phase_logs_dir="$(json_escape "$phase_logs_dir")"
 
   initial_state="initialized"
   if [[ "$candidate_setup_status" == "failed" ]]; then
@@ -821,7 +907,14 @@ write_iteration_state() {
     "implementation": "$implementation_path",
     "correctness": "$correctness_results",
     "benchmark": "$benchmark_path",
-    "decision": "$decision_path"
+    "decision": "$decision_path",
+    "phaseLogsDir": "$escaped_phase_logs_dir",
+    "phaseLogs": {
+      "propose": "$(phase_log_path "$iteration_dir" "propose")",
+      "implement": "$(phase_log_path "$iteration_dir" "implement")",
+      "benchmark": "$(phase_log_path "$iteration_dir" "benchmark")",
+      "decide": "$(phase_log_path "$iteration_dir" "decide")"
+    }
   }
 }
 EOF
@@ -1011,8 +1104,8 @@ run_iteration() {
   fi
 
   update_iteration_state "$LAST_ITERATION_STATE_PATH" "initialized" "proposing" "proposal phase start"
-  if ! run_claude_skill "evolution-propose" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
-    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "propose" "Claude skill execution failed during the propose phase."
+  if ! run_logged_phase "propose" "evolution-propose" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "propose" "Claude skill execution failed during the propose phase. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
 
@@ -1026,13 +1119,13 @@ run_iteration() {
 
   iteration_state="$(current_iteration_state "$LAST_ITERATION_STATE_PATH")"
   if [[ "$iteration_state" != "proposed" ]]; then
-    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "propose" "Proposal phase completed without writing state 'proposed'."
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "propose" "Proposal phase completed without writing state 'proposed'. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
 
   update_iteration_state "$LAST_ITERATION_STATE_PATH" "proposed" "implementing" "implementation phase start"
-  if ! run_claude_skill "evolution-implement" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
-    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Claude skill execution failed during the implementation phase."
+  if ! run_logged_phase "implement" "evolution-implement" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Claude skill execution failed during the implementation phase. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
 
@@ -1042,7 +1135,7 @@ run_iteration() {
   fi
 
   if [[ "$iteration_state" != "implemented" ]]; then
-    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Implementation phase completed without writing state 'implemented'."
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "implement" "Implementation phase completed without writing state 'implemented'. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
 
@@ -1056,8 +1149,8 @@ run_iteration() {
     return 0
   fi
 
-  if ! run_claude_skill "evolution-benchmark" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
-    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "benchmark" "Claude skill execution failed during the benchmark phase."
+  if ! run_logged_phase "benchmark" "evolution-benchmark" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "benchmark" "Claude skill execution failed during the benchmark phase. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
 
@@ -1067,13 +1160,13 @@ run_iteration() {
   fi
 
   if [[ "$iteration_state" != "benchmarked" ]]; then
-    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "benchmark" "Benchmark phase completed without writing state 'benchmarked'."
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "benchmark" "Benchmark phase completed without writing state 'benchmarked'. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
 
   update_iteration_state "$LAST_ITERATION_STATE_PATH" "benchmarked" "deciding" "decision phase start"
-  if ! run_claude_skill "evolution-decide" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
-    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Claude skill execution failed during the decision phase."
+  if ! run_logged_phase "decide" "evolution-decide" "$LAST_CANDIDATE_WORKSPACE_PATH" "$LAST_ITERATION_DIR" "$LAST_ITERATION_STATE_PATH"; then
+    record_phase_failure "$LAST_ITERATION_STATE_PATH" "$LAST_DECISION_PATH" "$LAST_BENCHMARK_PATH" "decision" "Claude skill execution failed during the decision phase. See $LAST_PHASE_LOG_RELATIVE_PATH for details."
     return 0
   fi
 }
