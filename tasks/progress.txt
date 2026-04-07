@@ -8,6 +8,17 @@
 - Candidate versioning belongs to the orchestration layer: once `ideas.proposalSource` is known, compute the tag there, sync all workspace Cargo versions, and persist the generated `target/debug/wiggum-engine` path into both `session.env` and `iteration.json` before benchmark/decision phases consume it.
 - Baseline resolution for the evolution loop is also orchestration-owned: expose `accepted_baseline_path` / `accepted_baseline_binary` in `session.env` and `baselinePath` / `baselineBinary` in `iteration.json`, while keeping any git ref only as internal setup state for creating candidate worktrees.
 - Promotion persistence should copy the built candidate binary into `chess-engine/versions/<tag>/wiggum-engine` and then update both `iteration.json.decision.promotion` and `session.env` from that stored artifact path, so future iterations never depend on the candidate worktree or target layout.
+- Treat `session.env` `active_baseline_*` fields as the stable operator-facing alias for the current promoted baseline, and keep the final session summary's promotion history derived from per-iteration decision metadata so accepted baseline changes are auditable in order.
+
+## 2026-04-07 11:32:03 PDT - US-008
+- Added explicit `active_baseline_version`, `active_baseline_path`, and `active_baseline_binary` fields to `session.env`, keeping them synchronized with accepted baseline state so accepted promotions immediately become the next iteration's active baseline contract.
+- Expanded the final session summary generation to list accepted baseline promotions in iteration order, including stored binary paths, while leaving non-promoting rejected/failed/inconclusive outcomes unchanged.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Session metadata should expose a stable operator-facing active-baseline contract even when internal orchestration still tracks accepted baseline details under older field names.
+  - Promotion history is best reconstructed from per-iteration decision metadata at summary time so ordered accepted baselines stay auditable without extra session-level bookkeeping.
+---
+
 
 ## 2026-04-07 10:40:36 PDT - US-005
 - Added orchestration-owned candidate versioning to `scripts/evolution-loop.sh`, including proposal-source-based tag selection, synchronized Cargo manifest bumps across all three crates, candidate metadata in `session.env` / `iteration.json`, and a built debug artifact copied to `target/debug/wiggum-engine`.

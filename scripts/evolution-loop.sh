@@ -194,6 +194,7 @@ import sys
 
 iterations_dir = os.path.join(session_dir, 'iterations')
 entries = []
+promotion_history = []
 accepted_versions = []
 rejected_attempts = []
 
@@ -225,7 +226,13 @@ if os.path.isdir(iterations_dir):
         entries.append(summary)
 
         if outcome == 'accepted':
-            accepted_versions.append(promoted_version or data.get('baselineVersion', 'unknown'))
+            effective_version = promoted_version or data.get('baselineVersion', 'unknown')
+            accepted_versions.append(effective_version)
+            promotion_history.append({
+                'iteration': data.get('iteration', name),
+                'version': effective_version,
+                'binary_path': promotion.get('binaryPath', ''),
+            })
         if outcome == 'rejected':
             rejected_attempts.append(str(data.get('iteration', name)))
 
@@ -252,6 +259,19 @@ lines.extend([
     '## Outcomes',
     '- Accepted versions: ' + (', '.join(accepted_versions) if accepted_versions else 'none'),
     '- Rejected attempts: ' + (', '.join(rejected_attempts) if rejected_attempts else 'none'),
+    '',
+    '## Accepted baseline promotions',
+])
+
+if promotion_history:
+    for promotion in promotion_history:
+        lines.append(f"- Iteration {promotion['iteration']}: `{promotion['version']}`")
+        if promotion['binary_path']:
+            lines.append(f"  - Stored binary: `{promotion['binary_path']}`")
+else:
+    lines.append('- None')
+
+lines.extend([
     '',
     '## Iteration artifacts',
 ])
@@ -704,6 +724,9 @@ write_session_metadata() {
 
   cat <<EOF > "$metadata_path"
 baseline_version=$BASELINE_VERSION
+active_baseline_version=$ACCEPTED_BASELINE_VERSION
+active_baseline_path=$escaped_baseline_path
+active_baseline_binary=$escaped_baseline_binary
 accepted_baseline_version=$ACCEPTED_BASELINE_VERSION
 accepted_baseline_path=$escaped_baseline_path
 accepted_baseline_binary=$escaped_baseline_binary

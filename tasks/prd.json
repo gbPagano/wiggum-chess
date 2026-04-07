@@ -132,8 +132,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added explicit active_baseline_version/path/binary fields to session.env as aliases for the accepted baseline state that the loop mutates on promotion, and expanded the final session summary to list accepted baseline promotions in iteration order with stored binary paths while leaving non-promoting outcomes unchanged."
     },
     {
       "id": "US-009",
