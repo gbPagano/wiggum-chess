@@ -1,5 +1,15 @@
 ## Ralph Progress
 
+## 2026-04-08 - US-010
+- Extended `evolution-loop/src/summary.rs` per-iteration artifact table to include all required columns: implementation.md, correctness/results.md, benchmark.md, and stockfish-comparison/results.md (previously only iteration.json, hypothesis.md, and decision.md were linked).
+- Both `write_placeholder_summary` and `write_session_summary` already existed and were wired into main.rs; only the table columns needed updating.
+- All 27 evolution-loop tests pass; full workspace test suite passes.
+- Files changed: `evolution-loop/src/summary.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - The summary writer was already scaffolded in prior iterations; this story only required completing the per-iteration artifact link columns.
+  - Named format args (`{p = iter_dir.display()}`) keep format strings readable when the same value repeats many times.
+---
+
 ## 2026-04-08 - US-009
 - Verified `evolution-loop/src/promotion.rs` implementation: `persist_promoted_artifact`, `promote_candidate`, and `baseline_version_path` all implemented and tested.
 - All 4 promotion tests pass; full workspace test suite (27 tests) passes.
