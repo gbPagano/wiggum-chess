@@ -1,106 +1,120 @@
+## Ralph Progress
+
 ## Codebase Patterns
-- chess-engine/src/engine.rs contains WiggumEngine struct (renamed from MaterialEngine in US-001)
-- cargo not available in shell PATH in this environment; use full path or verify via other means
-- All Rust quality checks (cargo test, cargo build) must be done via the cargo binary in PATH if available
-- UciEngine mock (shell script in tests) silently ignores unmatched commands — no explicit wildcard needed in case statement; unmatched patterns just continue the while loop
-- set_option on UciEngine: concrete method only, NOT on Engine trait; no reply expected per UCI spec
-- SPRT LLR uses trinomial model with draw_ratio estimated from actual results; probabilities clamped with EPS=1e-9 to avoid log(0)
-- sprt_bounds() and compute_llr() are pub fn so they can be unit tested from within the same file's #[cfg(test)] module
-- benchmark-version.sh must tag the just-appended results.csv row with the Stockfish level suffix because chess-runner records only the opponent UCI name
+- For evolution-loop phase execution, keep terminal output concise and write raw skill stdout/stderr to per-iteration log files under `iterations/<N>/phase-logs/`; record those paths in `iteration.json` so later phases and operators can inspect failures without banner noise.
+- Keep the loop's operator-facing phase list in one ordered sequence and derive both the full plan and remaining-phase output from it so progress text stays synchronized across iterations.
+- Optional propose inputs should be normalized by the loop before invoking the skill: record the resolved source in both `session.env` and `iteration.json`, but collapse empty Markdown checklist files back to the same self-propose path as no input.
+- When a proposal comes from an operator checklist, store the exact selected idea text plus `ideas.proposalSource` in `iteration.json`, then have the orchestration layer mark that checklist entry as `[x]` only after the iteration reaches a tested terminal outcome.
+- Candidate versioning belongs to the orchestration layer: once `ideas.proposalSource` is known, compute the tag there, sync all workspace Cargo versions, and persist the generated `target/debug/wiggum-engine` path into both `session.env` and `iteration.json` before benchmark/decision phases consume it.
+- Baseline resolution for the evolution loop is also orchestration-owned: expose `accepted_baseline_path` / `accepted_baseline_binary` in `session.env` and `baselinePath` / `baselineBinary` in `iteration.json`, while keeping any git ref only as internal setup state for creating candidate worktrees.
+- Promotion persistence should copy the built candidate binary into `chess-engine/versions/<tag>/wiggum-engine` and then update both `iteration.json.decision.promotion` and `session.env` from that stored artifact path, so future iterations never depend on the candidate worktree or target layout.
+- Treat `session.env` `active_baseline_*` fields as the stable operator-facing alias for the current promoted baseline, and keep the final session summary's promotion history derived from per-iteration decision metadata so accepted baseline changes are auditable in order.
+- Stockfish follow-up for inconclusive direct benchmarks should use pre-seeded `iteration.json.stockfishComparison` metadata plus `stockfish-comparison/results.md`, including whether the stored baseline report exists, whether the follow-up changed the recommendation, and any explicit limitation.
+- Positive-signal promotion after inconclusive evidence is decision-owned and must be explicit: seed `iteration.json.stockfishComparison.positiveSignal`, and only let a decision promote with `benchmark.sufficientForPromotion = false` when both the structured evidence and `decision.md` repeat the exact positive-signal rationale.
+- Quiet-vs-verbose phase execution should branch only at the shell wrapper: keep default runs redirecting skill output to per-phase logs, and implement `--verbose` by teeing the exact same phase stream so logging artifacts and iteration semantics stay identical.
 
----
-
-## 2026-04-06 - US-001
-- Renamed MaterialEngine to WiggumEngine in chess-engine/src/engine.rs
-- Updated name() to return 'Wiggum Engine v0.1'
-- Updated UCI main.rs to respond with correct id name/author
-- Updated all tests referencing the old name
-- Files changed: chess-engine/src/engine.rs, chess-engine/src/main.rs, and test files
-
----
-
-## 2026-04-06 - US-002
-- Added --verbose flag to MatchArgs in chess-runner/src/main.rs
-- Refactored PrintObserver to support quiet (default) and verbose modes
-- Without --verbose: prints one line per game + final summary
-- With --verbose: full board diagram and move output
-- Files changed: chess-runner/src/main.rs
-
----
-
-## 2026-04-06 - US-003
-- Created chess-engine/versions/ folder structure
-- chess-engine/versions/README.md: explains folder convention (one subfolder per version, each with CHANGES.md and report.md)
-- chess-engine/versions/v0.1/CHANGES.md: documents initial implementation (material eval, negamax depth-4, no alpha-beta)
-- chess-engine/versions/v0.1/.gitkeep: placeholder until report.md is generated
-- Files changed: chess-engine/versions/README.md, chess-engine/versions/v0.1/CHANGES.md, chess-engine/versions/v0.1/.gitkeep
+## 2026-04-07 11:32:03 PDT - US-008
+- Added explicit `active_baseline_version`, `active_baseline_path`, and `active_baseline_binary` fields to `session.env`, keeping them synchronized with accepted baseline state so accepted promotions immediately become the next iteration's active baseline contract.
+- Expanded the final session summary generation to list accepted baseline promotions in iteration order, including stored binary paths, while leaving non-promoting rejected/failed/inconclusive outcomes unchanged.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
 - **Learnings for future iterations:**
-  - cargo binary is not in PATH in this shell environment; quality checks via cargo not runnable directly
-  - US-003 was pure file creation — no code to typecheck or test
+  - Session metadata should expose a stable operator-facing active-baseline contract even when internal orchestration still tracks accepted baseline details under older field names.
+  - Promotion history is best reconstructed from per-iteration decision metadata at summary time so ordered accepted baselines stay auditable without extra session-level bookkeeping.
 ---
 
-## 2026-04-06 - US-004
-- Added `pub async fn set_option(&mut self, name: &str, value: &str) -> Result<()>` to UciEngine in chesslib/src/uci_engine.rs
-- Method sends `setoption name <name> value <value>` via existing `send_line` helper and returns after flush
-- Engine trait NOT modified — concrete method on UciEngine only
-- Unit test `test_set_option_sends_without_error` verifies mock engine handles setoption without error
-- Files changed: chesslib/src/uci_engine.rs
+## 2026-04-07 14:05:51 PDT - US-009
+- Extended `scripts/evolution-loop.sh` so each iteration now seeds `stockfishComparison` metadata with baseline report availability, recommendation-change tracking, and a dedicated `stockfish-comparison/results.md` artifact for extra candidate-vs-Stockfish evidence after inconclusive direct benchmarks.
+- Updated the session summary output and top-level project guidance so the extra Stockfish comparison artifact is part of the stable iteration contract and can be audited alongside benchmark and decision artifacts.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
 - **Learnings for future iterations:**
-  - The shell `case` statement in the mock engine has no wildcard — unmatched lines are simply ignored (loop continues), so setoption is already handled silently
-  - set_option follows same pattern as send_line — no response to read, just write + flush
+  - Inconclusive benchmark follow-up works best when the orchestration layer pre-allocates both machine-readable metadata and human-readable artifact paths before benchmark/decision skills run.
+  - Store whether the baseline Stockfish report exists as explicit iteration metadata so later phases can record a missing-reference limitation without re-discovering it ad hoc.
 ---
 
-## 2026-04-06 - US-005
-- Added `chess-runner sprt` subcommand with args: --engine1, --engine2, --time, --inc, --elo0, --elo1, --alpha, --beta, --timeout, --output
-- Implemented `sprt_bounds(alpha, beta)` → (lower, upper) using ln(beta/(1-alpha)) and ln((1-beta)/alpha)
-- Implemented `compute_llr(wins, draws, losses, elo0, elo1)` using full trinomial model with draw_ratio from actual results
-- SPRT loop runs games alternating colors, prints `[Game N] LLR: X.XX / [lower, upper] | W:x D:x L:x` after each game
-- Stops when LLR crosses either bound; prints H1 accepted or H0 accepted verdict
-- write_sprt_csv() appends to sprt_results.csv (creates with header if needed)
-- Unit tests: sprt_bounds alpha=beta=0.05 → [-2.944, 2.944]; LLR positive when engine1 dominates; LLR near 0 for equal score
-- Files changed: chess-runner/src/main.rs
+## 2026-04-07 10:40:36 PDT - US-005
+- Added orchestration-owned candidate versioning to `scripts/evolution-loop.sh`, including proposal-source-based tag selection, synchronized Cargo manifest bumps across all three crates, candidate metadata in `session.env` / `iteration.json`, and a built debug artifact copied to `target/debug/wiggum-engine`.
+- Made the engine UCI name derive from the Cargo package version in `chess-engine/src/lib.rs`, then reused that helper from both `chess-engine/src/main.rs` and `chess-engine/src/engine.rs` so benchmarked candidate builds advertise the computed version automatically.
+- Files changed: `CLAUDE.md`, `chess-engine/src/lib.rs`, `chess-engine/src/main.rs`, `chess-engine/src/engine.rs`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
 - **Learnings for future iterations:**
-  - Trinomial SPRT requires draw_ratio estimated from actual results; when D=0, falls back to pure win/loss model
-  - The `pub fn` on sprt_bounds/compute_llr allows unit testing within same file's #[cfg(test)] module — no separate test binary needed
+  - Keep candidate version selection in the orchestration layer, not inside Claude skills, so proposal provenance cleanly drives major/minor bump policy.
+  - Derive the UCI name from `CARGO_PKG_VERSION` in shared engine code so manifest version bumps automatically flow into both the binary handshake and in-process engine benchmarks.
 ---
 
-## 2026-04-06 - US-006
-- Added `chess-runner version-report` subcommand with args: --version, --engine-name, --matches-csv, --sprt-csv (optional), --output
-- Reads matches CSV (engine1_name/engine2_name/games_played/wins/draws/losses format), filters by case-insensitive substring match on engine name
-- Aggregates per-opponent stats from target engine's perspective (handles both engine1 and engine2 positions)
-- Generates markdown with H1 header, generation date, summary table (Opponent/Games/Wins/Draws/Losses/Win%), overall stats, best/worst matchup
-- If --sprt-csv provided, adds SPRT Results section (Opponent/Games/W/D/L/Result table)
-- Ends with empty ## Notes section; creates parent directories if output path doesn't exist
-- Handles missing/empty CSVs gracefully with inline markdown notes
-- Files changed: chess-runner/src/main.rs
-- **Learnings for future iterations:**
-  - Rust allows struct definitions inside function bodies (used for SprtRow local struct)
-  - When both engine1 and engine2 could match the filter, handle both cases and flip wins/losses perspective accordingly
-  - Use `opponent_map.entry(opponent.clone()).or_insert(...)` pattern for aggregating per-opponent stats
+
+Started: 2026-04-07
 ---
 
-## 2026-04-06 - US-007
-- Created `scripts/benchmark-version.sh` (chmod +x, bash -n syntax check passes)
-- Script accepts: --version, --engine, --prev-engine (optional), --stockfish, --games (default 100), --output-dir (default chess-engine/versions/<version>)
-- Workaround for chess-runner setoption limitation: creates temporary FIFO-based wrapper scripts per Stockfish skill level that inject setoption commands after intercepting the 'uci' command
-- Skill level wrappers: stockfish-1500.sh (UCI_LimitStrength=true, UCI_Elo=1500), stockfish-2000.sh, stockfish-2500.sh, stockfish-max.sh (UCI_LimitStrength=false)
-- If --prev-engine provided, runs `chess-runner sprt` first and saves to <output-dir>/sprt_results.csv
-- All match results appended to <output-dir>/results.csv via --output flag
-- Temporary wrappers cleaned up via trap on EXIT
-- Files changed: scripts/benchmark-version.sh
+## 2026-04-07 11:27:00 PDT - US-006
+- Changed `scripts/evolution-loop.sh` to resolve the active baseline from `chess-engine/versions/<tag>/wiggum-engine`, fail fast when the version directory or stored binary is missing, and write baseline artifact paths into both `session.env` and `iteration.json`.
+- Kept git commit resolution internal-only for candidate worktree creation, updated worker guidance to consume baseline artifact paths, and seeded `chess-engine/versions/v0.1/wiggum-engine` from the existing debug build so the first baseline satisfies the new contract.
+- Files changed: `CLAUDE.md`, `chess-engine/versions/v0.1/wiggum-engine`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
 - **Learnings for future iterations:**
-  - chess-runner match has no --setoption flag; FIFO-based wrapper is the cleanest workaround without modifying chess-runner
-  - bash FIFO pattern: `mkfifo $FIFO_IN`, open with `exec 3>$FIFO_IN`, start engine reading from FIFO, write setoption via >&3 after intercepting 'uci'
-  - cargo not available in this environment — shell script quality check is `bash -n` only
+  - Treat baseline version directories as the operator-facing source of truth; any git ref should stay an internal implementation detail for worktree setup only.
+  - When tightening artifact contracts, seed the current baseline forward if needed so the new fail-fast checks do not strand the only promotable starting point.
 ---
 
-## 2026-04-07 00:03 UTC - US-008
-- Ran `scripts/benchmark-version.sh` for `v0.1` against `/workspace/engines/stockfish` using current debug binaries and generated `chess-engine/versions/v0.1/results.csv`
-- Generated `chess-engine/versions/v0.1/report.md` with results vs Stockfish 1500/2000/2500/max and removed the obsolete `.gitkeep`
-- Updated `scripts/benchmark-version.sh` so each appended CSV row is tagged with the Stockfish level suffix, allowing `version-report` to keep the four benchmark levels distinct
-- Files changed: scripts/benchmark-version.sh, chess-engine/versions/v0.1/results.csv, chess-engine/versions/v0.1/report.md, tasks/prd.json, tasks/progress.txt
+## 2026-04-07 09:10:01 PDT - US-001
+- Suppressed raw per-phase OpenClaude output in `scripts/evolution-loop.sh` by routing skill stdout/stderr to per-iteration log files instead of streaming it live to the terminal.
+- Switched the default loop CLI from `claude` to `openclaude` and added phase log artifact paths to `iteration.json` so detailed output remains inspectable after each run.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
 - **Learnings for future iterations:**
-  - The release `chess-runner` binary currently fails on this machine with `GLIBC_2.39` missing, so benchmarking had to use the freshly built debug binaries instead
-  - `chess-runner match` writes the engine's UCI-reported name to CSV, so benchmark scripts must post-process the last row if multiple Stockfish wrappers all identify as `Stockfish 17`
-  - The generated baseline shows `Wiggum Engine v0.1` lost all 8 sample games versus Stockfish across the four configured levels
+  - Keep phase-level logs as first-class artifacts so terminal output can stay quiet without losing debuggability.
+  - `iteration.json.artifacts.phaseLogs` is the contract for locating captured phase stdout/stderr later.
 ---
+
+## 2026-04-07 09:16:37 PDT - US-002
+- Added concise phase progress output to `scripts/evolution-loop.sh` so each iteration prints the ordered phase list once and then prints the current phase plus remaining phases before propose, implement, validate, benchmark, and decide.
+- Kept the phase progress output aligned with the quiet logging behavior from US-001 by deriving it from a single ordered phase sequence.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Define operator-visible phase order in one canonical array so start-of-iteration and per-phase progress text cannot drift apart.
+  - Include `validate` in the operator-visible phase plan even though it runs locally rather than through a Claude skill, because it explains the gap between implement and benchmark.
+---
+
+## 2026-04-07 09:34:46 PDT - US-003
+- Added an optional `--ideas-file` flag to `scripts/evolution-loop.sh` and resolved it into session metadata before the loop starts.
+- Recorded ideas-file details in `session.env` and `iteration.json`, and collapsed missing pending checklist items back to the default self-propose path so empty Markdown task lists behave like no file was provided.
+- Extended the per-phase worker prompt so the propose phase knows how to consume unchecked `- [ ] idea text` entries when an ideas file is available.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Normalize optional operator inputs in the orchestration layer first, then hand skills a simple contract through `session.env` and `iteration.json`.
+  - For checklist-backed idea sources, treat only unchecked `- [ ]` entries as pending ideas and ignore empty files by clearing the resolved input path.
+---
+
+## 2026-04-07 10:02:11 PDT - US-004
+- Extended `scripts/evolution-loop.sh` so iteration artifacts now reserve `ideas.proposalSource`, `ideas.selectedIdea`, and `ideas.selectedIdeaMarkedUsed`, and the propose phase is required to write either `user_ideas_file` or `self_proposed` before the loop advances.
+- Updated the per-phase worker prompt so `hypothesis.md` must state the proposal source while later phases read the source of truth from `iteration.json`.
+- Added post-decision checklist bookkeeping so any selected operator idea is marked from `- [ ]` to `- [x]` only after the iteration reaches a tested terminal outcome, with the updated pending count written back into iteration metadata.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Proposal provenance belongs in machine-readable iteration metadata, not just narrative Markdown, because later phases need a stable contract.
+  - Mark curated ideas as used only after the iteration has been fully exercised; doing it at propose time would burn ideas that never made it through testing.
+---
+
+## 2026-04-07 11:45:00 PDT - US-007
+- Updated `scripts/evolution-loop.sh` so accepted iterations persist the built candidate binary into `chess-engine/versions/<promoted-version>/wiggum-engine` before the candidate worktree is discarded.
+- Recorded promoted artifact metadata back into `iteration.json` under `decision.promotion`, appended the stored binary details to `decision.md`, and refreshed `session.env` so later iterations read the promoted artifact path as the active baseline.
+- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Promotion should finalize artifact paths before deleting the candidate worktree; otherwise later baseline resolution can point at a binary that no longer exists.
+  - Keep promotion metadata in both machine-readable `iteration.json` and human-readable `decision.md` so operators and later phases can audit exactly which stored binary became the new baseline.
+---
+
+## 2026-04-07 14:38:38 PDT - US-010
+- Extended `scripts/evolution-loop.sh` so each iteration seeds `iteration.json.stockfishComparison.positiveSignal` and tightened the decision-phase worker instructions to treat positive-signal promotion as a narrow exception after both direct and Stockfish comparisons stay inconclusive.
+- Documented the positive-signal contract in the top-level project guidance and feature PRD, requiring the exact supporting evidence to be repeated in both `decision.md` and `iteration.json.decision.evidence` whenever an otherwise inconclusive candidate is promoted.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd-evolution-loop-enhancements.md`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - When an agent skill owns the final promotion call, orchestration should still pre-seed the machine-readable fields that make exception paths auditable instead of relying on free-form Markdown alone.
+  - If a decision can override the default benchmark policy, capture that override as an explicit contract in both the operator docs and the iteration artifact schema so later phases can validate it consistently.
+---
+
+## 2026-04-07 14:45:09 PDT - US-011
+- Added an optional `--verbose` flag to `scripts/evolution-loop.sh` and surfaced the selected mode in the startup summary so operators can explicitly request live phase output while debugging.
+- Updated phase execution to use `tee` in verbose mode, preserving the same per-phase log artifacts and quiet-mode iteration behavior for downstream auditing and decisions.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Add operator-facing debug verbosity at the phase runner boundary so artifact paths and downstream state handling remain identical between quiet and verbose runs.
+  - If a loop already captures phase logs, verbose mode should mirror that same stream instead of introducing a second logging path.
+---
+

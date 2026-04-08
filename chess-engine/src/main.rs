@@ -1,4 +1,5 @@
 use chess_engine::search::search;
+use chess_engine::uci_engine_name;
 use chesslib::board::Board;
 use chesslib::chess_move::ChessMove;
 use chesslib::movegen::MoveGen;
@@ -28,7 +29,7 @@ fn main() {
         let line = line.trim().to_string();
 
         if line == "uci" {
-            println!("id name Wiggum Engine v0.1");
+            println!("id name {}", uci_engine_name());
             println!("id author chess-ic");
             println!("uciok");
         } else if line == "isready" {

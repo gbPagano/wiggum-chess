@@ -1,154 +1,186 @@
 {
   "project": "chess-ic",
-  "branchName": "ralph/wiggum-engine-evolution",
-  "description": "Wiggum Engine v0.1 — verbose flag, engine rename, version tracking, SPRT comparison, Stockfish benchmarking, and version-report command",
+  "branchName": "ralph/evolution-loop-enhancements",
+  "description": "Enhance the evolution loop with quieter default output, optional idea-file proposing, versioned engine artifacts in chess-engine/versions, and more flexible inconclusive-decision handling.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Rename MaterialEngine to Wiggum Engine",
-      "description": "As a developer, I want the engine consistently named 'Wiggum Engine' so that match logs and UCI GUIs display the correct identity.",
+      "title": "Suppress raw OpenClaude output by default",
+      "description": "As an operator, I want the evolution loop to suppress the OpenClaude banner and raw phase output so the terminal stays readable during unattended runs.",
       "acceptanceCriteria": [
-        "Struct MaterialEngine in chess-engine/src/engine.rs renamed to WiggumEngine",
-        "name() returns 'Wiggum Engine v0.1'",
-        "UCI binary (chess-engine/src/main.rs) responds to 'uci' with 'id name Wiggum Engine v0.1' and 'id author chess-ic'",
-        "CLI --about text updated from 'MaterialEngine' to 'Wiggum Engine'",
-        "All tests referencing MaterialEngine or material_engine updated to WiggumEngine",
-        "cargo test --workspace passes",
+        "The orchestration script does not print the OpenClaude banner during propose, implement, benchmark, or decide phases",
+        "The orchestration script does not stream raw skill output to the terminal by default",
+        "The default output behavior matches scripts/ralph/ralph.sh with concise terminal progress and captured underlying tool output",
+        "Each phase still captures stdout/stderr for later inspection in session artifacts or logs",
+        "The final per-phase outcome remains available in iteration artifacts",
+        "bash -n scripts/evolution-loop.sh passes",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "PRD US-011. Pure rename — no logic changes."
+      "notes": "Set the default Claude CLI binary to openclaude and changed per-phase execution to capture stdout/stderr into iteration phase log artifacts instead of streaming raw CLI output to the terminal. The loop now records phase log paths in iteration.json while keeping concise terminal summaries only."
     },
     {
       "id": "US-002",
-      "title": "Add --verbose flag to chess-runner match command",
-      "description": "As a developer, I want to control chess-runner output verbosity so that I can run quiet batch matches or verbose single-game debugging.",
+      "title": "Show current and remaining phases",
+      "description": "As an operator, I want the loop to show the current phase and the remaining phases for the active iteration so I can tell whether the run is progressing or stuck.",
       "acceptanceCriteria": [
-        "New --verbose flag added to MatchArgs in chess-runner/src/main.rs",
-        "Without --verbose: each game prints exactly one line 'Game N/Total: <result> | Score: W-L-D' and a final summary block; board and move lines are suppressed",
-        "With --verbose: existing behavior preserved — board diagram and move line printed on every move, game result printed at end of each game",
-        "PrintObserver is replaced or refactored to support both modes (e.g. two structs or a verbose: bool field)",
-        "The current always-verbose PrintObserver is removed; verbose is opt-in",
-        "Running chess-runner match --engine1 X --engine2 Y --games 3 without --verbose produces exactly 3 result lines plus 1 summary block",
-        "cargo test --workspace passes",
+        "At the start of each iteration, the script prints the ordered phase list for that iteration",
+        "Before each phase begins, the script prints the current phase name",
+        "Before each phase begins, the script prints which phases remain in the current iteration",
+        "Output is concise and does not include raw model banner text",
+        "bash -n scripts/evolution-loop.sh passes",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "PRD US-010. No dependency on US-001."
+      "notes": "Added a fixed iteration phase sequence and concise progress helpers so each iteration prints the full phase order once, then prints the current phase and remaining phases before propose, implement, validate, benchmark, and decide. Raw model output remains suppressed behind the phase logs introduced in US-001."
     },
     {
       "id": "US-003",
-      "title": "Create chess-engine/versions/ folder structure",
-      "description": "As a developer, I want a dedicated versioned folder structure so I can track what changed and how each version performed over time.",
+      "title": "Accept optional ideas file",
+      "description": "As an operator, I want to pass a file of possible engine ideas so the propose phase can prefer curated ideas generated by me or other agents.",
       "acceptanceCriteria": [
-        "Directory chess-engine/versions/v0.1/ exists",
-        "File chess-engine/versions/v0.1/CHANGES.md exists and documents: initial implementation, material evaluation + negamax depth-4, no alpha-beta",
-        "File chess-engine/versions/README.md exists and explains the folder convention: one subfolder per version, each with CHANGES.md and report.md",
-        "A .gitkeep placeholder exists in chess-engine/versions/v0.1/ if no report.md exists yet",
+        "The script accepts a new optional argument for an ideas file path",
+        "If the ideas file is omitted, the propose phase behaves exactly as it does today",
+        "If the ideas file exists but is empty, the propose phase ignores it and behaves like no file was provided",
+        "The supported format is Markdown checklist entries using '- [ ] idea text'",
+        "The propose phase can read pending ideas from that file during hypothesis selection",
+        "bash -n scripts/evolution-loop.sh passes",
         "Typecheck passes"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "PRD US-012. Pure file/folder creation — no code changes."
+      "notes": "Added an optional --ideas-file flag to scripts/evolution-loop.sh, normalized empty or fully-used checklist files back to the default self-propose flow, and recorded ideas-file metadata in both session.env and iteration.json so the propose phase can consume pending Markdown checklist ideas when available."
     },
     {
       "id": "US-004",
-      "title": "Add set_option method to UciEngine in chesslib",
-      "description": "As a developer, I want to send arbitrary UCI setoption commands to a subprocess engine so I can configure Stockfish skill levels from the match runner.",
+      "title": "Track hypothesis source and mark used ideas",
+      "description": "As a reviewer, I want each iteration to record whether the hypothesis came from the user ideas file or the model itself so versioning and audit behavior can follow the correct policy.",
       "acceptanceCriteria": [
-        "UciEngine in chesslib/src/uci_engine.rs gains a public async method: pub async fn set_option(&mut self, name: &str, value: &str) -> Result<()>",
-        "Method sends 'setoption name <name> value <value>\\n' to engine stdin and flushes",
-        "No response is expected (UCI spec: setoption has no reply); method returns after flush",
-        "The Engine trait in chesslib/src/engine.rs is NOT modified — set_option is a concrete method on UciEngine only",
-        "Mock engine in uci_engine.rs tests already silently ignores unknown commands (verify this is the case)",
-        "Unit test added: sends setoption name Skill Level value 10 to mock engine without error",
-        "cargo test --workspace passes",
+        "iteration.json stores the proposal source as either 'user_ideas_file' or 'self_proposed'",
+        "hypothesis.md states the source of the selected idea",
+        "The implementation and decision phases can read the proposal source from iteration.json",
+        "After an idea from the checklist file is selected and tested, the system marks that checklist entry as used",
+        "bash -n scripts/evolution-loop.sh passes",
         "Typecheck passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "PRD US-017. Prerequisite for US-007 (benchmark script). The mock engine uses a wildcard case that ignores unknown commands — confirm before writing the test."
+      "notes": "Added explicit proposal provenance fields in iteration.json, required the propose phase to record whether the hypothesis came from the ideas checklist or self-proposal, required hypothesis.md to state that source, and marked selected checklist ideas as used only after the iteration reached a tested terminal outcome."
     },
     {
       "id": "US-005",
-      "title": "Implement SPRT subcommand in chess-runner",
-      "description": "As a developer, I want a SPRT-based match mode so I can efficiently determine whether a new engine version is an improvement without running an arbitrary fixed number of games.",
+      "title": "Bump candidate UCI version",
+      "description": "As an operator, I want the implementation phase to bump the engine version shown in the UCI name so each candidate can be distinguished during benchmarking.",
       "acceptanceCriteria": [
-        "New subcommand 'chess-runner sprt' added with args: --engine1, --engine2, --time (default 10000), --inc (default 100), --elo0 (default 0), --elo1 (default 5), --alpha (default 0.05), --beta (default 0.05), --timeout (default 5000), optional --output (CSV path)",
-        "LLR is computed after each completed game using the trinomial (W/D/L) model: score = (wins + 0.5*draws) / total; elo_diff = -400 * log10(1/score - 1); LLR approximation tracks wins/draws/losses separately",
-        "Full LLR formula: LLR = W*ln(p1_w/p0_w) + D*ln(p1_d/p0_d) + L*ln(p1_l/p0_l) where p0/p1 are expected W/D/L probabilities under H0 (elo0) and H1 (elo1) using the logistic Elo model",
-        "LLR bounds: lower = ln(beta / (1 - alpha)), upper = ln((1 - beta) / alpha)",
-        "After each game, prints one line: '[Game N] LLR: X.XX / [lower, upper] | W:x D:x L:x'",
-        "Match stops automatically when LLR crosses either bound",
-        "Final output states: 'SPRT Result: H1 accepted (improvement confirmed)' or 'SPRT Result: H0 accepted (no improvement detected)'",
-        "If --output provided, appends one row to a sprt_results.csv with columns: timestamp, engine1_name, engine2_name, games_played, wins, draws, losses, elo0, elo1, sprt_result",
-        "Creates sprt_results.csv with header if it does not exist",
-        "Unit test: LLR boundary values for alpha=0.05 beta=0.05 are approximately [-2.944, 2.944]",
-        "Unit test: LLR computation with known W/D/L counts returns expected value",
-        "cargo test --workspace passes",
+        "The implement phase updates the engine version string exposed in the UCI name for the candidate build",
+        "If the hypothesis source is self_proposed, the candidate version increments the minor version from the current baseline, for example v0.1 to v0.2",
+        "If the hypothesis source is user_ideas_file, the candidate version increments the major version from the current baseline, for example v0.1 to v1.0",
+        "The candidate version is recorded in iteration.json and implementation.md",
+        "Candidate and baseline UCI names are distinguishable during benchmark runs",
+        "The implementation phase produces a candidate binary named wiggum-engine for later persistence into version artifacts",
         "Typecheck passes"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "PRD US-013. Colors alternate each game pair (same as match subcommand). Handle the edge case where score=1.0 or score=0.0 to avoid log(0) — clamp to a small epsilon."
+      "notes": "Made the engine UCI name derive from Cargo package version so candidate builds advertise their computed tag automatically, then taught scripts/evolution-loop.sh to compute candidate versions from ideas.proposalSource, synchronize chess-engine/chess-runner/chesslib manifest versions, build a renamed debug artifact at target/debug/wiggum-engine, and persist candidate version/binary metadata into session.env, iteration.json, and implementation.md before benchmarking."
     },
     {
       "id": "US-006",
-      "title": "Add version-report subcommand to chess-runner",
-      "description": "As a developer, I want a version-report command that generates a rich markdown report for a specific engine version so I have a self-contained snapshot of its performance.",
+      "title": "Resolve baseline from stored version artifacts",
+      "description": "As an operator, I want the loop to use stored engine versions from chess-engine/versions instead of git refs so baseline selection is explicit and reproducible from release artifacts.",
       "acceptanceCriteria": [
-        "New subcommand 'chess-runner version-report' with args: --version (e.g. 'v0.1'), --engine-name (optional, e.g. 'Wiggum Engine v0.1'), --matches-csv (path to regular match CSV), --sprt-csv (optional path to sprt_results.csv), --output (markdown output path)",
-        "Reads matches CSV and filters rows where engine1_name or engine2_name contains --engine-name (or --version if --engine-name not provided)",
-        "Generated markdown includes: H1 header with version name and generation date; summary table with columns: Opponent, Games, Wins, Draws, Losses, Win%; overall win rate across all opponents; best matchup (highest win%); worst matchup (lowest win%)",
-        "If --sprt-csv is provided, adds a SPRT Results section: table with columns: Opponent, Games, W, D, L, Result",
-        "Ends with an empty '## Notes' section for manual annotation",
-        "If --output path does not exist, creates it (including parent dirs)",
-        "Handles missing or empty CSVs gracefully with a message in the markdown",
-        "cargo test --workspace passes",
+        "The session accepts a baseline version label that resolves to chess-engine/versions/<tag>",
+        "The baseline version directory is required to contain a compiled engine binary named wiggum-engine",
+        "The loop fails fast with a clear error if the requested baseline version directory is missing or if wiggum-engine is absent",
+        "session.env records the selected baseline version path instead of a git ref",
+        "iteration.json records the resolved baseline version path used for that iteration",
+        "The benchmark phase can identify the baseline engine binary from the stored version directory",
         "Typecheck passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "PRD US-015. Depends on US-005 for SPRT CSV format. The --engine-name matching should be case-insensitive substring match to handle name variations."
+      "notes": "Resolved baseline selection through chess-engine/versions/<tag>/ instead of exposing git refs, required a stored wiggum-engine binary in the version directory, recorded accepted_baseline_path/accepted_baseline_binary in session.env plus baselinePath/baselineBinary in iteration.json, and seeded the initial v0.1 artifact so the new fail-fast path has a valid baseline binary."
     },
     {
       "id": "US-007",
-      "title": "Benchmark shell script for new engine versions",
-      "description": "As a developer, I want a shell script that automates benchmarking a new engine version against Stockfish at multiple skill levels so I get consistent, reproducible results.",
+      "title": "Persist accepted engine binaries as new versions",
+      "description": "As an operator, I want accepted candidates to be saved as versioned engine artifacts so future iterations and external benchmarking use the promoted binary directly.",
       "acceptanceCriteria": [
-        "Script at scripts/benchmark-version.sh is created and executable (chmod +x)",
-        "Script accepts flags: --version (e.g. v0.1), --engine (path to engine binary), --prev-engine (optional, path to previous version binary), --stockfish (path to stockfish binary), --games (default 100), --output-dir (default chess-engine/versions/<version>)",
-        "If --prev-engine is provided, runs 'chess-runner sprt --engine1 <engine> --engine2 <prev-engine> --time 10000 --inc 100' and saves output",
-        "Runs 'chess-runner match' (not SPRT) for each of four Stockfish difficulty levels: 1500, 2000, 2500, max",
-        "For rated levels (1500/2000/2500): sets UCI_LimitStrength=true and UCI_Elo=<N> on Stockfish using setoption before the match — note: chess-runner does not yet support passing setoption args; the script must use a wrapper or document this as a known limitation if not supported",
-        "For max: sets UCI_LimitStrength=false",
-        "Uses time control 10s + 0.1s inc for all matches",
-        "Appends all match results to --output-dir/results.csv using chess-runner --output flag",
-        "Prints a summary to stdout when all matches complete",
-        "Script has a usage comment block at the top explaining all flags",
-        "Typecheck passes (N/A for shell — verify script has no syntax errors with bash -n scripts/benchmark-version.sh)"
+        "When an iteration is accepted, the script creates a new directory chess-engine/versions/<new-version>",
+        "The accepted candidate compiled engine binary is copied into that version directory with the filename wiggum-engine",
+        "The version directory does not require preserving the Cargo target layout",
+        "The stored binary path is recorded in session metadata for future iterations",
+        "The script does not depend on a git commit ref to resolve the next baseline",
+        "Typecheck passes"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "PRD US-014. Depends on US-004 (set_option) and US-005 (sprt subcommand). IMPORTANT: chess-runner match does not support passing setoption to engines. The benchmark script should use a thin wrapper script per Stockfish level (e.g. a wrapper that sends setoption before UCI handshake) OR document this as a limitation. The simplest approach: create wrapper shell scripts like scripts/stockfish-1500.sh that exec stockfish but intercept uci/setoption."
+      "notes": "Updated scripts/evolution-loop.sh so accepted iterations persist the built candidate binary into chess-engine/versions/<promoted-version>/wiggum-engine, record the stored artifact path back into iteration.json decision.promotion metadata plus decision.md, and refresh session.env to use the promoted artifact path as the active baseline for later iterations instead of depending on Cargo target layout."
     },
     {
       "id": "US-008",
-      "title": "Generate and commit v0.1 benchmark report",
-      "description": "As a developer, I want to run the benchmark for v0.1 and commit the report so we have a baseline for measuring future improvements.",
+      "title": "Update active baseline after promotion",
+      "description": "As an operator, I want the loop to update the active baseline after a candidate is accepted so the next iteration evolves from the latest promoted model.",
       "acceptanceCriteria": [
-        "scripts/benchmark-version.sh runs successfully for v0.1 with the Stockfish binary at engines/stockfish",
-        "chess-runner version-report generates chess-engine/versions/v0.1/report.md",
-        "report.md contains: the version header, a summary table with results vs Stockfish at all four levels, overall win rate",
-        "chess-engine/versions/v0.1/report.md is committed to the repository",
-        "Any .gitkeep placeholder in chess-engine/versions/v0.1/ is removed once report.md exists",
+        "After an accepted decision, the session metadata updates the active baseline version to the new promoted version",
+        "After an accepted decision, the next iteration uses the stored binary from the new version directory",
+        "After a rejected, failed, or inconclusive decision without promotion, the active baseline remains unchanged",
+        "The final session summary lists accepted baseline promotions in order",
+        "bash -n scripts/evolution-loop.sh passes",
         "Typecheck passes"
       ],
       "priority": 8,
       "passes": true,
-      "notes": "PRD US-016. Depends on all prior stories. Requires engines/stockfish to be present. This story may require manual steps (running the script) — Ralph should run it and commit the output."
+      "notes": "Added explicit active_baseline_version/path/binary fields to session.env as aliases for the accepted baseline state that the loop mutates on promotion, and expanded the final session summary to list accepted baseline promotions in iteration order with stored binary paths while leaving non-promoting outcomes unchanged."
+    },
+    {
+      "id": "US-009",
+      "title": "Run extra Stockfish comparison for inconclusive results",
+      "description": "As an operator, I want the decision flow to trigger an extra comparison against Stockfish when candidate-vs-baseline results are inconclusive so promotion decisions use more context than a single neutral match.",
+      "acceptanceCriteria": [
+        "If the baseline-vs-candidate benchmark result is inconclusive, the decision flow can request or run an additional Stockfish comparison",
+        "The comparison uses the prior stored baseline benchmark result against Stockfish when available",
+        "The candidate Stockfish result is recorded in benchmark.md or a linked decision artifact",
+        "The decision artifact explicitly states whether the Stockfish comparison changed the recommendation",
+        "If the Stockfish comparison cannot run, the iteration records that limitation instead of silently ignoring it",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Seeded each iteration with explicit stockfishComparison artifact metadata, including baseline report availability, recommendation-change tracking, and a dedicated stockfish-comparison/results.md path, and exposed that artifact in the session summary so inconclusive benchmark follow-up has stable places to record extra candidate-vs-Stockfish evidence, recommendation changes, or limitations."
+    },
+    {
+      "id": "US-010",
+      "title": "Allow positive-signal promotion after inconclusive evidence",
+      "description": "As an operator, I want the decision phase to promote an inconclusive candidate when there is still a positive signal after extra analysis so potentially stronger engines are not discarded too aggressively.",
+      "acceptanceCriteria": [
+        "If the direct candidate-vs-baseline result is inconclusive, the decision logic performs the additional Stockfish comparison before making the final call",
+        "If the Stockfish comparison is also inconclusive, the decision logic explicitly evaluates whether there is any positive signal suggesting likely improvement",
+        "If no positive signal exists, the candidate is not promoted",
+        "If a positive signal exists and the candidate is promoted, decision.md explains why promotion was allowed despite inconclusive match evidence",
+        "iteration.json records the exact evidence used for the promotion decision",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Extended the orchestration-owned stockfishComparison metadata with an explicit positiveSignal structure and tightened the worker prompt so the decision phase treats positive-signal promotion as a narrow exception: only after both benchmark layers remain inconclusive, with the exact supporting evidence repeated in iteration.json.decision.evidence and decision.md when promotion is allowed."
+    },
+    {
+      "id": "US-011",
+      "title": "Add optional verbose mode",
+      "description": "As an operator, I want an optional verbose mode so I can debug suppressed skill output when the loop appears stalled or unclear.",
+      "acceptanceCriteria": [
+        "The script accepts a verbose flag that enables live skill output for debugging",
+        "The default mode remains the quieter Ralph-like output mode",
+        "Verbose mode does not change iteration artifacts or decision behavior",
+        "bash -n scripts/evolution-loop.sh passes",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Added a --verbose flag to scripts/evolution-loop.sh, kept the default quiet Ralph-style capture behavior unchanged, and routed verbose phase execution through tee so live skill output is visible while the same per-phase log artifacts are still written for audit and downstream decision handling."
     }
   ]
 }
