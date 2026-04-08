@@ -1,5 +1,14 @@
 ## Ralph Progress
 
+## 2026-04-08 - US-011
+- `evolution-loop/src/artifacts.rs` already had `create_iteration_artifacts` fully wired into `main.rs`; added 4 unit tests to verify: directory creation, initialized-state JSON for successful setup, failed-state JSON (state=failed, correctness.status=skipped, decision.outcome=failed), and phase log paths recorded in iteration.json.
+- All 31 evolution-loop tests pass.
+- Files changed: `evolution-loop/src/artifacts.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - US-011 had no "Tests pass" requirement in its acceptance criteria (unlike most prior stories), but tests were added to verify the failed-setup branch populates all expected fields.
+  - The `tempfile` dev-dependency was already present, so TempDir-based tests were straightforward to add.
+---
+
 ## 2026-04-08 - US-010
 - Extended `evolution-loop/src/summary.rs` per-iteration artifact table to include all required columns: implementation.md, correctness/results.md, benchmark.md, and stockfish-comparison/results.md (previously only iteration.json, hypothesis.md, and decision.md were linked).
 - Both `write_placeholder_summary` and `write_session_summary` already existed and were wired into main.rs; only the table columns needed updating.
