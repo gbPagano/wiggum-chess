@@ -168,3 +168,154 @@ pub fn create_iteration_artifacts(
         phase_logs_dir,
     })
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    fn dummy_meta(session_dir: &Path) -> SessionMetadata {
+        SessionMetadata {
+            baseline_version: "v1.0".to_string(),
+            active_baseline_version: "v1.0".to_string(),
+            active_baseline_path: session_dir.to_string_lossy().to_string(),
+            active_baseline_binary: session_dir
+                .join("wiggum-engine")
+                .to_string_lossy()
+                .to_string(),
+            accepted_baseline_version: "v1.0".to_string(),
+            accepted_baseline_path: session_dir.to_string_lossy().to_string(),
+            accepted_baseline_binary: session_dir
+                .join("wiggum-engine")
+                .to_string_lossy()
+                .to_string(),
+            accepted_baseline_major: "1".to_string(),
+            accepted_baseline_minor: "0".to_string(),
+            candidate_version: "v1.1".to_string(),
+            candidate_binary_path: "/tmp/candidate/wiggum-engine".to_string(),
+            ideas_file: String::new(),
+            ideas_file_pending_count: "0".to_string(),
+            ideas_format: String::new(),
+            stockfish_binary: String::new(),
+            max_iterations: "10".to_string(),
+            max_infra_failures: "3".to_string(),
+            session_id: "test-session".to_string(),
+            session_dir: session_dir.to_string_lossy().to_string(),
+            summary_file: session_dir.join("summary.md").to_string_lossy().to_string(),
+        }
+    }
+
+    #[test]
+    fn creates_all_directories_and_placeholder_files() {
+        let tmp = TempDir::new().unwrap();
+        let session_dir = tmp.path();
+        let meta = dummy_meta(session_dir);
+        let candidate_workspace = Path::new("/tmp/candidate");
+
+        let paths = create_iteration_artifacts(
+            session_dir,
+            1,
+            &meta,
+            candidate_workspace,
+            "wiggum-evolution/test-session/iteration-1",
+            "ok",
+            "",
+        )
+        .unwrap();
+
+        assert!(paths.iteration_dir.exists());
+        assert!(paths.iteration_dir.join("correctness").exists());
+        assert!(paths.iteration_dir.join("stockfish-comparison").exists());
+        assert!(paths.phase_logs_dir.exists());
+        assert!(paths.hypothesis_md.exists());
+        assert!(paths.implementation_md.exists());
+        assert!(paths.correctness_results_md.exists());
+        assert!(paths.benchmark_md.exists());
+        assert!(paths.stockfish_comparison_md.exists());
+        assert!(paths.decision_md.exists());
+        assert!(paths.iteration_json.exists());
+    }
+
+    #[test]
+    fn successful_setup_writes_initialized_state() {
+        let tmp = TempDir::new().unwrap();
+        let session_dir = tmp.path();
+        let meta = dummy_meta(session_dir);
+        let candidate_workspace = Path::new("/tmp/candidate");
+
+        let paths = create_iteration_artifacts(
+            session_dir,
+            2,
+            &meta,
+            candidate_workspace,
+            "wiggum-evolution/test-session/iteration-2",
+            "ok",
+            "",
+        )
+        .unwrap();
+
+        let iter_state = crate::state::load_iteration_state(&paths.iteration_json).unwrap();
+        assert_eq!(iter_state.state, IterationPhase::Initialized);
+        assert_eq!(iter_state.correctness.status, "pending");
+        assert!(iter_state.decision.is_none());
+        assert_eq!(iter_state.iteration, 2);
+    }
+
+    #[test]
+    fn failed_setup_writes_failed_state_and_decision() {
+        let tmp = TempDir::new().unwrap();
+        let session_dir = tmp.path();
+        let meta = dummy_meta(session_dir);
+        let candidate_workspace = Path::new("/tmp/candidate");
+
+        let paths = create_iteration_artifacts(
+            session_dir,
+            3,
+            &meta,
+            candidate_workspace,
+            "",
+            "failed",
+            "git worktree add failed: ref not found",
+        )
+        .unwrap();
+
+        let iter_state = crate::state::load_iteration_state(&paths.iteration_json).unwrap();
+        assert_eq!(iter_state.state, IterationPhase::Failed);
+        assert_eq!(iter_state.correctness.status, "skipped");
+        assert!(!iter_state.correctness.benchmark_eligible);
+        let decision = iter_state.decision.unwrap();
+        assert_eq!(decision.outcome, "failed");
+        assert!(decision.evidence.as_deref().unwrap_or("").contains("git worktree"));
+    }
+
+    #[test]
+    fn phase_log_paths_recorded_in_iteration_json() {
+        let tmp = TempDir::new().unwrap();
+        let session_dir = tmp.path();
+        let meta = dummy_meta(session_dir);
+        let candidate_workspace = Path::new("/tmp/candidate");
+
+        let paths = create_iteration_artifacts(
+            session_dir,
+            4,
+            &meta,
+            candidate_workspace,
+            "wiggum-evolution/test-session/iteration-4",
+            "ok",
+            "",
+        )
+        .unwrap();
+
+        let iter_state = crate::state::load_iteration_state(&paths.iteration_json).unwrap();
+        let phase_logs = iter_state.artifacts.phase_logs.unwrap();
+        assert!(phase_logs.contains_key("propose"));
+        assert!(phase_logs.contains_key("implement"));
+        assert!(phase_logs.contains_key("benchmark"));
+        assert!(phase_logs.contains_key("decide"));
+        assert!(phase_logs["propose"].ends_with("propose.log"));
+    }
+}
