@@ -1,5 +1,22 @@
 ## Ralph Progress
 
+## 2026-04-08 - US-013
+- Replaced the stub `run_resume` with a full implementation:
+  - Validates `active_baseline_path` / `active_baseline_binary` from session.env before proceeding.
+  - Finds the latest iteration number from `iterations/` directory.
+  - Infers the resume phase from `iteration.json.state` via `phase_from_state()` when `--from` is not given (initialized/proposing→propose, proposed/implementing→implement, implemented/validating→validate, benchmarking→benchmark, benchmarked/deciding→decide).
+  - Validates candidate workspace (from `iteration.json.candidate.workspace`) and baseline artifacts still exist; if not, marks iteration failed and writes summary.
+  - Executes phases from the resume phase onward via new `run_iteration_from_phase()` function.
+  - Handles outcome identically to the main loop (promotion, idea marking, worktree cleanup).
+  - Does NOT start a new iteration after the resumed one completes.
+- Added `iteration_paths_from_dir()` helper to reconstruct `IterationPaths` from an existing directory without creating any files.
+- All 31 evolution-loop tests pass.
+- Files changed: `evolution-loop/src/main.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - `run_iteration_from_phase` replicates phase execution logic from `run_iteration`; if these diverge further, consider extracting per-phase functions.
+  - `serde_json::to_value(&iter_state.state).as_str()` is a clean way to get the camelCase string representation of a serde enum without adding a custom Display impl.
+---
+
 ## 2026-04-08 - US-012
 - Completed the main iteration loop in `evolution-loop/src/main.rs` with all required state verification, stopping conditions, and binary copy step.
 - Added `record_phase_failure` function: writes to iteration.json via serde_json::Value to set state/decision/benchmark fields, and writes benchmark.md and decision.md with phase-specific failure messages.
