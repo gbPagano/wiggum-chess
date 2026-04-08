@@ -31,8 +31,8 @@ use versioning::{
     parse_version_tag, ProposalSource,
 };
 use worktree::{
-    candidate_branch_name, commit_candidate_workspace, create_candidate_workspace,
-    remove_candidate_workspace,
+    candidate_branch_name, commit_candidate_workspace, create_candidate_branch,
+    create_candidate_workspace, remove_candidate_workspace,
 };
 
 // ---------------------------------------------------------------------------
@@ -160,7 +160,14 @@ fn run_iteration(
         &candidate_dir,
         &meta.active_baseline_version,
     ) {
-        Ok(()) => ("ok".to_string(), String::new()),
+        Ok(()) => match create_candidate_branch(&candidate_dir, &branch) {
+            Ok(()) => ("ok".to_string(), String::new()),
+            Err(e) => {
+                warn!(iteration = n, error = %e, "candidate branch creation failed");
+                remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
+                ("failed".to_string(), e.to_string())
+            }
+        },
         Err(e) => {
             warn!(iteration = n, error = %e, "candidate workspace setup failed");
             ("failed".to_string(), e.to_string())

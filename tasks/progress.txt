@@ -1,6 +1,16 @@
 ## Ralph Progress
 
+## 2026-04-07 22:15:57 PDT - US-005
+- Updated `evolution-loop/src/worktree.rs` so git worktree helpers consistently capture command output, surface non-zero git failures with stderr/stdout detail, create iteration branches explicitly, and treat `git diff --quiet` exit code `1` as "changes present" instead of a hard error.
+- Wired `evolution-loop/src/main.rs` to create the candidate branch immediately after `git worktree add`, and to clean up the new worktree if branch creation fails before artifact initialization proceeds.
+- Files changed: `evolution-loop/src/main.rs`, `evolution-loop/src/worktree.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Candidate worktree setup is a two-step operation in this codebase: detached worktree creation from the repo root, then branch creation inside the candidate workspace.
+  - For git status-style checks such as `git diff --quiet`, exit code `1` means "changes found" and should not be treated as command failure.
+---
+
 ## 2026-04-07 22:08:00 PDT - US-004
+
 - Verified and completed `evolution-loop/src/versioning.rs` for version tag parsing, proposal-source-based candidate bumps, Cargo semver conversion, and package-version-only manifest syncing across the three workspace crates.
 - Fixed a compile blocker in `evolution-loop/src/state.rs` by deriving `PartialEq, Eq` for `CheckResult`, allowing the versioning tests and crate build to pass.
 - Files changed: `evolution-loop/src/state.rs`, `tasks/prd.json`, `tasks/progress.txt`
@@ -37,6 +47,7 @@
 - When a proposal comes from an operator checklist, store the exact selected idea text plus `ideas.proposalSource` in `iteration.json`, then have the orchestration layer mark that checklist entry as `[x]` only after the iteration reaches a tested terminal outcome.
 - Candidate versioning belongs to the orchestration layer: once `ideas.proposalSource` is known, compute the tag there, sync all workspace Cargo versions, and persist the generated `target/debug/wiggum-engine` path into both `session.env` and `iteration.json` before benchmark/decision phases consume it.
 - Baseline resolution for the evolution loop is also orchestration-owned: expose `accepted_baseline_path` / `accepted_baseline_binary` in `session.env` and `baselinePath` / `baselineBinary` in `iteration.json`, while keeping any git ref only as internal setup state for creating candidate worktrees.
+- Candidate worktree setup is a two-step git contract: create the detached worktree from the repo root, then create the iteration branch inside that workspace; if branch creation fails, remove the worktree immediately so later runs do not inherit an orphaned checkout.
 - Promotion persistence should copy the built candidate binary into `chess-engine/versions/<tag>/wiggum-engine` and then update both `iteration.json.decision.promotion` and `session.env` from that stored artifact path, so future iterations never depend on the candidate worktree or target layout.
 - Treat `session.env` `active_baseline_*` fields as the stable operator-facing alias for the current promoted baseline, and keep the final session summary's promotion history derived from per-iteration decision metadata so accepted baseline changes are auditable in order.
 - Stockfish follow-up for inconclusive direct benchmarks should use pre-seeded `iteration.json.stockfishComparison` metadata plus `stockfish-comparison/results.md`, including whether the stored baseline report exists, whether the follow-up changed the recommendation, and any explicit limitation.
