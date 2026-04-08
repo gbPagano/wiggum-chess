@@ -1,5 +1,21 @@
 ## Ralph Progress
 
+## 2026-04-08 - US-012
+- Completed the main iteration loop in `evolution-loop/src/main.rs` with all required state verification, stopping conditions, and binary copy step.
+- Added `record_phase_failure` function: writes to iteration.json via serde_json::Value to set state/decision/benchmark fields, and writes benchmark.md and decision.md with phase-specific failure messages.
+- Added `check_iteration_state_is` to read the current state string from iteration.json after each Claude phase.
+- Added `iteration_has_no_hypothesis` to detect the `no_hypothesis` stop signal in raw JSON (checks state, hypothesis.status, hypothesis.state, hypothesis.stopSignal).
+- Added `copy_candidate_binary` to copy `target/debug/chess-engine` → `target/debug/wiggum-engine` after the correctness gate.
+- Fixed candidate versioning timing: was applied before propose, now applied after propose using actual `proposal_source` from iteration.json.
+- Added `stop_session: Option<(String, String)>` to `IterationResult` so `no_hypothesis` and other session-stopping conditions propagate to `run_loop`.
+- All 31 evolution-loop tests pass; 162 total workspace tests pass.
+- Files changed: `evolution-loop/src/main.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Use `serde_json::Value` for mutation of iteration.json in `record_phase_failure` to avoid struct limitations when the propose/implement skills may add non-standard fields.
+  - The candidate binary copy step (`chess-engine` → `wiggum-engine`) belongs after the correctness gate, not before it, because the gate's `cargo build --workspace` is what produces the binary.
+  - Candidate versioning must be orchestration-owned but timing-sensitive: compute the real version from `proposal_source` after propose succeeds, then apply manifest versions before implement runs.
+---
+
 ## 2026-04-08 - US-011
 - `evolution-loop/src/artifacts.rs` already had `create_iteration_artifacts` fully wired into `main.rs`; added 4 unit tests to verify: directory creation, initialized-state JSON for successful setup, failed-state JSON (state=failed, correctness.status=skipped, decision.outcome=failed), and phase log paths recorded in iteration.json.
 - All 31 evolution-loop tests pass.
