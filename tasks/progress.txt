@@ -1,5 +1,20 @@
 ## Ralph Progress
 
+## 2026-04-08 - US-014
+- Implemented structured logging with chrono-based timestamps and verbose-mode prefix:
+  - Added `static VERBOSE_MODE: AtomicBool` global; set in `run_start`/`run_resume` before the iteration loop.
+  - Implemented `EvolutionFmt` custom `FormatEvent` that writes `%Y-%m-%dT%H:%M:%S%.3fZ` timestamp, log level, target, and optionally `[evolution-loop]` prefix when `VERBOSE_MODE` is set.
+  - Added `use tracing_subscriber::fmt::FormatFields;` import required to call `ctx.format_fields()` in the custom formatter.
+  - Updated tracing init to use `.event_format(EvolutionFmt)` instead of `.with_target(true)`.
+- Added DEBUG logging for git commands in `worktree.rs`: `debug!(cmd="git", args=..., cwd=..., ...)` in `run_git_command`.
+- Added DEBUG logging for cargo commands in `correctness.rs`: `debug!(cmd=program, args=..., timeout_secs=..., ...)` in `run_with_timeout`.
+- All 31 evolution-loop tests pass.
+- Files changed: `evolution-loop/src/main.rs`, `evolution-loop/src/worktree.rs`, `evolution-loop/src/correctness.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - `tracing_subscriber::fmt::FormatFields` must be imported explicitly with `use` for `ctx.format_fields()` to resolve even though `N: FormatFields` is a where-clause bound.
+  - A `static AtomicBool` set early in the subcommand handler is the cleanest way to propagate a CLI flag to a custom `tracing_subscriber::fmt::FormatEvent` without needing to reinitialize the subscriber after arg parsing.
+---
+
 ## 2026-04-08 - US-013
 - Replaced the stub `run_resume` with a full implementation:
   - Validates `active_baseline_path` / `active_baseline_binary` from session.env before proceeding.

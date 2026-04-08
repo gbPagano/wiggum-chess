@@ -1,8 +1,10 @@
 use anyhow::{anyhow, Context, Result};
 use std::path::Path;
 use std::process::{Command, Output};
+use tracing::debug;
 
 fn run_git_command(args: &[&str], cwd: Option<&Path>) -> Result<Output> {
+    debug!(cmd = "git", args = %args.join(" "), cwd = ?cwd, "executing git command");
     let mut cmd = Command::new("git");
     cmd.args(args);
     if let Some(dir) = cwd {

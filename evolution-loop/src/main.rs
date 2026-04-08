@@ -17,6 +17,48 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tracing::{debug, info, warn};
+use tracing_subscriber::fmt::FormatFields;
+
+// ---------------------------------------------------------------------------
+// Global verbose flag (set before the iteration loop starts)
+// ---------------------------------------------------------------------------
+
+static VERBOSE_MODE: AtomicBool = AtomicBool::new(false);
+
+// ---------------------------------------------------------------------------
+// Custom tracing event formatter: chrono-based timestamp + optional prefix
+// ---------------------------------------------------------------------------
+
+struct EvolutionFmt;
+
+impl<S, N> tracing_subscriber::fmt::FormatEvent<S, N> for EvolutionFmt
+where
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    N: for<'a> tracing_subscriber::fmt::FormatFields<'a> + 'static,
+{
+    fn format_event(
+        &self,
+        ctx: &tracing_subscriber::fmt::FmtContext<'_, S, N>,
+        mut writer: tracing_subscriber::fmt::format::Writer<'_>,
+        event: &tracing::Event<'_>,
+    ) -> std::fmt::Result {
+        let now = Utc::now();
+        write!(writer, "{} ", now.format("%Y-%m-%dT%H:%M:%S%.3fZ"))?;
+
+        let level = event.metadata().level();
+        write!(writer, "{:>5} ", level)?;
+
+        if VERBOSE_MODE.load(Ordering::Relaxed) {
+            write!(writer, "[evolution-loop] ")?;
+        }
+
+        let target = event.metadata().target();
+        write!(writer, "{}: ", target)?;
+
+        ctx.format_fields(writer.by_ref(), event)?;
+        writeln!(writer)
+    }
+}
 
 use artifacts::create_iteration_artifacts;
 use correctness::{run_correctness_gate, CorrectnessOutcome};
@@ -728,6 +770,8 @@ fn run_start(
     phase_timeout_secs: u64,
     verbose: bool,
 ) -> Result<()> {
+    VERBOSE_MODE.store(verbose, Ordering::SeqCst);
+
     // Validate baseline version format
     parse_version_tag(&baseline_version)
         .with_context(|| format!("invalid --baseline-version '{}'", baseline_version))?;
@@ -1160,6 +1204,8 @@ fn run_resume(
     phase_timeout_secs: u64,
     verbose: bool,
 ) -> Result<()> {
+    VERBOSE_MODE.store(verbose, Ordering::SeqCst);
+
     let session_env_path = session_path.join("session.env");
     let mut meta = load_session_metadata(&session_env_path)
         .with_context(|| format!("reading session.env from {}", session_path.display()))?;
@@ -1386,7 +1432,7 @@ fn main() -> Result<()> {
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
         )
-        .with_target(true)
+        .event_format(EvolutionFmt)
         .init();
 
     let cli = Cli::parse();

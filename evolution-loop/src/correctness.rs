@@ -4,6 +4,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::Duration;
+use tracing::debug;
 
 use crate::state::{
     load_iteration_state, save_iteration_state, CheckResult, CorrectnessState, IterationPhase,
@@ -23,6 +24,7 @@ struct TimedResult {
 }
 
 fn run_with_timeout(program: &str, args: &[&str], cwd: &Path, timeout_secs: u64) -> TimedResult {
+    debug!(cmd = program, args = %args.join(" "), %timeout_secs, "executing cargo command");
     let mut child = match Command::new(program)
         .args(args)
         .current_dir(cwd)
