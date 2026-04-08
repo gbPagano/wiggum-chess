@@ -9,6 +9,15 @@
   - For git status-style checks such as `git diff --quiet`, exit code `1` means "changes found" and should not be treated as command failure.
 ---
 
+## 2026-04-07 22:35:56 PDT - US-007
+- Reworked `evolution-loop/src/phase.rs` so Claude phase execution now builds the full shell-script guidance prompt, invokes `$CLAUDE_BIN --dangerously-skip-permissions --add-dir <session_dir> --add-dir <repo_root> --print` from the candidate workspace, enforces per-phase timeouts, and writes logs to the stable logical phase filenames (`propose.log`, `implement.log`, `benchmark.log`, `decide.log`).
+- Added focused unit tests covering prompt content, successful log capture, non-zero exit handling, and timeout behavior via temporary fake Claude binaries.
+- Files changed: `CLAUDE.md`, `evolution-loop/src/phase.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Keep phase log filenames keyed by the logical phase name even when the invoked skill name includes the `evolution-` prefix, otherwise later artifact consumers look in the wrong place.
+  - Stream raw stdout/stderr bytes into the phase log from background reader threads so quiet and verbose mode capture the same Claude output without line-buffering artifacts.
+---
+
 ## 2026-04-07 22:08:00 PDT - US-004
 
 - Verified and completed `evolution-loop/src/versioning.rs` for version tag parsing, proposal-source-based candidate bumps, Cargo semver conversion, and package-version-only manifest syncing across the three workspace crates.
@@ -53,6 +62,7 @@
 - Stockfish follow-up for inconclusive direct benchmarks should use pre-seeded `iteration.json.stockfishComparison` metadata plus `stockfish-comparison/results.md`, including whether the stored baseline report exists, whether the follow-up changed the recommendation, and any explicit limitation.
 - Positive-signal promotion after inconclusive evidence is decision-owned and must be explicit: seed `iteration.json.stockfishComparison.positiveSignal`, and only let a decision promote with `benchmark.sufficientForPromotion = false` when both the structured evidence and `decision.md` repeat the exact positive-signal rationale.
 - Quiet-vs-verbose phase execution should branch only at the shell wrapper: keep default runs redirecting skill output to per-phase logs, and implement `--verbose` by teeing the exact same phase stream so logging artifacts and iteration semantics stay identical.
+- `evolution-loop/src/phase.rs` should keep invoking the `evolution-*` skills while writing logs to the stable logical phase filenames (`propose.log`, `implement.log`, `benchmark.log`, `decide.log`); stream raw stdout/stderr bytes into those logs so captured Claude output matches quiet and verbose runs.
 - The correctness gate contract is build-first, test-second: run `cargo build --workspace`, then `cargo test --workspace -- --skip gen_files::magics::name`, stop on the first failure or timeout, write the per-check outcome to `correctness/results.md`, and make `iteration.json.correctness.benchmarkEligible` true only when both checks pass.
 
 ## 2026-04-07 22:25:11 PDT - US-006
