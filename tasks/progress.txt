@@ -1,5 +1,24 @@
 ## Ralph Progress
 
+## 2026-04-07 22:08:00 PDT - US-004
+- Verified and completed `evolution-loop/src/versioning.rs` for version tag parsing, proposal-source-based candidate bumps, Cargo semver conversion, and package-version-only manifest syncing across the three workspace crates.
+- Fixed a compile blocker in `evolution-loop/src/state.rs` by deriving `PartialEq, Eq` for `CheckResult`, allowing the versioning tests and crate build to pass.
+- Files changed: `evolution-loop/src/state.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Shared state structs used inside result enums may need `PartialEq`/`Eq` derives even when the story itself targets a different module, because compileability of the crate gates story completion.
+  - The versioning helper should keep manifest edits scoped to the `[package]` version line only so dependency version requirements remain untouched.
+---
+
+
+## 2026-04-07 21:55:36 PDT - US-004
+- Added `evolution-loop/src/versioning.rs` helpers for parsing `vMAJOR.MINOR` tags, computing proposal-source-based candidate tags, converting them to Cargo semver, and syncing package versions across `chess-engine`, `chess-runner`, and `chesslib`.
+- Added focused unit coverage for valid/invalid tag parsing, source-based candidate bumps, semver conversion, manifest updates across all three crates, and missing-version failure handling.
+- Files changed: `CLAUDE.md`, `evolution-loop/src/versioning.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Candidate manifest version sync should replace only the package `version = "..."` line in each Cargo manifest so dependency declarations are not rewritten by accident.
+  - Versioning tests are easiest to keep isolated by creating temporary workspace manifests and asserting the exact rewritten semver in each crate.
+---
+
 ## 2026-04-07 - US-001
 - Created `evolution-loop/` crate with `Cargo.toml` (name = "evolution-loop", binary target named `evolution-loop`)
 - Added `evolution-loop` to `members` array in root `Cargo.toml`
