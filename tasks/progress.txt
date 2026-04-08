@@ -1,5 +1,16 @@
 ## Ralph Progress
 
+## 2026-04-07 - US-001
+- Created `evolution-loop/` crate with `Cargo.toml` (name = "evolution-loop", binary target named `evolution-loop`)
+- Added `evolution-loop` to `members` array in root `Cargo.toml`
+- Declared all required dependencies: serde (derive), serde_json, clap (derive), anyhow, chrono (serde), tracing, tracing-subscriber (env-filter), ctrlc
+- Created `evolution-loop/src/main.rs` with `fn main()` that prints "evolution-loop"
+- Files changed: `evolution-loop/Cargo.toml`, `evolution-loop/src/main.rs`, `Cargo.toml`
+- **Learnings for future iterations:**
+  - Cargo is not available in the devcontainer environment; structure must be verified by code review rather than build execution.
+  - New workspace crates must be added to both the `members` array in root Cargo.toml and have their own Cargo.toml with the correct package name and binary target.
+---
+
 ## Codebase Patterns
 - For evolution-loop phase execution, keep terminal output concise and write raw skill stdout/stderr to per-iteration log files under `iterations/<N>/phase-logs/`; record those paths in `iteration.json` so later phases and operators can inspect failures without banner noise.
 - Keep the loop's operator-facing phase list in one ordered sequence and derive both the full plan and remaining-phase output from it so progress text stays synchronized across iterations.
