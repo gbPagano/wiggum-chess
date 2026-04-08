@@ -407,3 +407,14 @@ Started: Sun Apr  5 22:30:19 PDT 2026
   - Avoid command substitutions around shell functions that need to export state back to the caller; use globals like `LAST_ITERATION_DIR` only when the function runs in the current shell
   - Python is not guaranteed to be available as `python`; for shell scripts in this repo, prefer pure bash data flow when possible rather than shelling out to parse files just written by the same process
 ---
+
+## 2026-04-07 05:30:00 UTC - US-009
+- Implemented Rust promotion helpers in `evolution-loop/src/promotion.rs` to copy the accepted candidate binary into `chess-engine/versions/<tag>/wiggum-engine`, preserve executable permissions, and return the stored artifact path
+- `promote_candidate()` now reads candidate version/binary from `iteration.json`, updates both active and accepted baseline fields in `SessionMetadata`, records accepted baseline major/minor, and writes `decision.promotion` metadata back into `iteration.json`
+- Added unit coverage for baseline path computation, artifact persistence, successful promotion metadata sync, and the missing-binary error path
+- Quality checks passed: `cargo build -p evolution-loop`, `cargo test -p evolution-loop`
+- Files changed: `evolution-loop/src/promotion.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Promotion is the point where session metadata must synchronize both `active_baseline_*` and `accepted_baseline_*`; later iterations should read those fields instead of reconstructing promoted artifact paths
+  - Promotion tests can stay local to `promotion.rs` by writing a minimal `iteration.json` fixture with `save_iteration_state()` and asserting the persisted artifact under `chess-engine/versions/<tag>/wiggum-engine`
+---

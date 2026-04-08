@@ -1,5 +1,5 @@
 [workspace]
-members = ["chesslib", "chess-runner", "chess-engine"]
+members = ["chesslib", "chess-runner", "chess-engine", "evolution-loop"]
 resolver = "2"
 
 [profile.release]

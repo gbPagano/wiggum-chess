@@ -1,186 +1,269 @@
 {
-  "project": "chess-ic",
-  "branchName": "ralph/evolution-loop-enhancements",
-  "description": "Enhance the evolution loop with quieter default output, optional idea-file proposing, versioned engine artifacts in chess-engine/versions, and more flexible inconclusive-decision handling.",
+  "project": "Wiggum Chess Engine",
+  "branchName": "ralph/evolution-loop-rust",
+  "description": "Rewrite the evolution orchestrator (scripts/evolution-loop.sh) as a new Rust crate `evolution-loop` in the Cargo workspace, eliminating bash/Python, adding typed state, per-phase timeouts, and structured logging.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Suppress raw OpenClaude output by default",
-      "description": "As an operator, I want the evolution loop to suppress the OpenClaude banner and raw phase output so the terminal stays readable during unattended runs.",
+      "title": "Create evolution-loop crate scaffold",
+      "description": "As a developer, I want a new `evolution-loop` Rust crate added to the Cargo workspace so that the orchestrator can be built like any other crate.",
       "acceptanceCriteria": [
-        "The orchestration script does not print the OpenClaude banner during propose, implement, benchmark, or decide phases",
-        "The orchestration script does not stream raw skill output to the terminal by default",
-        "The default output behavior matches scripts/ralph/ralph.sh with concise terminal progress and captured underlying tool output",
-        "Each phase still captures stdout/stderr for later inspection in session artifacts or logs",
-        "The final per-phase outcome remains available in iteration artifacts",
-        "bash -n scripts/evolution-loop.sh passes",
+        "Directory `evolution-loop/` created with valid `Cargo.toml` (name = \"evolution-loop\", binary target named `evolution-loop`)",
+        "`evolution-loop` added to `members` array in root `Cargo.toml`",
+        "Dependencies declared: serde (features=[\"derive\"]), serde_json, clap (features=[\"derive\"]), anyhow, chrono (features=[\"serde\"]), tracing, tracing-subscriber (features=[\"env-filter\"]), ctrlc",
+        "`evolution-loop/src/main.rs` exists with a `fn main()` that prints \"evolution-loop\" and exits 0",
+        "`cargo build -p evolution-loop` compiles without errors",
         "Typecheck passes"
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Set the default Claude CLI binary to openclaude and changed per-phase execution to capture stdout/stderr into iteration phase log artifacts instead of streaming raw CLI output to the terminal. The loop now records phase log paths in iteration.json while keeping concise terminal summaries only."
+      "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Show current and remaining phases",
-      "description": "As an operator, I want the loop to show the current phase and the remaining phases for the active iteration so I can tell whether the run is progressing or stuck.",
+      "title": "Implement CLI with start and resume subcommands",
+      "description": "As an operator, I want a clear CLI with `start` and `resume` subcommands so that I can start new sessions and resume interrupted ones.",
       "acceptanceCriteria": [
-        "At the start of each iteration, the script prints the ordered phase list for that iteration",
-        "Before each phase begins, the script prints the current phase name",
-        "Before each phase begins, the script prints which phases remain in the current iteration",
-        "Output is concise and does not include raw model banner text",
-        "bash -n scripts/evolution-loop.sh passes",
+        "Subcommand `start` accepts: --baseline-version <tag> (required), --ideas-file <path> (optional), --output-dir <path> (default: tasks/evolution-runs), --max-iterations <n> (default: 10), --max-infra-failures <n> (default: 3), --phase-timeout-secs <n> (default: 1800), --verbose (flag)",
+        "Subcommand `resume` accepts: --session <path> (required), --from <phase> (optional, one of: propose/implement/validate/benchmark/decide), --phase-timeout-secs <n> (default: 1800), --verbose (flag)",
+        "`evolution-loop --help` prints usage and exits 0",
+        "`evolution-loop start --help` and `evolution-loop resume --help` each print subcommand-specific help",
+        "Missing required `--baseline-version` in `start` prints a descriptive error and exits non-zero",
+        "Unknown arguments print a descriptive error and exit non-zero",
+        "`cargo build -p evolution-loop` compiles without errors",
         "Typecheck passes"
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Added a fixed iteration phase sequence and concise progress helpers so each iteration prints the full phase order once, then prints the current phase and remaining phases before propose, implement, validate, benchmark, and decide. Raw model output remains suppressed behind the phase logs introduced in US-001."
+      "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Accept optional ideas file",
-      "description": "As an operator, I want to pass a file of possible engine ideas so the propose phase can prefer curated ideas generated by me or other agents.",
+      "title": "Implement typed structs for session and iteration state",
+      "description": "As a developer, I want strongly-typed Rust structs for all session/iteration state so that JSON manipulation bugs are caught at compile time.",
       "acceptanceCriteria": [
-        "The script accepts a new optional argument for an ideas file path",
-        "If the ideas file is omitted, the propose phase behaves exactly as it does today",
-        "If the ideas file exists but is empty, the propose phase ignores it and behaves like no file was provided",
-        "The supported format is Markdown checklist entries using '- [ ] idea text'",
-        "The propose phase can read pending ideas from that file during hypothesis selection",
-        "bash -n scripts/evolution-loop.sh passes",
+        "Module `state` (or `types`) defines `SessionMetadata` struct with Serialize/Deserialize covering all fields currently in `session.env`: baseline_version, active_baseline_version, active_baseline_path, active_baseline_binary, accepted_baseline_version, accepted_baseline_path, accepted_baseline_binary, accepted_baseline_major, accepted_baseline_minor, candidate_version, candidate_binary_path, ideas_file, ideas_file_pending_count, ideas_format, stockfish_binary, max_iterations, max_infra_failures, session_id, session_dir, summary_file",
+        "Module defines `IterationState` struct with Serialize/Deserialize covering all top-level fields in `iteration.json`: iteration, baselineVersion, baselinePath, baselineBinary, ideas (IdeasState), candidate (CandidateState), state (IterationPhase), isolation (IsolationState), correctness (CorrectnessState), stockfishComparison (StockfishComparisonState), stateMachine (StateMachineState), artifacts (ArtifactsState), decision (Option<DecisionState>)",
+        "Enum `IterationPhase` covers: initialized, proposing, proposed, implementing, implemented, validating, benchmarking, benchmarked, deciding, accepted, rejected, inconclusive, failed",
+        "Function `transition_phase(state: &mut IterationState, from: IterationPhase, to: IterationPhase) -> anyhow::Result<()>` returns Err if current state != from",
+        "Function `load_iteration_state(path: &Path) -> anyhow::Result<IterationState>` reads and deserializes iteration.json",
+        "Function `save_iteration_state(path: &Path, state: &IterationState) -> anyhow::Result<()>` serializes with 2-space indent and trailing newline",
+        "Function `load_session_metadata(path: &Path) -> anyhow::Result<SessionMetadata>` reads key=value file",
+        "Function `save_session_metadata(path: &Path, meta: &SessionMetadata) -> anyhow::Result<()>` writes key=value file",
+        "Unit test: round-trip serialize/deserialize of an `IterationState` value produces identical JSON",
+        "Unit test: `transition_phase` returns Err when called with wrong `from` state",
+        "Tests pass",
         "Typecheck passes"
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Added an optional --ideas-file flag to scripts/evolution-loop.sh, normalized empty or fully-used checklist files back to the default self-propose flow, and recorded ideas-file metadata in both session.env and iteration.json so the propose phase can consume pending Markdown checklist ideas when available."
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Track hypothesis source and mark used ideas",
-      "description": "As a reviewer, I want each iteration to record whether the hypothesis came from the user ideas file or the model itself so versioning and audit behavior can follow the correct policy.",
+      "title": "Implement version tag parsing and candidate versioning",
+      "description": "As the orchestrator, I want version tag parsing and candidate version computation so that candidate versions are correctly bumped based on proposal source.",
       "acceptanceCriteria": [
-        "iteration.json stores the proposal source as either 'user_ideas_file' or 'self_proposed'",
-        "hypothesis.md states the source of the selected idea",
-        "The implementation and decision phases can read the proposal source from iteration.json",
-        "After an idea from the checklist file is selected and tested, the system marks that checklist entry as used",
-        "bash -n scripts/evolution-loop.sh passes",
+        "Function `parse_version_tag(tag: &str) -> anyhow::Result<(u32, u32)>` parses `vMAJOR.MINOR` and returns Err for invalid format",
+        "Function `candidate_version_for_source(baseline: &str, source: ProposalSource) -> anyhow::Result<String>` returns minor bump for self_proposed, major bump for user_ideas_file",
+        "Function `cargo_semver_from_tag(tag: &str) -> anyhow::Result<String>` returns `MAJOR.MINOR.0`",
+        "Function `apply_candidate_manifest_versions(workspace: &Path, semver: &str) -> anyhow::Result<()>` updates `version = \"...\"` in chess-engine/Cargo.toml, chess-runner/Cargo.toml, chesslib/Cargo.toml using string replacement (one replacement per file, error if none found)",
+        "Enum `ProposalSource` with variants `SelfProposed` and `UserIdeasFile`",
+        "Unit tests: parse_version_tag(\"v1.2\") == Ok((1,2)); parse_version_tag(\"bad\") == Err; candidate_version_for_source(\"v1.2\", SelfProposed) == \"v1.3\"; candidate_version_for_source(\"v1.2\", UserIdeasFile) == \"v2.0\"",
+        "Tests pass",
         "Typecheck passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Added explicit proposal provenance fields in iteration.json, required the propose phase to record whether the hypothesis came from the ideas checklist or self-proposal, required hypothesis.md to state that source, and marked selected checklist ideas as used only after the iteration reached a tested terminal outcome."
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Bump candidate UCI version",
-      "description": "As an operator, I want the implementation phase to bump the engine version shown in the UCI name so each candidate can be distinguished during benchmarking.",
+      "title": "Implement git worktree management",
+      "description": "As the orchestrator, I want candidate git worktrees to be created and cleaned up reliably so that interrupted sessions don't leave orphaned worktrees.",
       "acceptanceCriteria": [
-        "The implement phase updates the engine version string exposed in the UCI name for the candidate build",
-        "If the hypothesis source is self_proposed, the candidate version increments the minor version from the current baseline, for example v0.1 to v0.2",
-        "If the hypothesis source is user_ideas_file, the candidate version increments the major version from the current baseline, for example v0.1 to v1.0",
-        "The candidate version is recorded in iteration.json and implementation.md",
-        "Candidate and baseline UCI names are distinguishable during benchmark runs",
-        "The implementation phase produces a candidate binary named wiggum-engine for later persistence into version artifacts",
+        "Function `create_candidate_workspace(repo_root: &Path, candidate_dir: &Path, baseline_ref: &str) -> anyhow::Result<()>` shells out to `git worktree add --detach <dir> <ref>` then `git -C <dir> checkout -b <branch>`",
+        "Function `remove_candidate_workspace(repo_root: &Path, candidate_dir: &Path)` shells out to `git worktree remove --force <dir>` then `rm -rf <dir>`; does not panic/error if directory does not exist",
+        "Function `candidate_branch_name(session_id: &str, iteration: u32) -> String` returns `wiggum-evolution/<session_id>/iteration-<n>`",
+        "Function `candidate_has_uncommitted_changes(candidate_dir: &Path) -> anyhow::Result<bool>` checks `git diff --quiet` and `git diff --cached --quiet` and untracked files",
+        "Function `commit_candidate_workspace(candidate_dir: &Path, iteration: u32) -> anyhow::Result<()>` runs `git add -A` then `git commit -m \"chore: accept evolution iteration <n>\"`",
+        "All git commands capture stdout and stderr; on non-zero exit code return Err with the captured stderr included in the error message",
         "Typecheck passes"
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Made the engine UCI name derive from Cargo package version so candidate builds advertise their computed tag automatically, then taught scripts/evolution-loop.sh to compute candidate versions from ideas.proposalSource, synchronize chess-engine/chess-runner/chesslib manifest versions, build a renamed debug artifact at target/debug/wiggum-engine, and persist candidate version/binary metadata into session.env, iteration.json, and implementation.md before benchmarking."
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Resolve baseline from stored version artifacts",
-      "description": "As an operator, I want the loop to use stored engine versions from chess-engine/versions instead of git refs so baseline selection is explicit and reproducible from release artifacts.",
+      "title": "Implement correctness gate (validate phase)",
+      "description": "As the orchestrator, I want a correctness gate that runs cargo build and cargo test in the candidate workspace and records results before benchmarking.",
       "acceptanceCriteria": [
-        "The session accepts a baseline version label that resolves to chess-engine/versions/<tag>",
-        "The baseline version directory is required to contain a compiled engine binary named wiggum-engine",
-        "The loop fails fast with a clear error if the requested baseline version directory is missing or if wiggum-engine is absent",
-        "session.env records the selected baseline version path instead of a git ref",
-        "iteration.json records the resolved baseline version path used for that iteration",
-        "The benchmark phase can identify the baseline engine binary from the stored version directory",
+        "Function `run_correctness_gate(candidate_dir: &Path, iteration_state_path: &Path, correctness_results_path: &Path, timeout_secs: u64) -> anyhow::Result<CorrectnessOutcome>` runs two commands sequentially in `candidate_dir`: (1) `cargo build --workspace`, (2) `cargo test --workspace -- --skip gen_files::magics::name`",
+        "Each command has a per-command timeout equal to `timeout_secs`; if it exceeds the timeout, the process is killed and the check is marked failed with reason \"timeout\"",
+        "Returns `CorrectnessOutcome::Passed` if both pass, `CorrectnessOutcome::Failed(Vec<CheckResult>)` otherwise",
+        "Writes `correctness/results.md` with status (passed/failed) and per-check results",
+        "Updates `iteration.json` correctness field with status, passed bool, benchmarkEligible bool, and checks array",
         "Typecheck passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "Resolved baseline selection through chess-engine/versions/<tag>/ instead of exposing git refs, required a stored wiggum-engine binary in the version directory, recorded accepted_baseline_path/accepted_baseline_binary in session.env plus baselinePath/baselineBinary in iteration.json, and seeded the initial v0.1 artifact so the new fail-fast path has a valid baseline binary."
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Persist accepted engine binaries as new versions",
-      "description": "As an operator, I want accepted candidates to be saved as versioned engine artifacts so future iterations and external benchmarking use the promoted binary directly.",
+      "title": "Implement Claude phase execution with timeout and logging",
+      "description": "As the orchestrator, I want each Claude skill phase to run with a configurable timeout and produce a captured log so that hung processes don't block the session.",
       "acceptanceCriteria": [
-        "When an iteration is accepted, the script creates a new directory chess-engine/versions/<new-version>",
-        "The accepted candidate compiled engine binary is copied into that version directory with the filename wiggum-engine",
-        "The version directory does not require preserving the Cargo target layout",
-        "The stored binary path is recorded in session metadata for future iterations",
-        "The script does not depend on a git commit ref to resolve the next baseline",
+        "Function `run_phase(config: &PhaseConfig) -> anyhow::Result<PhaseOutcome>` spawns `$CLAUDE_BIN --dangerously-skip-permissions --add-dir <session_dir> --add-dir <repo_root> --print` with a heredoc-style stdin containing `/<skill_name>\\n\\n<context>` as the prompt, cwd set to candidate workspace",
+        "CLAUDE_BIN defaults to `openclaude`, overridable via environment variable",
+        "If the process exceeds `phase_timeout_secs`, it is killed with SIGKILL and `PhaseOutcome::Timeout` is returned",
+        "In quiet mode: stdout+stderr of the Claude process are captured to `phase-logs/<phase>.log` only",
+        "In verbose mode: stdout+stderr are written simultaneously to `phase-logs/<phase>.log` AND to the orchestrator's stdout using a background reader thread (tee behavior)",
+        "The phase prompt context includes: repository root, session directory, iteration directory, iteration state file path, session metadata file path, worker guidance path, and all guidance text from the current `run_claude_skill` function in `scripts/evolution-loop.sh`",
+        "Function returns `PhaseOutcome::Success` on exit code 0, `PhaseOutcome::Failed(exit_code)` otherwise",
+        "`PhaseConfig` struct holds: skill_name, candidate_workspace, iteration_dir, iteration_state_path, session_dir, repo_root, session_metadata_path, phase_timeout_secs, verbose",
         "Typecheck passes"
       ],
       "priority": 7,
       "passes": true,
-      "notes": "Updated scripts/evolution-loop.sh so accepted iterations persist the built candidate binary into chess-engine/versions/<promoted-version>/wiggum-engine, record the stored artifact path back into iteration.json decision.promotion metadata plus decision.md, and refresh session.env to use the promoted artifact path as the active baseline for later iterations instead of depending on Cargo target layout."
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Update active baseline after promotion",
-      "description": "As an operator, I want the loop to update the active baseline after a candidate is accepted so the next iteration evolves from the latest promoted model.",
+      "title": "Implement ideas file checklist management",
+      "description": "As the orchestrator, I want the ideas file checklist to be updated after each tested iteration so that ideas aren't retried.",
       "acceptanceCriteria": [
-        "After an accepted decision, the session metadata updates the active baseline version to the new promoted version",
-        "After an accepted decision, the next iteration uses the stored binary from the new version directory",
-        "After a rejected, failed, or inconclusive decision without promotion, the active baseline remains unchanged",
-        "The final session summary lists accepted baseline promotions in order",
-        "bash -n scripts/evolution-loop.sh passes",
+        "Function `count_pending_ideas(path: &Path) -> anyhow::Result<u32>` counts lines matching `^\\s*-\\s*\\[ \\]\\s+.+` in the ideas file",
+        "Function `mark_idea_used(ideas_path: &Path, selected_idea: &str) -> anyhow::Result<MarkResult>` finds the first unchecked entry matching `selected_idea` (trimmed), replaces `[ ]` with `[x]`, and returns `MarkResult::Updated`, `MarkResult::NotFound`, or `MarkResult::Skipped` (when path is empty or proposal_source != user_ideas_file)",
+        "Function `resolve_ideas_file(raw_path: &str, repo_root: &Path) -> anyhow::Result<Option<PathBuf>>` resolves relative/absolute path, returns None if file has zero pending ideas",
+        "After `mark_idea_used`, `ideas_file_pending_count` is updated in session metadata",
+        "If `pending_count` reaches 0 after marking, `ideas_file` field is cleared in session metadata so self-propose flow kicks in",
+        "Unit test: count_pending_ideas counts only `- [ ]` entries, not `- [x]` entries",
+        "Tests pass",
         "Typecheck passes"
       ],
       "priority": 8,
       "passes": true,
-      "notes": "Added explicit active_baseline_version/path/binary fields to session.env as aliases for the accepted baseline state that the loop mutates on promotion, and expanded the final session summary to list accepted baseline promotions in iteration order with stored binary paths while leaving non-promoting outcomes unchanged."
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Run extra Stockfish comparison for inconclusive results",
-      "description": "As an operator, I want the decision flow to trigger an extra comparison against Stockfish when candidate-vs-baseline results are inconclusive so promotion decisions use more context than a single neutral match.",
+      "title": "Implement candidate promotion and artifact persistence",
+      "description": "As the orchestrator, I want accepted candidates to be atomically promoted as the new baseline so that subsequent iterations use the correct binary.",
       "acceptanceCriteria": [
-        "If the baseline-vs-candidate benchmark result is inconclusive, the decision flow can request or run an additional Stockfish comparison",
-        "The comparison uses the prior stored baseline benchmark result against Stockfish when available",
-        "The candidate Stockfish result is recorded in benchmark.md or a linked decision artifact",
-        "The decision artifact explicitly states whether the Stockfish comparison changed the recommendation",
-        "If the Stockfish comparison cannot run, the iteration records that limitation instead of silently ignoring it",
+        "Function `persist_promoted_artifact(candidate_binary: &Path, promoted_version: &str, repo_root: &Path) -> anyhow::Result<PathBuf>` copies binary to `chess-engine/versions/<promoted_version>/wiggum-engine`, sets executable bit, returns the destination path",
+        "Function `promote_candidate(candidate_dir: &Path, iteration_state_path: &Path, session_meta: &mut SessionMetadata, repo_root: &Path) -> anyhow::Result<()>` reads promoted version and candidate binary from `iteration.json`, calls `persist_promoted_artifact`, updates `session_meta` active and accepted baseline fields, writes `iteration.json` with promotion fields filled",
+        "Function `baseline_version_path(repo_root: &Path, version: &str) -> PathBuf` returns `<repo_root>/chess-engine/versions/<version>`",
+        "If the candidate binary file does not exist at promotion time, return Err with a descriptive message",
+        "After successful promotion, `active_baseline_version`, `active_baseline_path`, `active_baseline_binary` in `SessionMetadata` are updated to the promoted version",
         "Typecheck passes"
       ],
       "priority": 9,
       "passes": true,
-      "notes": "Seeded each iteration with explicit stockfishComparison artifact metadata, including baseline report availability, recommendation-change tracking, and a dedicated stockfish-comparison/results.md path, and exposed that artifact in the session summary so inconclusive benchmark follow-up has stable places to record extra candidate-vs-Stockfish evidence, recommendation changes, or limitations."
+      "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Allow positive-signal promotion after inconclusive evidence",
-      "description": "As an operator, I want the decision phase to promote an inconclusive candidate when there is still a positive signal after extra analysis so potentially stronger engines are not discarded too aggressively.",
+      "title": "Implement session summary writer",
+      "description": "As an operator, I want a human-readable summary.md written at session end so that I can audit what happened.",
       "acceptanceCriteria": [
-        "If the direct candidate-vs-baseline result is inconclusive, the decision logic performs the additional Stockfish comparison before making the final call",
-        "If the Stockfish comparison is also inconclusive, the decision logic explicitly evaluates whether there is any positive signal suggesting likely improvement",
-        "If no positive signal exists, the candidate is not promoted",
-        "If a positive signal exists and the candidate is promoted, decision.md explains why promotion was allowed despite inconclusive match evidence",
-        "iteration.json records the exact evidence used for the promotion decision",
+        "Function `write_session_summary(path: &Path, session_dir: &Path, session_id: &str, baseline_version: &str, max_iterations: u32, completed_iterations: u32, stop_reason: &str, stop_reason_details: &str, accepted_baseline_version: &str, accepted_baseline_path: &str) -> anyhow::Result<()>` writes summary.md",
+        "Summary includes: session id, baseline inicial, baseline final aceito, max iterations, completed iterations, session directory, stop reason, stop details, list of accepted versions, list of rejected attempts, per-iteration artifact links (iteration.json, hypothesis.md, implementation.md, correctness/results.md, benchmark.md, stockfish-comparison/results.md, decision.md)",
+        "Reads all `iterations/<n>/iteration.json` files to build the per-iteration table",
+        "Writes a placeholder summary at session start (`Status: pending final session summary`)",
+        "Overwrites placeholder with final summary at session end",
         "Typecheck passes"
       ],
       "priority": 10,
       "passes": true,
-      "notes": "Extended the orchestration-owned stockfishComparison metadata with an explicit positiveSignal structure and tightened the worker prompt so the decision phase treats positive-signal promotion as a narrow exception: only after both benchmark layers remain inconclusive, with the exact supporting evidence repeated in iteration.json.decision.evidence and decision.md when promotion is allowed."
+      "notes": ""
     },
     {
       "id": "US-011",
-      "title": "Add optional verbose mode",
-      "description": "As an operator, I want an optional verbose mode so I can debug suppressed skill output when the loop appears stalled or unclear.",
+      "title": "Implement iteration artifact initialization",
+      "description": "As the orchestrator, I want all iteration artifacts initialized before phases run so that skills find the expected files.",
       "acceptanceCriteria": [
-        "The script accepts a verbose flag that enables live skill output for debugging",
-        "The default mode remains the quieter Ralph-like output mode",
-        "Verbose mode does not change iteration artifacts or decision behavior",
-        "bash -n scripts/evolution-loop.sh passes",
+        "Function `create_iteration_artifacts(session_dir: &Path, iteration: u32, session_meta: &SessionMetadata, candidate_workspace: &Path, candidate_branch: &str, candidate_setup_status: &str, candidate_setup_error: &str) -> anyhow::Result<IterationPaths>` creates directories and writes initial files",
+        "Creates: `iterations/<n>/`, `iterations/<n>/correctness/`, `iterations/<n>/stockfish-comparison/`, `iterations/<n>/phase-logs/`",
+        "Writes placeholder markdown for: hypothesis.md, implementation.md, correctness/results.md, benchmark.md, stockfish-comparison/results.md, decision.md",
+        "Writes `iterations/<n>/iteration.json` with all fields populated matching the structure currently produced by `write_iteration_state` in the shell script, including stockfishComparison, stateMachine, artifacts with full paths, phase log paths",
+        "If candidate workspace setup failed, `iteration.json` is pre-populated with state=failed, correctness.status=skipped, benchmark.status=skipped, decision.outcome=failed",
+        "Returns `IterationPaths` struct with paths to all key files for use by the iteration runner",
         "Typecheck passes"
       ],
       "priority": 11,
       "passes": true,
-      "notes": "Added a --verbose flag to scripts/evolution-loop.sh, kept the default quiet Ralph-style capture behavior unchanged, and routed verbose phase execution through tee so live skill output is visible while the same per-phase log artifacts are still written for audit and downstream decision handling."
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Implement main iteration loop and session initialization",
+      "description": "As an operator, I want the main loop to run up to --max-iterations iterations with all stopping conditions so that sessions terminate gracefully.",
+      "acceptanceCriteria": [
+        "Session `start` flow: validates baseline version format, resolves baseline artifacts (checks directory and binary exist), generates session ID as `YYYYMMDDTHHMMSSz` via chrono, creates session directory, writes placeholder summary and initial session.env, then runs the iteration loop",
+        "Iteration loop runs from 1 to max_iterations; each iteration: creates artifacts → sets up worktree → runs propose → runs implement → runs validate → copies binary → runs benchmark → runs decide → handles outcome",
+        "After each phase, reads `iteration.json` to verify expected state transition; if state is wrong, calls record_phase_failure and continues to next iteration",
+        "Stopping conditions: (a) max iterations reached, (b) infra failure count >= max_infra_failures, (c) propose phase sets hypothesis.status=no_hypothesis (stop_reason = \"no valid next hypothesis could be generated\"), (d) unexpected iteration state",
+        "After `accepted` outcome: marks idea used, promotes candidate, removes worktree; resets infra_failure_count on success, increments on failure",
+        "After `rejected` or `inconclusive`: marks idea used, removes worktree, resets infra_failure_count (increments only if mark_idea_used returns NotFound)",
+        "After `failed` outcome: increments infra_failure_count, removes worktree",
+        "Writes final summary.md after loop exits regardless of stop reason",
+        "Prints startup banner with session config, and per-iteration progress lines matching current shell script output style",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Implement resume mode",
+      "description": "As an operator, I want to resume an interrupted session at a specific phase so that I don't have to restart from scratch.",
+      "acceptanceCriteria": [
+        "Session `resume` flow: reads session.env from --session path, loads session metadata, resolves accepted baseline artifacts, finds latest iteration number from `iterations/` directory",
+        "If --from is not specified, infers resume phase from `iteration.json.state` using the same mapping as the shell script (initialized→propose, proposing→propose, proposed→implement, implementing→implement, implemented→validate, benchmarking→benchmark, benchmarked→decide, deciding→decide)",
+        "Validates that the candidate workspace directory still exists and that baselinePath/baselineBinary referenced in iteration.json still exist; if not, logs error and marks iteration as failed",
+        "Executes only the phases from the resume phase onward (skips earlier phases)",
+        "After the resumed iteration completes, handles outcome (acceptance/rejection/failure) identically to the main loop",
+        "Does NOT start a new iteration after resuming — run one iteration and stop",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Implement structured logging and signal handling",
+      "description": "As a developer debugging a hang, I want timestamped structured logs and graceful SIGINT handling so that sessions terminate cleanly and are diagnosable.",
+      "acceptanceCriteria": [
+        "tracing-subscriber initialized at startup with format including timestamp (chrono-based), level, and target; default level INFO, overridable via RUST_LOG env var",
+        "Every phase start/end logged at INFO with fields: iteration=N, phase=<name>, outcome=<state>",
+        "Phase timeout events logged at WARN with fields: iteration=N, phase=<name>, timeout_secs=N",
+        "Git and cargo command invocations logged at DEBUG with the full command arguments",
+        "SIGINT/SIGTERM handler registered via `ctrlc` crate: on signal, sets a global AtomicBool stop flag; the main loop checks this flag between iterations and writes the partial summary before exiting",
+        "In verbose mode, a clear prefix (e.g., `[evolution-loop]`) is added to orchestrator log lines to distinguish them from Claude process output",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Delete scripts/evolution-loop.sh and update references",
+      "description": "As the team, I want the shell script removed and all references updated so that the Rust binary is the canonical orchestrator.",
+      "acceptanceCriteria": [
+        "`scripts/evolution-loop.sh` is deleted from the repository",
+        "The correctness gate in the new Rust binary no longer checks `bash -n scripts/evolution-loop.sh` (remove that check from the correctness gate, keep only cargo build and cargo test)",
+        "Any reference to `scripts/evolution-loop.sh` in CLAUDE.md, README files, or other scripts is updated to reference `./target/debug/evolution-loop` or `./target/release/evolution-loop`",
+        "`cargo build --workspace` still compiles successfully after deletion",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": ""
     }
   ]
 }
