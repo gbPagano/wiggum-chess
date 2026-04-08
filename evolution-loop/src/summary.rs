@@ -70,13 +70,11 @@ pub fn write_session_summary(
                 .unwrap_or("unknown");
 
             let row = format!(
-                "| {} | {} | {} | [iteration.json]({}/iteration.json) | [hypothesis.md]({}/hypothesis.md) | [decision.md]({}/decision.md) |",
+                "| {} | {} | {} | [iteration.json]({p}/iteration.json) | [hypothesis.md]({p}/hypothesis.md) | [implementation.md]({p}/implementation.md) | [correctness/results.md]({p}/correctness/results.md) | [benchmark.md]({p}/benchmark.md) | [stockfish-comparison/results.md]({p}/stockfish-comparison/results.md) | [decision.md]({p}/decision.md) |",
                 n,
                 iter_state.candidate.version.as_deref().unwrap_or("-"),
                 outcome,
-                iter_dir.display(),
-                iter_dir.display(),
-                iter_dir.display(),
+                p = iter_dir.display(),
             );
             iteration_rows.push(row);
 
@@ -132,8 +130,8 @@ pub fn write_session_summary(
 
     writeln!(f, "## Per-Iteration Artifacts")?;
     writeln!(f)?;
-    writeln!(f, "| N | Candidate | Outcome | State | Hypothesis | Decision |")?;
-    writeln!(f, "|---|-----------|---------|-------|------------|----------|")?;
+    writeln!(f, "| N | Candidate | Outcome | State | Hypothesis | Implementation | Correctness | Benchmark | Stockfish Comparison | Decision |")?;
+    writeln!(f, "|---|-----------|---------|-------|------------|----------------|-------------|-----------|----------------------|----------|")?;
     for row in &iteration_rows {
         writeln!(f, "{}", row)?;
     }
