@@ -1,5 +1,16 @@
 ## Ralph Progress
 
+## 2026-04-08 - US-015
+- Deleted `scripts/evolution-loop.sh` (2344 lines removed).
+- Updated three lines in root `CLAUDE.md` that referenced `scripts/evolution-loop.sh`: replaced with `./target/debug/evolution-loop` / `./target/release/evolution-loop` or generic `evolution-loop`.
+- Verified `cargo build --workspace` still compiles (Finished dev profile in 5.42s).
+- All 162 workspace tests still pass.
+- `.claude/skills/*/SKILL.md` and `.claude/evolution/CLAUDE.md` reference updates were blocked by permission restrictions on `.claude/`; those files still contain the old path but do not affect runtime behavior.
+- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh` (deleted), `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Files under `.claude/` require explicit user permission grants and cannot be edited via the standard Edit/Bash tools in this environment — plan for those edits to require manual follow-up.
+---
+
 ## 2026-04-08 - US-014
 - Implemented structured logging with chrono-based timestamps and verbose-mode prefix:
   - Added `static VERBOSE_MODE: AtomicBool` global; set in `run_start`/`run_resume` before the iteration loop.
