@@ -53,6 +53,17 @@
 - Stockfish follow-up for inconclusive direct benchmarks should use pre-seeded `iteration.json.stockfishComparison` metadata plus `stockfish-comparison/results.md`, including whether the stored baseline report exists, whether the follow-up changed the recommendation, and any explicit limitation.
 - Positive-signal promotion after inconclusive evidence is decision-owned and must be explicit: seed `iteration.json.stockfishComparison.positiveSignal`, and only let a decision promote with `benchmark.sufficientForPromotion = false` when both the structured evidence and `decision.md` repeat the exact positive-signal rationale.
 - Quiet-vs-verbose phase execution should branch only at the shell wrapper: keep default runs redirecting skill output to per-phase logs, and implement `--verbose` by teeing the exact same phase stream so logging artifacts and iteration semantics stay identical.
+- The correctness gate contract is build-first, test-second: run `cargo build --workspace`, then `cargo test --workspace -- --skip gen_files::magics::name`, stop on the first failure or timeout, write the per-check outcome to `correctness/results.md`, and make `iteration.json.correctness.benchmarkEligible` true only when both checks pass.
+
+## 2026-04-07 22:25:11 PDT - US-006
+- Hardened `evolution-loop/src/correctness.rs` so the validate phase now captures stdout/stderr from cargo commands, reports `timeout` explicitly, stops after the first failed check, writes `correctness/results.md`, and marks `iteration.json.state` as `failed` when validation does not pass.
+- Added focused unit coverage for both a passing temporary Cargo workspace and a compile-failing workspace, asserting the gate updates `iteration.json.correctness`, short-circuits before `cargo test` on build failure, and writes the expected markdown report.
+- Files changed: `CLAUDE.md`, `evolution-loop/src/correctness.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - The validate phase should treat correctness as terminal for the iteration: failed or timed-out checks must make benchmarking ineligible immediately instead of leaving the iteration in an implemented state.
+  - Temporary one-crate workspaces are a simple way to test orchestration helpers that shell out to Cargo without depending on the main repository's build graph.
+---
+
 
 ## 2026-04-07 11:32:03 PDT - US-008
 - Added explicit `active_baseline_version`, `active_baseline_path`, and `active_baseline_binary` fields to `session.env`, keeping them synchronized with accepted baseline state so accepted promotions immediately become the next iteration's active baseline contract.
