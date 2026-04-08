@@ -1,5 +1,14 @@
 ## Ralph Progress
 
+## 2026-04-07 22:43:01 PDT - US-008
+- Hardened `evolution-loop/src/ideas.rs` so checklist parsing now accepts indented `- [ ]` entries with flexible spacing, marks the first trimmed matching unchecked idea, and resolves relative/absolute ideas paths by pending unchecked entries instead of silently treating missing work as empty.
+- Added focused unit coverage for marking behavior, relative path resolution, zero-pending files, and session metadata refresh when the last checklist item is consumed.
+- Files changed: `evolution-loop/src/ideas.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Treat Markdown checklist parsing as whitespace-tolerant because operator-maintained idea files may be indented or aligned manually.
+  - Refresh `ideas_file_pending_count` after both successful marks and `NotFound` outcomes so session metadata reflects the actual checklist state even when the selected idea text drifts.
+---
+
 ## 2026-04-07 22:15:57 PDT - US-005
 - Updated `evolution-loop/src/worktree.rs` so git worktree helpers consistently capture command output, surface non-zero git failures with stderr/stdout detail, create iteration branches explicitly, and treat `git diff --quiet` exit code `1` as "changes present" instead of a hard error.
 - Wired `evolution-loop/src/main.rs` to create the candidate branch immediately after `git worktree add`, and to clean up the new worktree if branch creation fails before artifact initialization proceeds.
@@ -64,6 +73,7 @@
 - Quiet-vs-verbose phase execution should branch only at the shell wrapper: keep default runs redirecting skill output to per-phase logs, and implement `--verbose` by teeing the exact same phase stream so logging artifacts and iteration semantics stay identical.
 - `evolution-loop/src/phase.rs` should keep invoking the `evolution-*` skills while writing logs to the stable logical phase filenames (`propose.log`, `implement.log`, `benchmark.log`, `decide.log`); stream raw stdout/stderr bytes into those logs so captured Claude output matches quiet and verbose runs.
 - The correctness gate contract is build-first, test-second: run `cargo build --workspace`, then `cargo test --workspace -- --skip gen_files::magics::name`, stop on the first failure or timeout, write the per-check outcome to `correctness/results.md`, and make `iteration.json.correctness.benchmarkEligible` true only when both checks pass.
+- Checklist idea parsing should accept leading indentation and extra spaces between `-` and `[ ]`, and `update_session_after_mark` should refresh `ideas_file_pending_count` after both successful marks and `NotFound` outcomes so session metadata stays aligned with the file.
 
 ## 2026-04-07 22:25:11 PDT - US-006
 - Hardened `evolution-loop/src/correctness.rs` so the validate phase now captures stdout/stderr from cargo commands, reports `timeout` explicitly, stops after the first failed check, writes `correctness/results.md`, and marks `iteration.json.state` as `failed` when validation does not pass.
