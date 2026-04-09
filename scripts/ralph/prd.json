@@ -61,8 +61,8 @@
         "Tests pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added pseudo_legal_pawn_moves() to Board. Single pushes, double pushes from start rank, diagonal captures. Updated apply_move to set en_passant_file on double pushes."
     },
     {
       "id": "US-005",
