@@ -83,6 +83,22 @@ impl Square {
     }
 }
 
+/// A chess move from one square to another.
+///
+/// For now this represents normal moves and captures.
+/// Special moves (promotion, castling, en passant) will extend this.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Move {
+    pub from: Square,
+    pub to: Square,
+}
+
+impl Move {
+    pub fn new(from: Square, to: Square) -> Self {
+        Self { from, to }
+    }
+}
+
 /// The full chess board state.
 ///
 /// The board is stored as an 8×8 matrix of `Option<Piece>`.
@@ -130,6 +146,41 @@ impl Board {
         }
 
         b
+    }
+
+    /// Apply a normal move or capture, returning the resulting board.
+    ///
+    /// The piece at `mv.from` is moved to `mv.to`. Any piece previously on
+    /// `mv.to` is removed (capture). The side to move is toggled.
+    ///
+    /// Caller is responsible for passing a legal move; this method does not
+    /// validate legality.
+    pub fn apply_move(&self, mv: Move) -> Board {
+        let mut next = self.clone();
+
+        let piece = next.squares[mv.from.rank as usize][mv.from.file as usize]
+            .take()
+            .expect("apply_move: no piece on from-square");
+
+        let captured = next.squares[mv.to.rank as usize][mv.to.file as usize].replace(piece);
+
+        // Halfmove clock: reset on pawn move or capture, else increment.
+        if piece.kind == PieceKind::Pawn || captured.is_some() {
+            next.halfmove_clock = 0;
+        } else {
+            next.halfmove_clock += 1;
+        }
+
+        // Fullmove number increments after black's move.
+        if self.side_to_move == Color::Black {
+            next.fullmove_number += 1;
+        }
+
+        // Clear en passant (will be set correctly by pawn generation in later stories).
+        next.en_passant_file = None;
+
+        next.side_to_move = self.side_to_move.opponent();
+        next
     }
 
     /// Get the piece at a square (if any).
@@ -203,5 +254,79 @@ mod tests {
     fn color_opponent() {
         assert_eq!(Color::White.opponent(), Color::Black);
         assert_eq!(Color::Black.opponent(), Color::White);
+    }
+
+    // --- US-003: move application tests ---
+
+    #[test]
+    fn normal_move_updates_squares_and_side_to_move() {
+        let board = Board::starting_position();
+        // Move white pawn e2→e3 (rank 1, file 4 → rank 2, file 4)
+        let from = Square::new(1, 4);
+        let to = Square::new(2, 4);
+        let after = board.apply_move(Move::new(from, to));
+
+        assert!(after.get(from).is_none(), "from-square should be empty");
+        assert_eq!(
+            after.get(to),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+            "to-square should have white pawn"
+        );
+        assert_eq!(after.side_to_move, Color::Black, "side to move should switch");
+    }
+
+    #[test]
+    fn capture_removes_captured_piece() {
+        // Place a white rook on e4 and a black pawn on e5, then capture.
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        let attacker_sq = Square::new(3, 4); // e4
+        let target_sq = Square::new(4, 4);   // e5
+        board.set(attacker_sq, Some(Piece::new(PieceKind::Rook, Color::White)));
+        board.set(target_sq, Some(Piece::new(PieceKind::Pawn, Color::Black)));
+
+        let after = board.apply_move(Move::new(attacker_sq, target_sq));
+
+        assert!(after.get(attacker_sq).is_none(), "rook should have left e4");
+        assert_eq!(
+            after.get(target_sq),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+            "rook should be on e5; captured pawn should be gone"
+        );
+        assert_eq!(after.side_to_move, Color::Black);
+    }
+
+    #[test]
+    fn fullmove_increments_after_black_move() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::Black;
+        board.fullmove_number = 3;
+        board.set(Square::new(6, 0), Some(Piece::new(PieceKind::Rook, Color::Black)));
+
+        let after = board.apply_move(Move::new(Square::new(6, 0), Square::new(5, 0)));
+        assert_eq!(after.fullmove_number, 4);
+    }
+
+    #[test]
+    fn halfmove_clock_resets_on_capture() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.halfmove_clock = 10;
+        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Rook, Color::White)));
+        board.set(Square::new(4, 0), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+
+        let after = board.apply_move(Move::new(Square::new(0, 0), Square::new(4, 0)));
+        assert_eq!(after.halfmove_clock, 0);
+    }
+
+    #[test]
+    fn halfmove_clock_increments_on_quiet_non_pawn_move() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.halfmove_clock = 5;
+        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Rook, Color::White)));
+
+        let after = board.apply_move(Move::new(Square::new(0, 0), Square::new(4, 0)));
+        assert_eq!(after.halfmove_clock, 6);
     }
 }
