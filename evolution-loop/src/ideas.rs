@@ -19,7 +19,11 @@ fn parse_unchecked_idea_line(line: &str) -> Option<(Range<usize>, &str)> {
     let bracket_index = line.len() - after_dash.len();
     let after_checkbox = after_dash.strip_prefix("[ ]")?;
 
-    if !after_checkbox.chars().next().is_some_and(char::is_whitespace) {
+    if !after_checkbox
+        .chars()
+        .next()
+        .is_some_and(char::is_whitespace)
+    {
         return None;
     }
 
@@ -189,8 +193,8 @@ mod tests {
     fn resolve_ideas_file_returns_none_when_no_pending_entries() {
         let f = write_temp("- [x] done\n");
 
-        let resolved = resolve_ideas_file(&f.path().to_string_lossy(), Path::new("/workspace"))
-            .unwrap();
+        let resolved =
+            resolve_ideas_file(&f.path().to_string_lossy(), Path::new("/workspace")).unwrap();
 
         assert!(resolved.is_none());
     }

@@ -20,7 +20,6 @@ impl fmt::Display for PgnError {
 
 impl std::error::Error for PgnError {}
 
-
 /// Parse a single-game PGN string into a sequence of `ChessMove` values.
 /// Equivalent to `parse_nth(pgn, 0)`.
 pub fn parse(pgn: &str) -> Result<Vec<ChessMove>, PgnError> {
@@ -274,8 +273,12 @@ fn parse_san_token(raw: &str, board: &Board) -> Result<ChessMove, PgnError> {
 
     // Last two characters are the destination square
     let dest_str = &s[s.len() - 2..];
-    let dest_sq = Square::from_str(dest_str)
-        .map_err(|_| PgnError(format!("invalid destination square '{}' in '{}'", dest_str, raw)))?;
+    let dest_sq = Square::from_str(dest_str).map_err(|_| {
+        PgnError(format!(
+            "invalid destination square '{}' in '{}'",
+            dest_str, raw
+        ))
+    })?;
 
     // Everything before dest is disambiguation
     let disambiguation = &s[..s.len() - 2];
@@ -323,9 +326,17 @@ fn parse_disambiguation(
         1 => {
             let c = s.chars().next().unwrap();
             if ('a'..='h').contains(&c) {
-                Ok((Some(File::from_index(c as usize - 'a' as usize)), None, None))
+                Ok((
+                    Some(File::from_index(c as usize - 'a' as usize)),
+                    None,
+                    None,
+                ))
             } else if ('1'..='8').contains(&c) {
-                Ok((None, Some(Rank::from_index(c as usize - '1' as usize)), None))
+                Ok((
+                    None,
+                    Some(Rank::from_index(c as usize - '1' as usize)),
+                    None,
+                ))
             } else {
                 Err(PgnError(format!(
                     "invalid disambiguation '{}' in '{}'",

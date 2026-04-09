@@ -249,8 +249,7 @@ pub fn load_iteration_state(path: &Path) -> Result<IterationState> {
 }
 
 pub fn save_iteration_state(path: &Path, state: &IterationState) -> Result<()> {
-    let json = serde_json::to_string_pretty(state)
-        .context("serializing iteration state")?;
+    let json = serde_json::to_string_pretty(state).context("serializing iteration state")?;
     let mut f = fs::File::create(path)
         .with_context(|| format!("creating iteration state file {}", path.display()))?;
     writeln!(f, "{}", json)?;
@@ -332,14 +331,23 @@ mod tests {
     fn transition_phase_wrong_from_returns_err() {
         let mut state = sample_iteration_state();
         // state is Initialized; transition from Proposing should fail
-        let result = transition_phase(&mut state, IterationPhase::Proposing, IterationPhase::Proposed);
+        let result = transition_phase(
+            &mut state,
+            IterationPhase::Proposing,
+            IterationPhase::Proposed,
+        );
         assert!(result.is_err(), "expected Err when from != current state");
     }
 
     #[test]
     fn transition_phase_correct_from_succeeds() {
         let mut state = sample_iteration_state();
-        transition_phase(&mut state, IterationPhase::Initialized, IterationPhase::Proposing).unwrap();
+        transition_phase(
+            &mut state,
+            IterationPhase::Initialized,
+            IterationPhase::Proposing,
+        )
+        .unwrap();
         assert_eq!(state.state, IterationPhase::Proposing);
     }
 }

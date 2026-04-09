@@ -5,9 +5,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::state::{
-    save_iteration_state, ArtifactsState, CandidateState, CorrectnessState,
-    DecisionState, IdeasState, IsolationState, IterationPhase, IterationState,
-    SessionMetadata, StateMachineState, StockfishComparisonState,
+    save_iteration_state, ArtifactsState, CandidateState, CorrectnessState, DecisionState,
+    IdeasState, IsolationState, IterationPhase, IterationState, SessionMetadata, StateMachineState,
+    StockfishComparisonState,
 };
 
 pub struct IterationPaths {
@@ -23,8 +23,7 @@ pub struct IterationPaths {
 }
 
 fn write_placeholder(path: &Path, title: &str) -> Result<()> {
-    let mut f = fs::File::create(path)
-        .with_context(|| format!("creating {}", path.display()))?;
+    let mut f = fs::File::create(path).with_context(|| format!("creating {}", path.display()))?;
     writeln!(f, "# {}", title)?;
     writeln!(f)?;
     writeln!(f, "_Pending phase execution._")?;
@@ -46,8 +45,7 @@ pub fn create_iteration_artifacts(
     let phase_logs_dir = iter_dir.join("phase-logs");
 
     for dir in &[&iter_dir, &correctness_dir, &stockfish_dir, &phase_logs_dir] {
-        fs::create_dir_all(dir)
-            .with_context(|| format!("creating directory {}", dir.display()))?;
+        fs::create_dir_all(dir).with_context(|| format!("creating directory {}", dir.display()))?;
     }
 
     let hypothesis_md = iter_dir.join("hypothesis.md");
@@ -71,7 +69,10 @@ pub fn create_iteration_artifacts(
     for phase in &["propose", "implement", "benchmark", "decide"] {
         phase_logs.insert(
             phase.to_string(),
-            phase_logs_dir.join(format!("{}.log", phase)).to_string_lossy().to_string(),
+            phase_logs_dir
+                .join(format!("{}.log", phase))
+                .to_string_lossy()
+                .to_string(),
         );
     }
 
@@ -119,17 +120,45 @@ pub fn create_iteration_artifacts(
             selected_idea_marked_used: Some(false),
         },
         candidate: CandidateState {
-            version: if failed_setup { None } else { Some(session_meta.candidate_version.clone()) },
-            binary_path: if failed_setup { None } else { Some(session_meta.candidate_binary_path.clone()) },
-            workspace: if failed_setup { None } else { Some(candidate_workspace.to_string_lossy().to_string()) },
-            branch: if failed_setup { None } else { Some(candidate_branch.to_string()) },
+            version: if failed_setup {
+                None
+            } else {
+                Some(session_meta.candidate_version.clone())
+            },
+            binary_path: if failed_setup {
+                None
+            } else {
+                Some(session_meta.candidate_binary_path.clone())
+            },
+            workspace: if failed_setup {
+                None
+            } else {
+                Some(candidate_workspace.to_string_lossy().to_string())
+            },
+            branch: if failed_setup {
+                None
+            } else {
+                Some(candidate_branch.to_string())
+            },
             setup_status: Some(candidate_setup_status.to_string()),
-            setup_error: if candidate_setup_error.is_empty() { None } else { Some(candidate_setup_error.to_string()) },
+            setup_error: if candidate_setup_error.is_empty() {
+                None
+            } else {
+                Some(candidate_setup_error.to_string())
+            },
         },
         state: state.clone(),
         isolation: IsolationState {
-            worktree: if failed_setup { None } else { Some(candidate_workspace.to_string_lossy().to_string()) },
-            branch: if failed_setup { None } else { Some(candidate_branch.to_string()) },
+            worktree: if failed_setup {
+                None
+            } else {
+                Some(candidate_workspace.to_string_lossy().to_string())
+            },
+            branch: if failed_setup {
+                None
+            } else {
+                Some(candidate_branch.to_string())
+            },
         },
         correctness: correctness_status,
         stockfish_comparison: StockfishComparisonState {
@@ -289,7 +318,11 @@ mod tests {
         assert!(!iter_state.correctness.benchmark_eligible);
         let decision = iter_state.decision.unwrap();
         assert_eq!(decision.outcome, "failed");
-        assert!(decision.evidence.as_deref().unwrap_or("").contains("git worktree"));
+        assert!(decision
+            .evidence
+            .as_deref()
+            .unwrap_or("")
+            .contains("git worktree"));
     }
 
     #[test]

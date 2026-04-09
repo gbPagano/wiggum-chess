@@ -111,7 +111,11 @@ pub fn run_correctness_gate(
     timeout_secs: u64,
 ) -> Result<CorrectnessOutcome> {
     let checks_spec: &[(&str, &[&str], &str)] = &[
-        ("cargo build", &["build", "--workspace"], "cargo build --workspace"),
+        (
+            "cargo build",
+            &["build", "--workspace"],
+            "cargo build --workspace",
+        ),
         (
             "cargo test",
             &[
@@ -164,7 +168,11 @@ pub fn run_correctness_gate(
         let mut f = fs::File::create(correctness_results_path)
             .with_context(|| format!("creating {}", correctness_results_path.display()))?;
         writeln!(f, "# Correctness Gate Results\n")?;
-        writeln!(f, "Status: {}\n", if all_passed { "passed" } else { "failed" })?;
+        writeln!(
+            f,
+            "Status: {}\n",
+            if all_passed { "passed" } else { "failed" }
+        )?;
         for check in &check_results {
             writeln!(f, "## {}", check.name)?;
             writeln!(f, "- Status: {}", check.status)?;
@@ -337,7 +345,10 @@ mod tests {
                 assert_eq!(checks.len(), 1);
                 assert_eq!(checks[0].name, "cargo build");
                 assert_eq!(checks[0].status, "failed");
-                assert!(checks[0].reason.as_ref().is_some_and(|reason| !reason.is_empty()));
+                assert!(checks[0]
+                    .reason
+                    .as_ref()
+                    .is_some_and(|reason| !reason.is_empty()));
             }
         }
 

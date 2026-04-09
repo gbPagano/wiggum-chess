@@ -65,9 +65,7 @@ use correctness::{run_correctness_gate, CorrectnessOutcome};
 use ideas::{mark_idea_used, resolve_ideas_file, update_session_after_mark, MarkResult};
 use phase::{run_phase, PhaseConfig, PhaseOutcome};
 use promotion::promote_candidate;
-use state::{
-    load_iteration_state, load_session_metadata, save_session_metadata, SessionMetadata,
-};
+use state::{load_iteration_state, load_session_metadata, save_session_metadata, SessionMetadata};
 use summary::{write_placeholder_summary, write_session_summary};
 use versioning::{
     apply_candidate_manifest_versions, candidate_version_for_source, cargo_semver_from_tag,
@@ -238,7 +236,11 @@ fn record_phase_failure(
         writeln!(f)?;
         writeln!(f, "Status: skipped")?;
         writeln!(f)?;
-        writeln!(f, "Benchmark execution is skipped because the {} phase failed.", phase)?;
+        writeln!(
+            f,
+            "Benchmark execution is skipped because the {} phase failed.",
+            phase
+        )?;
         writeln!(f)?;
         writeln!(f, "Reason: {}", reason)?;
     } else if phase == "benchmark" {
@@ -282,8 +284,12 @@ fn check_iteration_state_is(iteration_json: &Path, _expected: &str) -> Result<St
 /// Returns true if iteration.json contains a "no_hypothesis" signal in any of the
 /// state, hypothesis.status, hypothesis.state, or hypothesis.stopSignal fields.
 fn iteration_has_no_hypothesis(iteration_json: &Path) -> bool {
-    let Ok(content) = fs::read_to_string(iteration_json) else { return false };
-    let Ok(data) = serde_json::from_str::<serde_json::Value>(&content) else { return false };
+    let Ok(content) = fs::read_to_string(iteration_json) else {
+        return false;
+    };
+    let Ok(data) = serde_json::from_str::<serde_json::Value>(&content) else {
+        return false;
+    };
 
     let hypothesis = data.get("hypothesis").and_then(|h| h.as_object());
     let signals = [
@@ -306,8 +312,14 @@ fn iteration_has_no_hypothesis(iteration_json: &Path) -> bool {
 
 /// Copies the built chess-engine binary to the wiggum-engine path in the candidate workspace.
 fn copy_candidate_binary(candidate_dir: &Path) -> Result<PathBuf> {
-    let source = candidate_dir.join("target").join("debug").join("chess-engine");
-    let dest = candidate_dir.join("target").join("debug").join("wiggum-engine");
+    let source = candidate_dir
+        .join("target")
+        .join("debug")
+        .join("chess-engine");
+    let dest = candidate_dir
+        .join("target")
+        .join("debug")
+        .join("wiggum-engine");
 
     if !source.exists() {
         anyhow::bail!(
@@ -424,27 +436,65 @@ fn run_iteration(
     info!(iteration = n, phase = "propose", "running phase");
     match run_phase(&make_phase_config("evolution-propose"))? {
         PhaseOutcome::Timeout => {
-            warn!(iteration = n, phase = "propose", timeout_secs = cfg.phase_timeout_secs, "phase timed out");
+            warn!(
+                iteration = n,
+                phase = "propose",
+                timeout_secs = cfg.phase_timeout_secs,
+                "phase timed out"
+            );
             let reason = "Claude skill execution timed out during the propose phase.";
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "propose", reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "propose",
+                reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
         PhaseOutcome::Failed(code) => {
-            warn!(iteration = n, phase = "propose", exit_code = code, "phase failed");
+            warn!(
+                iteration = n,
+                phase = "propose",
+                exit_code = code,
+                "phase failed"
+            );
             let reason = "Claude skill execution failed during the propose phase.";
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "propose", reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "propose",
+                reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
         PhaseOutcome::Success => {
-            info!(iteration = n, phase = "propose", outcome = "success", "phase complete");
+            info!(
+                iteration = n,
+                phase = "propose",
+                outcome = "success",
+                "phase complete"
+            );
         }
     }
 
     // Check for no-hypothesis stop condition
     if iteration_has_no_hypothesis(&paths.iteration_json) {
-        info!(iteration = n, "propose phase produced no_hypothesis stop signal; stopping session");
+        info!(
+            iteration = n,
+            "propose phase produced no_hypothesis stop signal; stopping session"
+        );
         remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
         return Ok(IterationResult {
             outcome: "failed".to_string(),
@@ -466,9 +516,19 @@ fn run_iteration(
     if proposal_source_str != "user_ideas_file" && proposal_source_str != "self_proposed" {
         let reason = "Proposal phase completed without writing ideas.proposalSource as 'user_ideas_file' or 'self_proposed'.";
         warn!(iteration = n, phase = "propose", proposal_source = %proposal_source_str, "{}", reason);
-        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "propose", reason);
+        let _ = record_phase_failure(
+            &paths.iteration_json,
+            &paths.decision_md,
+            &paths.benchmark_md,
+            "propose",
+            reason,
+        );
         remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+        return Ok(IterationResult {
+            outcome: "failed".to_string(),
+            infra_failure: true,
+            stop_session: None,
+        });
     }
 
     // Verify state == "proposed"
@@ -479,9 +539,19 @@ fn run_iteration(
             current_state
         );
         warn!(iteration = n, phase = "propose", current_state = %current_state, "unexpected state after propose");
-        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "propose", &reason);
+        let _ = record_phase_failure(
+            &paths.iteration_json,
+            &paths.decision_md,
+            &paths.benchmark_md,
+            "propose",
+            &reason,
+        );
         remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+        return Ok(IterationResult {
+            outcome: "failed".to_string(),
+            infra_failure: true,
+            stop_session: None,
+        });
     }
 
     // Now that we know the proposal source, compute the real candidate version
@@ -496,9 +566,19 @@ fn run_iteration(
             Err(e) => {
                 let reason = format!("Failed to compute candidate version: {}", e);
                 warn!(iteration = n, error = %e, "candidate versioning failed");
-                let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", &reason);
+                let _ = record_phase_failure(
+                    &paths.iteration_json,
+                    &paths.decision_md,
+                    &paths.benchmark_md,
+                    "implement",
+                    &reason,
+                );
                 remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-                return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                return Ok(IterationResult {
+                    outcome: "failed".to_string(),
+                    infra_failure: true,
+                    stop_session: None,
+                });
             }
         };
 
@@ -510,11 +590,24 @@ fn run_iteration(
             debug!(iteration = n, candidate_version = %candidate_version, "applied candidate manifest versions");
         }
         Err(e) => {
-            let reason = format!("Failed to apply candidate version metadata before implementation: {}", e);
+            let reason = format!(
+                "Failed to apply candidate version metadata before implementation: {}",
+                e
+            );
             warn!(iteration = n, error = %e, "manifest version apply failed");
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", &reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "implement",
+                &reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
     }
 
@@ -532,30 +625,73 @@ fn run_iteration(
     info!(iteration = n, phase = "implement", "running phase");
     match run_phase(&make_phase_config("evolution-implement"))? {
         PhaseOutcome::Timeout => {
-            warn!(iteration = n, phase = "implement", timeout_secs = cfg.phase_timeout_secs, "phase timed out");
+            warn!(
+                iteration = n,
+                phase = "implement",
+                timeout_secs = cfg.phase_timeout_secs,
+                "phase timed out"
+            );
             let reason = "Claude skill execution timed out during the implementation phase.";
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "implement",
+                reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
         PhaseOutcome::Failed(code) => {
-            warn!(iteration = n, phase = "implement", exit_code = code, "phase failed");
+            warn!(
+                iteration = n,
+                phase = "implement",
+                exit_code = code,
+                "phase failed"
+            );
             let reason = "Claude skill execution failed during the implementation phase.";
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "implement",
+                reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
         PhaseOutcome::Success => {
-            info!(iteration = n, phase = "implement", outcome = "success", "phase complete");
+            info!(
+                iteration = n,
+                phase = "implement",
+                outcome = "success",
+                "phase complete"
+            );
         }
     }
 
     // Verify state after implement
     let current_state = check_iteration_state_is(&paths.iteration_json, "implemented")?;
     if current_state == "failed" {
-        info!(iteration = n, phase = "implement", "iteration marked failed by implement phase");
+        info!(
+            iteration = n,
+            phase = "implement",
+            "iteration marked failed by implement phase"
+        );
         remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: false, stop_session: None });
+        return Ok(IterationResult {
+            outcome: "failed".to_string(),
+            infra_failure: false,
+            stop_session: None,
+        });
     }
     if current_state != "implemented" {
         let reason = format!(
@@ -563,13 +699,27 @@ fn run_iteration(
             current_state
         );
         warn!(iteration = n, phase = "implement", current_state = %current_state, "unexpected state after implement");
-        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", &reason);
+        let _ = record_phase_failure(
+            &paths.iteration_json,
+            &paths.decision_md,
+            &paths.benchmark_md,
+            "implement",
+            &reason,
+        );
         remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+        return Ok(IterationResult {
+            outcome: "failed".to_string(),
+            infra_failure: true,
+            stop_session: None,
+        });
     }
 
     // --- validate (correctness gate) ---
-    info!(iteration = n, phase = "validate", "running correctness gate");
+    info!(
+        iteration = n,
+        phase = "validate",
+        "running correctness gate"
+    );
     let correctness_outcome = run_correctness_gate(
         &candidate_dir,
         &paths.iteration_json,
@@ -578,12 +728,21 @@ fn run_iteration(
     )?;
     match &correctness_outcome {
         CorrectnessOutcome::Passed => {
-            info!(iteration = n, phase = "validate", outcome = "passed", "correctness gate passed");
+            info!(
+                iteration = n,
+                phase = "validate",
+                outcome = "passed",
+                "correctness gate passed"
+            );
         }
         CorrectnessOutcome::Failed(_) => {
             warn!(iteration = n, phase = "validate", "correctness gate failed");
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: false, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: false,
+                stop_session: None,
+            });
         }
     }
 
@@ -595,9 +754,19 @@ fn run_iteration(
             current_state
         );
         warn!(iteration = n, phase = "validate", current_state = %current_state, "unexpected state after correctness gate");
-        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "benchmark", &reason);
+        let _ = record_phase_failure(
+            &paths.iteration_json,
+            &paths.decision_md,
+            &paths.benchmark_md,
+            "benchmark",
+            &reason,
+        );
         remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+        return Ok(IterationResult {
+            outcome: "failed".to_string(),
+            infra_failure: true,
+            stop_session: None,
+        });
     }
 
     // --- copy binary ---
@@ -613,9 +782,19 @@ fn run_iteration(
                 e
             );
             warn!(iteration = n, error = %e, "candidate binary copy failed");
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", &reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "implement",
+                &reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: false, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: false,
+                stop_session: None,
+            });
         }
     }
 
@@ -623,30 +802,73 @@ fn run_iteration(
     info!(iteration = n, phase = "benchmark", "running phase");
     match run_phase(&make_phase_config("evolution-benchmark"))? {
         PhaseOutcome::Timeout => {
-            warn!(iteration = n, phase = "benchmark", timeout_secs = cfg.phase_timeout_secs, "phase timed out");
+            warn!(
+                iteration = n,
+                phase = "benchmark",
+                timeout_secs = cfg.phase_timeout_secs,
+                "phase timed out"
+            );
             let reason = "Claude skill execution timed out during the benchmark phase.";
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "benchmark", reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "benchmark",
+                reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
         PhaseOutcome::Failed(code) => {
-            warn!(iteration = n, phase = "benchmark", exit_code = code, "phase failed");
+            warn!(
+                iteration = n,
+                phase = "benchmark",
+                exit_code = code,
+                "phase failed"
+            );
             let reason = "Claude skill execution failed during the benchmark phase.";
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "benchmark", reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "benchmark",
+                reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
         PhaseOutcome::Success => {
-            info!(iteration = n, phase = "benchmark", outcome = "success", "phase complete");
+            info!(
+                iteration = n,
+                phase = "benchmark",
+                outcome = "success",
+                "phase complete"
+            );
         }
     }
 
     // Verify state == "benchmarked"
     let current_state = check_iteration_state_is(&paths.iteration_json, "benchmarked")?;
     if current_state == "failed" {
-        info!(iteration = n, phase = "benchmark", "iteration marked failed by benchmark phase");
+        info!(
+            iteration = n,
+            phase = "benchmark",
+            "iteration marked failed by benchmark phase"
+        );
         remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: false, stop_session: None });
+        return Ok(IterationResult {
+            outcome: "failed".to_string(),
+            infra_failure: false,
+            stop_session: None,
+        });
     }
     if current_state != "benchmarked" {
         let reason = format!(
@@ -654,30 +876,75 @@ fn run_iteration(
             current_state
         );
         warn!(iteration = n, phase = "benchmark", current_state = %current_state, "unexpected state after benchmark");
-        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "benchmark", &reason);
+        let _ = record_phase_failure(
+            &paths.iteration_json,
+            &paths.decision_md,
+            &paths.benchmark_md,
+            "benchmark",
+            &reason,
+        );
         remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+        return Ok(IterationResult {
+            outcome: "failed".to_string(),
+            infra_failure: true,
+            stop_session: None,
+        });
     }
 
     // --- decide ---
     info!(iteration = n, phase = "decide", "running phase");
     match run_phase(&make_phase_config("evolution-decide"))? {
         PhaseOutcome::Timeout => {
-            warn!(iteration = n, phase = "decide", timeout_secs = cfg.phase_timeout_secs, "phase timed out");
+            warn!(
+                iteration = n,
+                phase = "decide",
+                timeout_secs = cfg.phase_timeout_secs,
+                "phase timed out"
+            );
             let reason = "Claude skill execution timed out during the decision phase.";
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "decision", reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "decision",
+                reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
         PhaseOutcome::Failed(code) => {
-            warn!(iteration = n, phase = "decide", exit_code = code, "phase failed");
+            warn!(
+                iteration = n,
+                phase = "decide",
+                exit_code = code,
+                "phase failed"
+            );
             let reason = "Claude skill execution failed during the decision phase.";
-            let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "decision", reason);
+            let _ = record_phase_failure(
+                &paths.iteration_json,
+                &paths.decision_md,
+                &paths.benchmark_md,
+                "decision",
+                reason,
+            );
             remove_candidate_workspace(&cfg.repo_root, &candidate_dir);
-            return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+            return Ok(IterationResult {
+                outcome: "failed".to_string(),
+                infra_failure: true,
+                stop_session: None,
+            });
         }
         PhaseOutcome::Success => {
-            info!(iteration = n, phase = "decide", outcome = "success", "phase complete");
+            info!(
+                iteration = n,
+                phase = "decide",
+                outcome = "success",
+                "phase complete"
+            );
         }
     }
 
@@ -695,31 +962,22 @@ fn run_iteration(
         .proposal_source
         .clone()
         .unwrap_or_default();
-    let selected_idea = final_state
-        .ideas
-        .selected_idea
-        .clone()
-        .unwrap_or_default();
+    let selected_idea = final_state.ideas.selected_idea.clone().unwrap_or_default();
 
     let infra_failure = match outcome.as_str() {
         "accepted" => {
             // Mark idea used
             if let Ok(ideas_path) = resolve_ideas_file(&meta.ideas_file, &cfg.repo_root) {
                 if let Some(p) = ideas_path {
-                    let mark_result =
-                        mark_idea_used(&p, &selected_idea, &proposal_source_final)
-                            .unwrap_or(MarkResult::Skipped);
+                    let mark_result = mark_idea_used(&p, &selected_idea, &proposal_source_final)
+                        .unwrap_or(MarkResult::Skipped);
                     let _ = update_session_after_mark(meta, &p, &mark_result);
                 }
             }
             // Promote
-            let promotion_ok = promote_candidate(
-                &candidate_dir,
-                &paths.iteration_json,
-                meta,
-                &cfg.repo_root,
-            )
-            .is_ok();
+            let promotion_ok =
+                promote_candidate(&candidate_dir, &paths.iteration_json, meta, &cfg.repo_root)
+                    .is_ok();
             if !promotion_ok {
                 warn!(iteration = n, "promotion failed");
             }
@@ -733,9 +991,8 @@ fn run_iteration(
             let mut infra = false;
             if let Ok(ideas_path) = resolve_ideas_file(&meta.ideas_file, &cfg.repo_root) {
                 if let Some(p) = ideas_path {
-                    let mark_result =
-                        mark_idea_used(&p, &selected_idea, &proposal_source_final)
-                            .unwrap_or(MarkResult::NotFound);
+                    let mark_result = mark_idea_used(&p, &selected_idea, &proposal_source_final)
+                        .unwrap_or(MarkResult::NotFound);
                     if mark_result == MarkResult::NotFound {
                         infra = true;
                     }
@@ -754,7 +1011,11 @@ fn run_iteration(
     };
 
     info!(iteration = n, outcome = %outcome, "iteration complete");
-    Ok(IterationResult { outcome, infra_failure, stop_session: None })
+    Ok(IterationResult {
+        outcome,
+        infra_failure,
+        stop_session: None,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -807,10 +1068,7 @@ fn run_start(
     let summary_path = session_dir.join("summary.md");
 
     // Resolve ideas file
-    let resolved_ideas = ideas_file
-        .as_ref()
-        .and_then(|p| p.to_str())
-        .unwrap_or("");
+    let resolved_ideas = ideas_file.as_ref().and_then(|p| p.to_str()).unwrap_or("");
     let resolved_ideas_path = ideas::resolve_ideas_file(resolved_ideas, &repo_root)?;
     let (ideas_file_str, ideas_pending_count) = if let Some(p) = &resolved_ideas_path {
         let count = ideas::count_pending_ideas(p)?;
@@ -895,7 +1153,9 @@ fn iteration_paths_from_dir(iteration_dir: &Path) -> artifacts::IterationPaths {
         implementation_md: iteration_dir.join("implementation.md"),
         correctness_results_md: iteration_dir.join("correctness").join("results.md"),
         benchmark_md: iteration_dir.join("benchmark.md"),
-        stockfish_comparison_md: iteration_dir.join("stockfish-comparison").join("results.md"),
+        stockfish_comparison_md: iteration_dir
+            .join("stockfish-comparison")
+            .join("results.md"),
         decision_md: iteration_dir.join("decision.md"),
         phase_logs_dir: iteration_dir.join("phase-logs"),
     }
@@ -947,25 +1207,63 @@ fn run_iteration_from_phase(
                 info!(iteration = n, phase = "propose", "running phase");
                 match run_phase(&make_phase_config("evolution-propose"))? {
                     PhaseOutcome::Timeout => {
-                        warn!(iteration = n, phase = "propose", timeout_secs = cfg.phase_timeout_secs, "phase timed out");
+                        warn!(
+                            iteration = n,
+                            phase = "propose",
+                            timeout_secs = cfg.phase_timeout_secs,
+                            "phase timed out"
+                        );
                         let reason = "Claude skill execution timed out during the propose phase.";
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "propose", reason);
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "propose",
+                            reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                     PhaseOutcome::Failed(code) => {
-                        warn!(iteration = n, phase = "propose", exit_code = code, "phase failed");
+                        warn!(
+                            iteration = n,
+                            phase = "propose",
+                            exit_code = code,
+                            "phase failed"
+                        );
                         let reason = "Claude skill execution failed during the propose phase.";
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "propose", reason);
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "propose",
+                            reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                     PhaseOutcome::Success => {
-                        info!(iteration = n, phase = "propose", outcome = "success", "phase complete");
+                        info!(
+                            iteration = n,
+                            phase = "propose",
+                            outcome = "success",
+                            "phase complete"
+                        );
                     }
                 }
                 if iteration_has_no_hypothesis(&paths.iteration_json) {
-                    info!(iteration = n, "propose phase produced no_hypothesis stop signal");
+                    info!(
+                        iteration = n,
+                        "propose phase produced no_hypothesis stop signal"
+                    );
                     remove_candidate_workspace(&cfg.repo_root, candidate_dir);
                     return Ok(IterationResult {
                         outcome: "failed".to_string(),
@@ -977,20 +1275,46 @@ fn run_iteration_from_phase(
                     });
                 }
                 let iter_state = load_iteration_state(&paths.iteration_json)?;
-                let proposal_source_str = iter_state.ideas.proposal_source.clone().unwrap_or_default();
-                if proposal_source_str != "user_ideas_file" && proposal_source_str != "self_proposed" {
+                let proposal_source_str =
+                    iter_state.ideas.proposal_source.clone().unwrap_or_default();
+                if proposal_source_str != "user_ideas_file"
+                    && proposal_source_str != "self_proposed"
+                {
                     let reason = "Proposal phase completed without writing ideas.proposalSource.";
                     warn!(iteration = n, phase = "propose", "{}", reason);
-                    let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "propose", reason);
+                    let _ = record_phase_failure(
+                        &paths.iteration_json,
+                        &paths.decision_md,
+                        &paths.benchmark_md,
+                        "propose",
+                        reason,
+                    );
                     remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                    return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                    return Ok(IterationResult {
+                        outcome: "failed".to_string(),
+                        infra_failure: true,
+                        stop_session: None,
+                    });
                 }
                 let current_state = check_iteration_state_is(&paths.iteration_json, "proposed")?;
                 if current_state != "proposed" {
-                    let reason = format!("Proposal phase completed without writing state 'proposed' (got '{}').", current_state);
-                    let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "propose", &reason);
+                    let reason = format!(
+                        "Proposal phase completed without writing state 'proposed' (got '{}').",
+                        current_state
+                    );
+                    let _ = record_phase_failure(
+                        &paths.iteration_json,
+                        &paths.decision_md,
+                        &paths.benchmark_md,
+                        "propose",
+                        &reason,
+                    );
                     remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                    return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                    return Ok(IterationResult {
+                        outcome: "failed".to_string(),
+                        infra_failure: true,
+                        stop_session: None,
+                    });
                 }
                 // Apply candidate manifest versions
                 let proposal_source_enum = if proposal_source_str == "user_ideas_file" {
@@ -998,62 +1322,145 @@ fn run_iteration_from_phase(
                 } else {
                     ProposalSource::SelfProposed
                 };
-                let candidate_version = match candidate_version_for_source(&meta.active_baseline_version, proposal_source_enum) {
+                let candidate_version = match candidate_version_for_source(
+                    &meta.active_baseline_version,
+                    proposal_source_enum,
+                ) {
                     Ok(v) => v,
                     Err(e) => {
                         let reason = format!("Failed to compute candidate version: {}", e);
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", &reason);
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "implement",
+                            &reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                 };
                 if let Err(e) = cargo_semver_from_tag(&candidate_version)
                     .and_then(|semver| apply_candidate_manifest_versions(candidate_dir, &semver))
                 {
                     let reason = format!("Failed to apply candidate version metadata: {}", e);
-                    let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", &reason);
+                    let _ = record_phase_failure(
+                        &paths.iteration_json,
+                        &paths.decision_md,
+                        &paths.benchmark_md,
+                        "implement",
+                        &reason,
+                    );
                     remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                    return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                    return Ok(IterationResult {
+                        outcome: "failed".to_string(),
+                        infra_failure: true,
+                        stop_session: None,
+                    });
                 }
                 meta.candidate_version = candidate_version;
-                meta.candidate_binary_path = candidate_dir.join("target").join("debug").join("wiggum-engine").to_string_lossy().to_string();
+                meta.candidate_binary_path = candidate_dir
+                    .join("target")
+                    .join("debug")
+                    .join("wiggum-engine")
+                    .to_string_lossy()
+                    .to_string();
                 save_session_metadata(&cfg.session_env_path, meta)?;
             }
             "implement" => {
                 info!(iteration = n, phase = "implement", "running phase");
                 match run_phase(&make_phase_config("evolution-implement"))? {
                     PhaseOutcome::Timeout => {
-                        warn!(iteration = n, phase = "implement", timeout_secs = cfg.phase_timeout_secs, "phase timed out");
-                        let reason = "Claude skill execution timed out during the implementation phase.";
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", reason);
+                        warn!(
+                            iteration = n,
+                            phase = "implement",
+                            timeout_secs = cfg.phase_timeout_secs,
+                            "phase timed out"
+                        );
+                        let reason =
+                            "Claude skill execution timed out during the implementation phase.";
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "implement",
+                            reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                     PhaseOutcome::Failed(code) => {
-                        warn!(iteration = n, phase = "implement", exit_code = code, "phase failed");
-                        let reason = "Claude skill execution failed during the implementation phase.";
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", reason);
+                        warn!(
+                            iteration = n,
+                            phase = "implement",
+                            exit_code = code,
+                            "phase failed"
+                        );
+                        let reason =
+                            "Claude skill execution failed during the implementation phase.";
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "implement",
+                            reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                     PhaseOutcome::Success => {
-                        info!(iteration = n, phase = "implement", outcome = "success", "phase complete");
+                        info!(
+                            iteration = n,
+                            phase = "implement",
+                            outcome = "success",
+                            "phase complete"
+                        );
                     }
                 }
                 let current_state = check_iteration_state_is(&paths.iteration_json, "implemented")?;
                 if current_state == "failed" {
                     remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                    return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: false, stop_session: None });
+                    return Ok(IterationResult {
+                        outcome: "failed".to_string(),
+                        infra_failure: false,
+                        stop_session: None,
+                    });
                 }
                 if current_state != "implemented" {
                     let reason = format!("Implementation phase completed without writing state 'implemented' (got '{}').", current_state);
-                    let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", &reason);
+                    let _ = record_phase_failure(
+                        &paths.iteration_json,
+                        &paths.decision_md,
+                        &paths.benchmark_md,
+                        "implement",
+                        &reason,
+                    );
                     remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                    return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                    return Ok(IterationResult {
+                        outcome: "failed".to_string(),
+                        infra_failure: true,
+                        stop_session: None,
+                    });
                 }
             }
             "validate" => {
-                info!(iteration = n, phase = "validate", "running correctness gate");
+                info!(
+                    iteration = n,
+                    phase = "validate",
+                    "running correctness gate"
+                );
                 let correctness_outcome = run_correctness_gate(
                     candidate_dir,
                     &paths.iteration_json,
@@ -1062,12 +1469,21 @@ fn run_iteration_from_phase(
                 )?;
                 match &correctness_outcome {
                     CorrectnessOutcome::Passed => {
-                        info!(iteration = n, phase = "validate", outcome = "passed", "correctness gate passed");
+                        info!(
+                            iteration = n,
+                            phase = "validate",
+                            outcome = "passed",
+                            "correctness gate passed"
+                        );
                     }
                     CorrectnessOutcome::Failed(_) => {
                         warn!(iteration = n, phase = "validate", "correctness gate failed");
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: false, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: false,
+                            stop_session: None,
+                        });
                     }
                 }
                 // Copy binary after validate passes
@@ -1077,9 +1493,19 @@ fn run_iteration_from_phase(
                     }
                     Err(e) => {
                         let reason = format!("Candidate binary could not be built: {}", e);
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "implement", &reason);
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "implement",
+                            &reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: false, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: false,
+                            stop_session: None,
+                        });
                     }
                 }
             }
@@ -1087,54 +1513,141 @@ fn run_iteration_from_phase(
                 info!(iteration = n, phase = "benchmark", "running phase");
                 match run_phase(&make_phase_config("evolution-benchmark"))? {
                     PhaseOutcome::Timeout => {
-                        warn!(iteration = n, phase = "benchmark", timeout_secs = cfg.phase_timeout_secs, "phase timed out");
+                        warn!(
+                            iteration = n,
+                            phase = "benchmark",
+                            timeout_secs = cfg.phase_timeout_secs,
+                            "phase timed out"
+                        );
                         let reason = "Claude skill execution timed out during the benchmark phase.";
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "benchmark", reason);
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "benchmark",
+                            reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                     PhaseOutcome::Failed(code) => {
-                        warn!(iteration = n, phase = "benchmark", exit_code = code, "phase failed");
+                        warn!(
+                            iteration = n,
+                            phase = "benchmark",
+                            exit_code = code,
+                            "phase failed"
+                        );
                         let reason = "Claude skill execution failed during the benchmark phase.";
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "benchmark", reason);
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "benchmark",
+                            reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                     PhaseOutcome::Success => {
-                        info!(iteration = n, phase = "benchmark", outcome = "success", "phase complete");
+                        info!(
+                            iteration = n,
+                            phase = "benchmark",
+                            outcome = "success",
+                            "phase complete"
+                        );
                     }
                 }
                 let current_state = check_iteration_state_is(&paths.iteration_json, "benchmarked")?;
                 if current_state == "failed" {
                     remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                    return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: false, stop_session: None });
+                    return Ok(IterationResult {
+                        outcome: "failed".to_string(),
+                        infra_failure: false,
+                        stop_session: None,
+                    });
                 }
                 if current_state != "benchmarked" {
-                    let reason = format!("Benchmark phase completed without writing state 'benchmarked' (got '{}').", current_state);
-                    let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "benchmark", &reason);
+                    let reason = format!(
+                        "Benchmark phase completed without writing state 'benchmarked' (got '{}').",
+                        current_state
+                    );
+                    let _ = record_phase_failure(
+                        &paths.iteration_json,
+                        &paths.decision_md,
+                        &paths.benchmark_md,
+                        "benchmark",
+                        &reason,
+                    );
                     remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                    return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                    return Ok(IterationResult {
+                        outcome: "failed".to_string(),
+                        infra_failure: true,
+                        stop_session: None,
+                    });
                 }
             }
             "decide" => {
                 info!(iteration = n, phase = "decide", "running phase");
                 match run_phase(&make_phase_config("evolution-decide"))? {
                     PhaseOutcome::Timeout => {
-                        warn!(iteration = n, phase = "decide", timeout_secs = cfg.phase_timeout_secs, "phase timed out");
+                        warn!(
+                            iteration = n,
+                            phase = "decide",
+                            timeout_secs = cfg.phase_timeout_secs,
+                            "phase timed out"
+                        );
                         let reason = "Claude skill execution timed out during the decision phase.";
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "decision", reason);
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "decision",
+                            reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                     PhaseOutcome::Failed(code) => {
-                        warn!(iteration = n, phase = "decide", exit_code = code, "phase failed");
+                        warn!(
+                            iteration = n,
+                            phase = "decide",
+                            exit_code = code,
+                            "phase failed"
+                        );
                         let reason = "Claude skill execution failed during the decision phase.";
-                        let _ = record_phase_failure(&paths.iteration_json, &paths.decision_md, &paths.benchmark_md, "decision", reason);
+                        let _ = record_phase_failure(
+                            &paths.iteration_json,
+                            &paths.decision_md,
+                            &paths.benchmark_md,
+                            "decision",
+                            reason,
+                        );
                         remove_candidate_workspace(&cfg.repo_root, candidate_dir);
-                        return Ok(IterationResult { outcome: "failed".to_string(), infra_failure: true, stop_session: None });
+                        return Ok(IterationResult {
+                            outcome: "failed".to_string(),
+                            infra_failure: true,
+                            stop_session: None,
+                        });
                     }
                     PhaseOutcome::Success => {
-                        info!(iteration = n, phase = "decide", outcome = "success", "phase complete");
+                        info!(
+                            iteration = n,
+                            phase = "decide",
+                            outcome = "success",
+                            "phase complete"
+                        );
                     }
                 }
             }
@@ -1150,18 +1663,25 @@ fn run_iteration_from_phase(
         .map(|d| d.outcome.clone())
         .unwrap_or_else(|| "inconclusive".to_string());
 
-    let proposal_source_final = final_state.ideas.proposal_source.clone().unwrap_or_default();
+    let proposal_source_final = final_state
+        .ideas
+        .proposal_source
+        .clone()
+        .unwrap_or_default();
     let selected_idea = final_state.ideas.selected_idea.clone().unwrap_or_default();
 
     let infra_failure = match outcome.as_str() {
         "accepted" => {
             if let Ok(ideas_path) = resolve_ideas_file(&meta.ideas_file, &cfg.repo_root) {
                 if let Some(p) = ideas_path {
-                    let mark_result = mark_idea_used(&p, &selected_idea, &proposal_source_final).unwrap_or(MarkResult::Skipped);
+                    let mark_result = mark_idea_used(&p, &selected_idea, &proposal_source_final)
+                        .unwrap_or(MarkResult::Skipped);
                     let _ = update_session_after_mark(meta, &p, &mark_result);
                 }
             }
-            let promotion_ok = promote_candidate(candidate_dir, &paths.iteration_json, meta, &cfg.repo_root).is_ok();
+            let promotion_ok =
+                promote_candidate(candidate_dir, &paths.iteration_json, meta, &cfg.repo_root)
+                    .is_ok();
             if !promotion_ok {
                 warn!(iteration = n, "promotion failed");
             }
@@ -1173,7 +1693,8 @@ fn run_iteration_from_phase(
             let mut infra = false;
             if let Ok(ideas_path) = resolve_ideas_file(&meta.ideas_file, &cfg.repo_root) {
                 if let Some(p) = ideas_path {
-                    let mark_result = mark_idea_used(&p, &selected_idea, &proposal_source_final).unwrap_or(MarkResult::NotFound);
+                    let mark_result = mark_idea_used(&p, &selected_idea, &proposal_source_final)
+                        .unwrap_or(MarkResult::NotFound);
                     if mark_result == MarkResult::NotFound {
                         infra = true;
                     }
@@ -1191,7 +1712,11 @@ fn run_iteration_from_phase(
     };
 
     info!(iteration = n, outcome = %outcome, "resumed iteration complete");
-    Ok(IterationResult { outcome, infra_failure, stop_session: None })
+    Ok(IterationResult {
+        outcome,
+        infra_failure,
+        stop_session: None,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1342,7 +1867,14 @@ fn run_resume(
     println!("  Session dir:  {}", session_path.display());
     println!("==================================");
 
-    let result = run_iteration_from_phase(latest_n, &start_phase, &cfg, &mut meta, &paths, &candidate_dir)?;
+    let result = run_iteration_from_phase(
+        latest_n,
+        &start_phase,
+        &cfg,
+        &mut meta,
+        &paths,
+        &candidate_dir,
+    )?;
 
     info!(iteration = latest_n, outcome = %result.outcome, "resumed iteration complete");
 
@@ -1389,7 +1921,10 @@ fn run_loop(cfg: &SessionConfig, mut meta: SessionMetadata, start_n: u32) -> Res
         let result = run_iteration(n, cfg, &mut meta)?;
         completed += 1;
 
-        println!("[iteration {}/{}] outcome: {}", n, cfg.max_iterations, result.outcome);
+        println!(
+            "[iteration {}/{}] outcome: {}",
+            n, cfg.max_iterations, result.outcome
+        );
 
         // Check for session-stopping conditions from the iteration
         if let Some((reason, details)) = result.stop_session {

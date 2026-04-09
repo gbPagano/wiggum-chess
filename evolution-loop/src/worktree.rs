@@ -73,7 +73,13 @@ pub fn create_candidate_workspace(
         .to_str()
         .ok_or_else(|| anyhow!("candidate_dir path is not valid UTF-8"))?;
     run_git(
-        &["worktree", "add", "--detach", candidate_dir_str, baseline_ref],
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            candidate_dir_str,
+            baseline_ref,
+        ],
         Some(repo_root),
     )
 }

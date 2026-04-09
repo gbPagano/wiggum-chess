@@ -97,7 +97,11 @@ pub fn write_session_summary(
     writeln!(f, "|-------|-------|")?;
     writeln!(f, "| Session ID | {} |", session_id)?;
     writeln!(f, "| Initial Baseline | {} |", baseline_version)?;
-    writeln!(f, "| Final Accepted Baseline | {} |", accepted_baseline_version)?;
+    writeln!(
+        f,
+        "| Final Accepted Baseline | {} |",
+        accepted_baseline_version
+    )?;
     writeln!(f, "| Accepted Baseline Path | {} |", accepted_baseline_path)?;
     writeln!(f, "| Max Iterations | {} |", max_iterations)?;
     writeln!(f, "| Completed Iterations | {} |", completed_iterations)?;

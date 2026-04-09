@@ -48,7 +48,10 @@ fn logical_phase_name(skill_name: &str) -> &str {
 }
 
 fn worker_guidance_path(repo_root: &Path) -> PathBuf {
-    repo_root.join(".claude").join("evolution").join("CLAUDE.md")
+    repo_root
+        .join(".claude")
+        .join("evolution")
+        .join("CLAUDE.md")
 }
 
 fn build_prompt(config: &PhaseConfig) -> String {
@@ -100,10 +103,7 @@ where
     })
 }
 
-fn join_reader(
-    handle: thread::JoinHandle<std::io::Result<()>>,
-    stream_name: &str,
-) -> Result<()> {
+fn join_reader(handle: thread::JoinHandle<std::io::Result<()>>, stream_name: &str) -> Result<()> {
     handle
         .join()
         .map_err(|_| anyhow!("{} reader thread panicked", stream_name))?
@@ -115,10 +115,10 @@ pub fn run_phase(config: &PhaseConfig) -> Result<PhaseOutcome> {
     let log_dir = config.iteration_dir.join("phase-logs");
     fs::create_dir_all(&log_dir).context("creating phase-logs directory")?;
     let log_path = log_dir.join(format!("{}.log", phase_name));
-    let log_file = Arc::new(Mutex::new(
-        File::create(&log_path)
-            .with_context(|| format!("creating phase log {}", log_path.display()))?,
-    ));
+    let log_file =
+        Arc::new(Mutex::new(File::create(&log_path).with_context(|| {
+            format!("creating phase log {}", log_path.display())
+        })?));
 
     let prompt = build_prompt(config);
     let claude = claude_bin();
@@ -156,14 +156,8 @@ pub fn run_phase(config: &PhaseConfig) -> Result<PhaseOutcome> {
             .with_context(|| format!("writing prompt for phase {}", config.skill_name))?;
     }
 
-    let stdout = child
-        .stdout
-        .take()
-        .context("capturing Claude stdout")?;
-    let stderr = child
-        .stderr
-        .take()
-        .context("capturing Claude stderr")?;
+    let stdout = child.stdout.take().context("capturing Claude stdout")?;
+    let stderr = child.stderr.take().context("capturing Claude stderr")?;
 
     let stdout_reader = spawn_reader(stdout, Arc::clone(&log_file), config.verbose);
     let stderr_reader = spawn_reader(stderr, Arc::clone(&log_file), config.verbose);
@@ -180,7 +174,9 @@ pub fn run_phase(config: &PhaseConfig) -> Result<PhaseOutcome> {
                 };
             }
             None if started_at.elapsed() >= timeout => {
-                child.kill().context("killing timed out Claude phase process")?;
+                child
+                    .kill()
+                    .context("killing timed out Claude phase process")?;
                 let _ = child.wait();
                 break PhaseOutcome::Timeout;
             }

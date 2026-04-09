@@ -579,7 +579,8 @@ impl FromStr for Board {
 
         // Halfmove clock (token 4, optional — default 0)
         if tokens.len() >= 5
-            && let Ok(hmc) = tokens[4].parse::<u32>() {
+            && let Ok(hmc) = tokens[4].parse::<u32>()
+        {
             board.halfmove_clock = hmc;
         }
 

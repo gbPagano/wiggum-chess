@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chesslib::analysis::{analyze_fen, StockfishProcess};
+use chesslib::analysis::{StockfishProcess, analyze_fen};
 use chesslib::chess_move::ChessMove;
 use chesslib::clock::Clock;
 use chesslib::engine::Engine;
@@ -8,8 +8,8 @@ use chesslib::match_runner::{Match, MatchObserver};
 use chesslib::pgn;
 use chesslib::uci_engine::UciEngine;
 use clap::{Parser, Subcommand};
-use rand::seq::SliceRandom;
 use rand::SeedableRng;
+use rand::seq::SliceRandom;
 use std::collections::HashSet;
 use std::io::Write;
 
@@ -723,7 +723,10 @@ fn run_extract_positions(args: &ExtractPositionsArgs) -> Result<()> {
         let end_ply = args.max_ply.min(moves.len());
         if args.min_ply > end_ply {
             if game_idx % 100 == 0 {
-                eprintln!("Games: {} | Evaluated: {} | Kept: {}", game_idx, evaluated, kept);
+                eprintln!(
+                    "Games: {} | Evaluated: {} | Kept: {}",
+                    game_idx, evaluated, kept
+                );
             }
             continue;
         }
@@ -765,7 +768,10 @@ fn run_extract_positions(args: &ExtractPositionsArgs) -> Result<()> {
         }
 
         if game_idx % 100 == 0 {
-            eprintln!("Games: {} | Evaluated: {} | Kept: {}", game_idx, evaluated, kept);
+            eprintln!(
+                "Games: {} | Evaluated: {} | Kept: {}",
+                game_idx, evaluated, kept
+            );
         }
     }
 
@@ -914,8 +920,9 @@ async fn run_match(args: MatchArgs) -> Result<()> {
 
     if let Some(ref positions_path) = args.positions_file {
         // --- Balanced positions mode ---
-        let content = std::fs::read_to_string(positions_path)
-            .map_err(|e| anyhow::anyhow!("cannot read positions file '{}': {}", positions_path, e))?;
+        let content = std::fs::read_to_string(positions_path).map_err(|e| {
+            anyhow::anyhow!("cannot read positions file '{}': {}", positions_path, e)
+        })?;
 
         let mut fens: Vec<String> = content
             .lines()
@@ -1000,7 +1007,10 @@ async fn run_match(args: MatchArgs) -> Result<()> {
         println!("Draws: {}", total_draws);
 
         if args.output.is_some() {
-            println!("Match results appended to: {}", args.output.as_ref().unwrap());
+            println!(
+                "Match results appended to: {}",
+                args.output.as_ref().unwrap()
+            );
         }
     } else {
         // --- Standard mode (single starting position or initial position) ---
@@ -1050,10 +1060,7 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
         "SPRT: elo0={}, elo1={}, alpha={}, beta={}",
         args.elo0, args.elo1, args.alpha, args.beta
     );
-    println!(
-        "LLR bounds: [{:.3}, {:.3}]",
-        lower_bound, upper_bound
-    );
+    println!("LLR bounds: [{:.3}, {:.3}]", lower_bound, upper_bound);
     println!();
 
     // Query engine names via UCI handshake before the match loop.
@@ -1080,8 +1087,9 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
 
     // Load balanced positions if provided
     let fens: Vec<String> = if let Some(ref positions_path) = args.positions_file {
-        let content = std::fs::read_to_string(positions_path)
-            .map_err(|e| anyhow::anyhow!("cannot read positions file '{}': {}", positions_path, e))?;
+        let content = std::fs::read_to_string(positions_path).map_err(|e| {
+            anyhow::anyhow!("cannot read positions file '{}': {}", positions_path, e)
+        })?;
         let mut fens: Vec<String> = content
             .lines()
             .map(|l| l.trim().to_string())
@@ -1092,7 +1100,10 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
         let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
         fens.shuffle(&mut rng);
         fens.truncate(args.num_positions);
-        println!("Positions mode: {} position(s), cycling through SPRT games", fens.len());
+        println!(
+            "Positions mode: {} position(s), cycling through SPRT games",
+            fens.len()
+        );
         println!();
         fens
     } else {
@@ -1232,8 +1243,7 @@ fn run_pgn_fen(args: &PgnFenArgs) -> Result<()> {
 
     let up_to = args.r#move.unwrap_or(moves.len());
 
-    let board = pgn::replay(&moves, up_to)
-        .map_err(|e| anyhow::anyhow!("replay error: {}", e))?;
+    let board = pgn::replay(&moves, up_to).map_err(|e| anyhow::anyhow!("replay error: {}", e))?;
 
     println!("{}", board);
     Ok(())
@@ -1254,8 +1264,8 @@ async fn run_pgn_match(args: PgnMatchArgs) -> Result<()> {
 
     let up_to = args.r#move.unwrap_or(moves.len());
 
-    let start_board = pgn::replay(&moves, up_to)
-        .map_err(|e| anyhow::anyhow!("replay error: {}", e))?;
+    let start_board =
+        pgn::replay(&moves, up_to).map_err(|e| anyhow::anyhow!("replay error: {}", e))?;
 
     let start_fen = format!("{}", start_board);
 
@@ -1310,10 +1320,7 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
     let matches_note;
 
     if !std::path::Path::new(&args.matches_csv).exists() {
-        matches_note = format!(
-            "_No matches CSV found at `{}`._",
-            args.matches_csv
-        );
+        matches_note = format!("_No matches CSV found at `{}`._", args.matches_csv);
     } else {
         let mut rdr = csv::Reader::from_path(&args.matches_csv)?;
         let mut found = 0usize;
@@ -1344,13 +1351,15 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
                 (engine1.clone(), e2_wins, e1_wins)
             };
 
-            let entry = opponent_map.entry(opponent.clone()).or_insert(OpponentStats {
-                opponent,
-                games: 0,
-                wins: 0,
-                draws: 0,
-                losses: 0,
-            });
+            let entry = opponent_map
+                .entry(opponent.clone())
+                .or_insert(OpponentStats {
+                    opponent,
+                    games: 0,
+                    wins: 0,
+                    draws: 0,
+                    losses: 0,
+                });
             entry.games += games;
             entry.wins += wins;
             entry.draws += draws;
@@ -1426,8 +1435,7 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
             if found == 0 {
                 sprt_note = format!(
                     "_No SPRT rows matching `{}` found in `{}`._",
-                    filter,
-                    sprt_path
+                    filter, sprt_path
                 );
             } else {
                 sprt_note = String::new();
@@ -1441,10 +1449,7 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
     let mut md = String::new();
     let generation_date = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
-    let report_title = args
-        .engine_name
-        .as_deref()
-        .unwrap_or(args.version.as_str());
+    let report_title = args.engine_name.as_deref().unwrap_or(args.version.as_str());
 
     md.push_str(&format!("# {} — Version Report\n\n", report_title));
     md.push_str(&format!("_Generated: {}_\n\n", generation_date));

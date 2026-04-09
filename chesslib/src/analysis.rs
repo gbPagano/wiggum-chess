@@ -26,7 +26,9 @@ impl fmt::Display for AnalysisError {
             AnalysisError::HandshakeFailed(msg) => write!(f, "UCI handshake failed: {}", msg),
             AnalysisError::Timeout => write!(f, "Stockfish analysis timed out"),
             AnalysisError::ProcessDied => write!(f, "Stockfish process died unexpectedly"),
-            AnalysisError::IoError(msg) => write!(f, "I/O error communicating with Stockfish: {}", msg),
+            AnalysisError::IoError(msg) => {
+                write!(f, "I/O error communicating with Stockfish: {}", msg)
+            }
         }
     }
 }
@@ -102,8 +104,7 @@ impl StockfishProcess {
     }
 
     fn send_line(&mut self, cmd: &str) -> Result<(), AnalysisError> {
-        write!(self.stdin, "{}\n", cmd)
-            .map_err(|e| AnalysisError::IoError(e.to_string()))?;
+        write!(self.stdin, "{}\n", cmd).map_err(|e| AnalysisError::IoError(e.to_string()))?;
         self.stdin
             .flush()
             .map_err(|e| AnalysisError::IoError(e.to_string()))?;
@@ -235,7 +236,10 @@ done
         let mut sf = StockfishProcess::new(path).expect("handshake should succeed");
         let fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         let result = analyze_fen(&mut sf, fen, 1).expect("analyze_fen should not panic");
-        assert_eq!(result, None, "mock returns no cp line so result should be None");
+        assert_eq!(
+            result, None,
+            "mock returns no cp line so result should be None"
+        );
     }
 
     #[test]
