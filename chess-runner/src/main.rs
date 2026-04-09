@@ -921,6 +921,16 @@ async fn run_match(args: MatchArgs) -> Result<()> {
     }
     println!();
 
+    // Load and validate opening book early so the match fails fast on bad data.
+    let _validated_book: Option<Vec<opening_book::OpeningLine>> =
+        if let Some(ref book_path) = args.opening_book {
+            let raw = opening_book::load_opening_book(std::path::Path::new(book_path))?;
+            let validated = opening_book::validate_opening_book(raw)?;
+            Some(validated)
+        } else {
+            None
+        };
+
     // Query engine names via UCI handshake before the match loop.
     let engine1_name = {
         let mut e = UciEngine::new(&args.engine1, args.timeout)

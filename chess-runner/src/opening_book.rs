@@ -15,6 +15,8 @@
 /// Each move token must be a valid UCI move string (e.g. `e2e4`, `e7e8q`).
 /// The book can be loaded from a file bundled in the repository (e.g. `data/openings.txt`)
 /// or from any local path supplied at runtime.
+use chesslib::board::Board;
+use chesslib::chess_move::ChessMove;
 use std::path::Path;
 
 /// A single opening line: a sequence of UCI move strings from the initial position.
@@ -50,6 +52,58 @@ pub fn parse_opening_book(content: &str) -> Vec<OpeningLine> {
         .collect()
 }
 
+/// Validate a slice of parsed opening lines against legal chess moves.
+///
+/// Each line is replayed from the initial position. If any move in a line is illegal,
+/// that line is rejected and an error message is returned for it. Lines that pass are
+/// collected and returned. If the result is empty (all lines were invalid, or the input
+/// was empty to begin with), an error is returned.
+///
+/// # Errors
+///
+/// Returns an error if any line contains an illegal move, or if no valid lines remain.
+pub fn validate_opening_book(lines: Vec<OpeningLine>) -> anyhow::Result<Vec<OpeningLine>> {
+    let mut valid = Vec::with_capacity(lines.len());
+    let mut errors: Vec<String> = Vec::new();
+
+    for line in lines {
+        let mut board = Board::default();
+        let mut ok = true;
+        for (i, mv_str) in line.moves.iter().enumerate() {
+            match ChessMove::from_uci(mv_str, &board) {
+                Ok(m) => {
+                    board = board.make_move(m);
+                }
+                Err(e) => {
+                    errors.push(format!(
+                        "invalid move '{}' at ply {} in line '{}': {}",
+                        mv_str,
+                        i + 1,
+                        line.moves.join(" "),
+                        e
+                    ));
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        if ok {
+            valid.push(line);
+        }
+    }
+
+    if !errors.is_empty() {
+        let msg = errors.join("\n");
+        anyhow::bail!("opening book contains invalid lines:\n{}", msg);
+    }
+
+    if valid.is_empty() {
+        anyhow::bail!("opening book is empty: no valid opening lines found");
+    }
+
+    Ok(valid)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -82,5 +136,30 @@ mod tests {
         assert_eq!(lines.len(), 1);
         assert_eq!(lines[0].moves.len(), 5);
         assert_eq!(lines[0].moves[4], "f1b5");
+    }
+
+    #[test]
+    fn test_validate_valid_lines() {
+        let lines = parse_opening_book("e2e4 e7e5\nd2d4 d7d5 c2c4\n");
+        let validated = validate_opening_book(lines).unwrap();
+        assert_eq!(validated.len(), 2);
+    }
+
+    #[test]
+    fn test_validate_invalid_move_errors() {
+        // "e2e5" is not a legal pawn move from initial position
+        let lines = parse_opening_book("e2e5\n");
+        let result = validate_opening_book(lines);
+        assert!(result.is_err());
+        let msg = result.unwrap_err().to_string();
+        assert!(msg.contains("e2e5"));
+    }
+
+    #[test]
+    fn test_validate_empty_lines_errors() {
+        let lines = parse_opening_book("# no moves\n\n");
+        let result = validate_opening_book(lines);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("empty"));
     }
 }
