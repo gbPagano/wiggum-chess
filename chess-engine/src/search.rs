@@ -7,25 +7,28 @@ use crate::eval::evaluate;
 pub const CHECKMATE_SCORE: i32 = 30000;
 const INF: i32 = CHECKMATE_SCORE + 1_000;
 
-/// Negamax search with alpha-beta pruning: returns the best (move, score) pair
+/// Runs a negamax search with alpha-beta pruning and returns the best result
 /// for the side to move.
 ///
-/// Score is from the side-to-move's perspective (positive = good for mover).
-/// At depth 0, returns the material evaluation directly (no move).
+/// The returned score is from the side-to-move's perspective
+/// (positive = good for the player to move). At depth 0 and in terminal
+/// positions, no move is returned and the static evaluation is used.
 pub fn search(board: &Board, depth: u8) -> (Option<ChessMove>, i32) {
+    alpha_beta(board, depth, -INF, INF)
+}
+
+/// Searches a position with negamax alpha-beta pruning inside the window
+/// `[alpha, beta]` and returns the best legal move found together with its
+/// score from the current side-to-move's perspective.
+///
+/// This implementation is used both at the root and in recursive child nodes.
+/// In recursive calls, the move from deeper levels is not propagated upward;
+/// each caller keeps the current move that produced the best child score.
+fn alpha_beta(board: &Board, depth: u8, mut alpha: i32, beta: i32) -> (Option<ChessMove>, i32) {
     if depth == 0 {
         return (None, evaluate(board));
     }
 
-    alpha_beta_root(board, depth, -INF, INF)
-}
-
-fn alpha_beta_root(
-    board: &Board,
-    depth: u8,
-    mut alpha: i32,
-    beta: i32,
-) -> (Option<ChessMove>, i32) {
     let moves: Vec<ChessMove> = MoveGen::new_legal(board).collect();
 
     // Terminal position: checkmate or stalemate
@@ -38,7 +41,8 @@ fn alpha_beta_root(
 
     for mv in moves {
         let child = board.make_move(mv);
-        let score = -alpha_beta(&child, depth - 1, -beta, -alpha);
+        let (_child_move, child_score) = alpha_beta(&child, depth - 1, -beta, -alpha);
+        let score = -child_score;
 
         if score > best_score {
             best_score = score;
@@ -54,38 +58,19 @@ fn alpha_beta_root(
     (best_move, best_score)
 }
 
-fn alpha_beta(board: &Board, depth: u8, mut alpha: i32, beta: i32) -> i32 {
-    if depth == 0 {
-        return evaluate(board);
-    }
-
-    let moves: Vec<ChessMove> = MoveGen::new_legal(board).collect();
-
-    // Terminal position: checkmate or stalemate
-    if moves.is_empty() {
-        return evaluate(board);
-    }
-
-    let mut best_score = -INF;
-
-    for mv in moves {
-        let child = board.make_move(mv);
-        let score = -alpha_beta(&child, depth - 1, -beta, -alpha);
-        best_score = best_score.max(score);
-        alpha = alpha.max(score);
-
-        if alpha >= beta {
-            break;
-        }
-    }
-
-    best_score
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::str::FromStr;
+
+    #[test]
+    fn returns_static_evaluation_at_depth_zero() {
+        let board =
+            Board::from_str("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap();
+        let (mv, score) = search(&board, 0);
+        assert!(mv.is_none(), "Expected no move at depth 0");
+        assert_eq!(score, evaluate(&board));
+    }
 
     #[test]
     fn returns_valid_move_from_start() {
@@ -140,10 +125,28 @@ mod tests {
     }
 
     #[test]
+    fn returns_checkmate_score_without_move_in_terminal_position() {
+        let board = Board::from_str("7k/6Q1/6K1/8/8/8/8/8 b - - 0 1").unwrap();
+        let (mv, score) = search(&board, 3);
+        assert!(mv.is_none(), "Expected no move in checkmate");
+        assert_eq!(score, -CHECKMATE_SCORE);
+    }
+
+    #[test]
     fn terminal_positions_are_evaluated_without_searching_children() {
         let board = Board::from_str("k7/2K5/1Q6/8/8/8/8/8 b - - 0 1").unwrap();
         let (mv, score) = search(&board, 3);
         assert!(mv.is_none(), "Expected no move in stalemate");
         assert_eq!(score, 0);
+    }
+
+    #[test]
+    fn returns_only_legal_move_when_forced() {
+        let board = Board::from_str("7k/8/p5Q1/8/8/8/8/5K2 b - - 0 1").unwrap();
+        let legal_moves: Vec<ChessMove> = MoveGen::new_legal(&board).collect();
+        assert_eq!(legal_moves.len(), 1, "Expected exactly one legal move");
+
+        let (mv, _score) = search(&board, 2);
+        assert_eq!(mv, Some(legal_moves[0]));
     }
 }
