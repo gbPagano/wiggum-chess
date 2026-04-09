@@ -1,0 +1,3 @@
+timestamp,engine1_name,engine2_name,games_played,engine1_wins,engine2_wins,draws,engine1_win_rate,start_fen,time_control
+2026-04-09T18:44:33.065119375+00:00,Wiggum Engine v0.2,Wiggum Engine v0.1,10,5,0,5,0.5000,startpos,STC
+2026-04-09T18:45:11.785241682+00:00,Wiggum Engine v0.2,Wiggum Engine v0.1,10,4,1,5,0.4000,balanced-positions,STC

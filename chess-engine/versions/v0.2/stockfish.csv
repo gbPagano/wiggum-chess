@@ -1,0 +1,3 @@
+timestamp,engine1_name,engine2_name,games_played,engine1_wins,engine2_wins,draws,engine1_win_rate,start_fen,time_control
+2026-04-09T18:50:08.495335541+00:00,Wiggum Engine v0.2,Stockfish 17 (1500-STC),10,3,7,0,0.3000,startpos,STC
+2026-04-09T18:54:29.811751403+00:00,Wiggum Engine v0.2,Stockfish 17 (1500-STC-balanced),10,3,5,2,0.3000,balanced-positions,STC

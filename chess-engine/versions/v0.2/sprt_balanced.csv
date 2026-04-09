@@ -1,0 +1,2 @@
+timestamp,engine1_name,engine2_name,games_played,wins,draws,losses,elo0,elo1,sprt_result,time_control
+2026-04-09T18:44:02.684364857+00:00,Wiggum Engine v0.2,Wiggum Engine v0.1,10,2,8,0,0.00,5.00,inconclusive,STC
