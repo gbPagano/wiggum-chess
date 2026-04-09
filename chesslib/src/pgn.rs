@@ -481,6 +481,31 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_nth_multi_game_different_moves() {
+        let pgn = r#"[Event "Game 1"]
+
+1. e4 e5 2. Nf3 1-0
+
+[Event "Game 2"]
+
+1. d4 d5 2. c4 1-0
+"#;
+        let game0 = parse_nth(pgn, 0).unwrap();
+        let game1 = parse_nth(pgn, 1).unwrap();
+        assert_eq!(game0.len(), 3);
+        assert_eq!(game1.len(), 3);
+        // First moves differ: e2e4 vs d2d4
+        assert_ne!(game0[0], game1[0]);
+    }
+
+    #[test]
+    fn test_parse_nth_out_of_range_returns_error() {
+        let pgn = "1. e4 e5";
+        assert!(parse_nth(pgn, 1).is_err());
+        assert!(parse_nth(pgn, 99).is_err());
+    }
+
+    #[test]
     fn test_replay_zero_moves_returns_starting_position() {
         let pgn = "1. e4 e5 2. Nf3";
         let moves = parse(pgn).unwrap();
