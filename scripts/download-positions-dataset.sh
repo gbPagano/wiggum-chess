@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+REPO_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 DATA_DIR="$REPO_ROOT/data"
-OUTPUT_FILE="$DATA_DIR/lichess-elite-2016-01.pgn"
+OUTPUT_FILE="$DATA_DIR/lichess-2013-01.pgn"
 
 if [ -f "$OUTPUT_FILE" ]; then
     echo "already exists — skipping"
@@ -12,10 +12,10 @@ fi
 
 mkdir -p "$DATA_DIR"
 
-DATASET_URL="https://database.lichess.org/elite/lichess_db_standard_rated_2016-01.pgn.zst"
-TMP_FILE="$DATA_DIR/lichess_db_standard_rated_2016-01.pgn.zst"
+DATASET_URL="https://database.lichess.org/standard/lichess_db_standard_rated_2013-01.pgn.zst"
+TMP_FILE="$DATA_DIR/lichess_db_standard_rated_2013-01.pgn.zst"
 
-echo "Downloading Lichess Elite dataset from $DATASET_URL ..."
+echo "Downloading Lichess dataset from $DATASET_URL ..."
 curl -fsSL -o "$TMP_FILE" "$DATASET_URL"
 
 echo "Decompressing ..."

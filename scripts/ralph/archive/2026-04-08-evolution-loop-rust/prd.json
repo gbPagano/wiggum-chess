@@ -1,7 +1,7 @@
 {
   "project": "Wiggum Chess Engine",
   "branchName": "ralph/balanced-positions",
-  "description": "Balanced Starting Positions - Download a Lichess rated PGN dataset, extract Stockfish-evaluated balanced positions, and use them as randomized starting points in match, sprt, and benchmark-version.sh.",
+  "description": "Balanced Starting Positions - Download a Lichess Elite PGN dataset, extract Stockfish-evaluated balanced positions, and use them as randomized starting points in match, sprt, and benchmark-version.sh.",
   "userStories": [
     {
       "id": "US-001",
@@ -17,7 +17,7 @@
         "`bash -n scripts/download-positions-dataset.sh` passes (syntax check)"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -36,7 +36,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
@@ -57,7 +57,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
