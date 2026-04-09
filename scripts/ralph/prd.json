@@ -70,8 +70,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added select_opening_line(lines, seed) to chess-runner/src/opening_book.rs using SmallRng::seed_from_u64 + SliceRandom::choose. In run_match(), load/validate/select happen together early; selected line stored as _selected_opening for US-005 to consume."
     },
     {
       "id": "US-005",

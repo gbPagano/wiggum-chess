@@ -47,3 +47,16 @@ Started: Thu Apr  9 09:09:27 PDT 2026
   - Collect all errors from all lines before returning, so the user sees every invalid line at once (not just the first)
   - The validated book is stored as `_validated_book` for now; US-004/US-005 will use it for selection and application
 ---
+
+## 2026-04-09 - US-004
+- Added `select_opening_line(lines: &[OpeningLine], seed: Option<u64>) -> &OpeningLine` to `chess-runner/src/opening_book.rs`
+- Uses `rand::rngs::SmallRng::seed_from_u64` with `SliceRandom::choose` — same pattern as FEN shuffle in the same file
+- If `seed` is `None`, calls `rand::random::<u64>()` for a non-deterministic fallback
+- In `run_match()`, replaced `_validated_book` with `_selected_opening: Option<OpeningLine>` — load + validate + select happen together; cloned chosen line stored for US-005 to consume
+- Added 4 tests: same seed reproducibility, two distinct seeds succeed, no-seed path, single-line always chosen
+- Files changed: `chess-runner/src/opening_book.rs`, `chess-runner/src/main.rs`, `scripts/ralph/prd.json`
+- **Learnings for future iterations:**
+  - `SliceRandom::choose(&mut rng)` returns `Option<&T>` — use `.expect("non-empty slice always yields Some")` after asserting non-empty
+  - The selected line is now `_selected_opening: Option<opening_book::OpeningLine>` in `run_match()` — US-005 should rename it and use `.moves` to replay and get the starting FEN
+  - `play_games()` takes `start_fen: Option<&str>` — US-005 replays the selected opening moves from `Board::default()` to get the FEN string
+---
