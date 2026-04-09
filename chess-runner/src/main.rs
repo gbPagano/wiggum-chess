@@ -1339,8 +1339,11 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
         .to_lowercase();
 
     // ---- Parse matches CSV ----
-    let mut opponent_map: std::collections::HashMap<String, OpponentStats> =
-        std::collections::HashMap::new();
+    // Keyed by (time_control, opponent) to avoid silently merging LTC and STC rows.
+    let mut tc_opponent_map: std::collections::BTreeMap<
+        String,
+        std::collections::HashMap<String, OpponentStats>,
+    > = std::collections::BTreeMap::new();
     let matches_note;
 
     if !std::path::Path::new(&args.matches_csv).exists() {
@@ -1360,6 +1363,12 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
             let e1_wins: usize = record[4].parse().unwrap_or(0);
             let e2_wins: usize = record[5].parse().unwrap_or(0);
             let draws: usize = record[6].parse().unwrap_or(0);
+            // index 7 = win_rate, index 8 = start_fen, index 9 = time_control
+            let time_control = if record.len() > 9 {
+                record[9].to_string()
+            } else {
+                "unknown".to_string()
+            };
 
             let target_is_e1 = engine1.to_lowercase().contains(&filter);
             let target_is_e2 = engine2.to_lowercase().contains(&filter);
@@ -1375,7 +1384,9 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
                 (engine1.clone(), e2_wins, e1_wins)
             };
 
-            let entry = opponent_map
+            let entry = tc_opponent_map
+                .entry(time_control)
+                .or_default()
                 .entry(opponent.clone())
                 .or_insert(OpponentStats {
                     opponent,
@@ -1485,67 +1496,71 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
         md.push_str(&matches_note);
         md.push('\n');
     } else {
-        // Summary table
-        md.push_str("| Opponent | Games | Wins | Draws | Losses | Win% |\n");
-        md.push_str("|----------|-------|------|-------|--------|------|\n");
+        // Render one sub-section per time control (LTC, STC, etc.) so rows are
+        // never silently merged across different time controls.
+        for (tc, opponent_map) in &tc_opponent_map {
+            md.push_str(&format!("### {}\n\n", tc));
+            md.push_str("| Opponent | Games | Wins | Draws | Losses | Win% |\n");
+            md.push_str("|----------|-------|------|-------|--------|------|\n");
 
-        let mut all_stats: Vec<&OpponentStats> = opponent_map.values().collect();
-        all_stats.sort_by(|a, b| a.opponent.cmp(&b.opponent));
+            let mut all_stats: Vec<&OpponentStats> = opponent_map.values().collect();
+            all_stats.sort_by(|a, b| a.opponent.cmp(&b.opponent));
 
-        let mut total_games = 0usize;
-        let mut total_wins = 0usize;
-        let mut total_draws = 0usize;
-        let mut total_losses = 0usize;
+            let mut total_games = 0usize;
+            let mut total_wins = 0usize;
+            let mut total_draws = 0usize;
+            let mut total_losses = 0usize;
 
-        for s in &all_stats {
+            for s in &all_stats {
+                md.push_str(&format!(
+                    "| {} | {} | {} | {} | {} | {:.1}% |\n",
+                    s.opponent,
+                    s.games,
+                    s.wins,
+                    s.draws,
+                    s.losses,
+                    s.win_pct()
+                ));
+                total_games += s.games;
+                total_wins += s.wins;
+                total_draws += s.draws;
+                total_losses += s.losses;
+            }
+
+            md.push('\n');
+
+            let overall_win_pct = if total_games > 0 {
+                total_wins as f64 / total_games as f64 * 100.0
+            } else {
+                0.0
+            };
+
             md.push_str(&format!(
-                "| {} | {} | {} | {} | {} | {:.1}% |\n",
-                s.opponent,
-                s.games,
-                s.wins,
-                s.draws,
-                s.losses,
-                s.win_pct()
+                "**Overall:** {} games, {} wins, {} draws, {} losses — **{:.1}% win rate**\n\n",
+                total_games, total_wins, total_draws, total_losses, overall_win_pct
             ));
-            total_games += s.games;
-            total_wins += s.wins;
-            total_draws += s.draws;
-            total_losses += s.losses;
-        }
 
-        md.push('\n');
+            let best = all_stats
+                .iter()
+                .max_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
+            let worst = all_stats
+                .iter()
+                .min_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
 
-        let overall_win_pct = if total_games > 0 {
-            total_wins as f64 / total_games as f64 * 100.0
-        } else {
-            0.0
-        };
-
-        md.push_str(&format!(
-            "**Overall:** {} games, {} wins, {} draws, {} losses — **{:.1}% win rate**\n\n",
-            total_games, total_wins, total_draws, total_losses, overall_win_pct
-        ));
-
-        let best = all_stats
-            .iter()
-            .max_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
-        let worst = all_stats
-            .iter()
-            .min_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
-
-        if let Some(b) = best {
-            md.push_str(&format!(
-                "**Best matchup:** {} ({:.1}%)\n\n",
-                b.opponent,
-                b.win_pct()
-            ));
-        }
-        if let Some(w) = worst {
-            md.push_str(&format!(
-                "**Worst matchup:** {} ({:.1}%)\n\n",
-                w.opponent,
-                w.win_pct()
-            ));
+            if let Some(b) = best {
+                md.push_str(&format!(
+                    "**Best matchup:** {} ({:.1}%)\n\n",
+                    b.opponent,
+                    b.win_pct()
+                ));
+            }
+            if let Some(w) = worst {
+                md.push_str(&format!(
+                    "**Worst matchup:** {} ({:.1}%)\n\n",
+                    w.opponent,
+                    w.win_pct()
+                ));
+            }
         }
     }
 
