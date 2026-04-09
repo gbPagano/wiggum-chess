@@ -6,6 +6,7 @@
 - Pawn direction: White advances +1 rank, Black advances -1 rank. White start rank = 1, Black start rank = 6. Promotion rank for white = 7, black = 0.
 - Skip promotion in pawn generation until US-010 — skip moves landing on promote_rank in `pseudo_legal_pawn_moves`.
 - En passant file set in `apply_move` for double pushes (white: rank 1→3, black: rank 6→4).
+- Short-range pieces (knight, king): use a shared `short_range_moves(color, kind, offsets)` helper — loop offsets, bounds-check, skip friendly squares.
 
 # Ralph Progress Log
 Started: Thu Apr  9 13:19:42 PDT 2026
@@ -53,4 +54,17 @@ Started: Thu Apr  9 13:19:42 PDT 2026
   - Promotion rank check must skip both quiet and capture moves landing on rank 7 (white) / rank 0 (black)
   - En passant file is stored per-move in `apply_move`; the rank can be inferred from the color whose turn it is to capture
   - 20 tests total now passing in `chesslib-simple`
+---
+
+## 2026-04-09 - US-005
+- Added `Board::pseudo_legal_knight_moves()` and `Board::pseudo_legal_king_moves()`
+- Backed by a private `short_range_moves(color, kind, offsets)` helper to avoid duplication
+- Knight offsets: all 8 L-shaped jumps; King offsets: all 8 adjacent squares
+- Both methods skip out-of-bounds targets and squares occupied by friendly pieces
+- 9 new tests added; 29 total tests passing
+- Files changed: `chesslib-simple/src/lib.rs`
+- **Learnings for future iterations:**
+  - The `short_range_moves` helper can be reused for any short-range piece if more are needed
+  - Pattern: iterate all 8x8 squares, find pieces of the right kind/color, then apply offsets
+  - King moves do NOT include castling (handled separately in US-008)
 ---

@@ -77,8 +77,8 @@
         "Tests pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added pseudo_legal_knight_moves() and pseudo_legal_king_moves(), both backed by a shared short_range_moves() helper. 9 new tests, 29 total passing."
     },
     {
       "id": "US-006",
