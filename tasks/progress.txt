@@ -1,74 +1,37 @@
-## Ralph Progress
-
 ## Codebase Patterns
-- PgnError: implement `std::error::Error`; anyhow's blanket `From<E>` covers it — do NOT add an explicit `impl From<PgnError> for anyhow::Error`
-- SAN disambiguation: strip piece letter + 'x', take last 2 chars as dest, preceding chars are disambiguation (1 char = file or rank, 2 chars = full square)
-- Board::make_move takes a ChessMove and returns a new Board (immutable move application)
-- MoveGen::new_legal(board) is an iterator over all legal ChessMove values for the position
-- Castling in UCI: e1g1 (kingside white), e1c1 (queenside white), e8g8/e8c8 for black
-- Board::from_str(fen) parses FEN; fmt::Display on Board outputs FEN
+- Use `chesslib::analysis::{analyze_fen, StockfishProcess}` for Stockfish evaluation
+- `chess-runner` uses clap with `#[derive(Parser)]` for subcommands
+- CSV output uses `write_csv_row` helper; each row is appended to the file
+- Match runner is in `chesslib::match_runner::{Match, MatchObserver}`
+- `SmallRng::seed_from_u64` from the `rand` crate for reproducible shuffles
+- `chess-runner` already depends on `rand` crate (added during US-004 or later)
+- FEN positions file: one FEN per line, loaded into Vec<String>
 
 ## 2026-04-08 - US-001
-- Implemented `chesslib::pgn` module with `parse()`, `parse_nth()`, and `replay()` functions
-- Added `PgnError` type implementing `std::error::Error`
-- SAN parser handles: pawn pushes/captures, piece moves, castling (O-O/O-O-O), promotions (=Q etc.), file/rank/full disambiguation, check/annotation decorators stripped
-- Tokenizer strips: tag headers (`[...]` lines), inline comments (`{...}`), line comments (`;...`), move numbers, result tokens, NAGs (`$N`)
-- Files changed: `chesslib/src/pgn.rs` (new), `chesslib/src/lib.rs` (added `pub mod pgn`)
+- Implemented `scripts/download-positions-dataset.sh`
+- Downloads Lichess Elite January 2016 PGN, decompresses with zstd
+- Added `data/` to `.gitignore`
 - **Learnings for future iterations:**
-  - The `Board` Display impl outputs FEN with halfmove clock but no fullmove number (ends in `... N 1`)
-  - `MoveGen::new_legal` is an iterator, not a vec — call `.find()` / `.filter().collect()` on it
-  - `Piece::Pawn` is the implicit piece for lowercase SAN tokens
-  - Castling dest squares: kingside=G file, queenside=C file (same rank as king)
+  - Pattern mirrors `scripts/download-stockfish.sh`
+  - Uses `zstd -d` with fallback to `unzstd`
 ---
 
 ## 2026-04-08 - US-002
-- Added two unit tests for multi-game PGN selection: `test_parse_nth_multi_game_different_moves` and `test_parse_nth_out_of_range_returns_error`
-- The `parse_nth` and `split_games` implementations were already complete from US-001; US-002 only required the specific acceptance-criteria tests
-- Files changed: `chesslib/src/pgn.rs` (added 2 tests)
+- Implemented `StockfishProcess` and `analyze_fen` in `chesslib/src/analysis.rs`
+- UCI handshake: sends `uci`, reads until `uciok`
+- Per-line 5-second read timeout via `BufReader` + `read_line` with timeout
 - **Learnings for future iterations:**
-  - `split_games` uses a `seen_moves` flag: a `[` header after movetext flushes the current game; a header before any movetext is just added to the current game
-  - Two-game PGN test needs `[Event "..."]` headers so `split_games` can detect the game boundary
+  - `StockfishProcess::new(path)` spawns child process with piped stdin/stdout
+  - `analyze_fen` returns `Ok(None)` for mate scores, `Ok(Some(cp))` for centipawn
+  - Error type `AnalysisError` wraps IO and protocol errors
 ---
 
 ## 2026-04-08 - US-003
-- `replay()` was already fully implemented in `chesslib/src/pgn.rs` as part of US-001 (lines 50-66)
-- All acceptance criteria were met: `up_to=0` returns starting position, `up_to=moves.len()` returns final position, out-of-range returns `PgnError`, illegal move returns `PgnError`
-- Three tests already existed: `test_replay_zero_moves_returns_starting_position`, `test_replay_all_moves`, `test_replay_out_of_range_returns_error`
-- Files changed: `tasks/prd.json` (set passes: true)
+- Implemented `ExtractPositions` subcommand in `chess-runner/src/main.rs`
+- Reads PGN via `chesslib::pgn::parse_nth`, replays moves, evaluates with Stockfish
+- Deduplicates FENs with `HashSet<String>`, writes to output file
 - **Learnings for future iterations:**
-  - Always run tests before assuming a story needs implementation — prior stories may have already done the work
----
-
-## 2026-04-08 - US-004
-- Added Opera Game (Morphy vs Duke of Brunswick, Paris 1858) as embedded real-world PGN constant in `chesslib/src/pgn.rs`
-- Tests added: move count (33), final FEN assertion, perft(1) on checkmate (0 moves), O-O-O verification, file disambiguation (Rxd7), promotion via parse_san_token, both castling sides combined test
-- Final FEN of Opera Game: `1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 1`
-- Files changed: `chesslib/src/pgn.rs` (added 8 tests + OPERA_GAME_PGN constant), `tasks/prd.json` (passes: true)
-- **Learnings for future iterations:**
-  - Board::fmt always outputs fullmove number as 1 (not the actual game fullmove count)
-  - Checkmate position returns 0 from MoveGen::perft_test at depth 1
-  - When writing FEN-based tests, beware placing the black king ON the promotion square (makes promotion illegal)
----
-
-## 2026-04-08 - US-005
-- Added `PgnFen(PgnFenArgs)` variant to `Commands` enum in `chess-runner/src/main.rs`
-- Added `PgnFenArgs` struct with `--file`, `--move`, `--game` (1-based, default 1) fields
-- Implemented `run_pgn_fen()` using `pgn::parse_nth` + `pgn::replay` from chesslib
-- `--game` is 1-based in CLI; passes `game - 1` to `parse_nth`
-- Tests: starting position, file not found, game out of range, move out of range
-- Files changed: `chess-runner/src/main.rs`, `tasks/prd.json`
-- **Learnings for future iterations:**
-  - `r#move` is needed to use `move` as a field name in Rust (reserved keyword)
-  - `run_pgn_fen` returns `Result` with `anyhow::bail!` for validation errors — no process::exit needed
----
-
-## 2026-04-08 - US-006
-- Added `PgnMatch(PgnMatchArgs)` variant to `Commands` enum in `chess-runner/src/main.rs`
-- Added `PgnMatchArgs` struct with `--file`, `--move`, `--game` plus all match flags (`--engine1`, `--engine2`, `--games`, `--time`, `--inc`, `--timeout`, `--csv`)
-- Implemented `run_pgn_match()` which loads PGN, replays to target position, then delegates to `run_match()` with `start_fen` set
-- The `--csv` flag maps to the `output` field in `MatchArgs` for CSV appending
-- Files changed: `chess-runner/src/main.rs`, `tasks/prd.json`
-- **Learnings for future iterations:**
-  - `run_pgn_match` delegates to `run_match` by constructing a `MatchArgs` struct — avoids duplicating match logic
-  - Unit-testing async functions that spawn real engines is impractical; test the PGN-loading logic separately via the sync `run_pgn_fen` helper
+  - PGN parsing: `pgn::parse_nth(reader, game_index)` returns parsed game
+  - Board FEN: `format!("{}", board)` gives the FEN string
+  - Progress printed to stderr: games processed, positions evaluated, kept
 ---
