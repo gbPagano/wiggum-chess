@@ -53,7 +53,7 @@ struct MatchArgs {
     time: u64,
 
     /// Increment per move in milliseconds
-    #[arg(long, default_value = "0")]
+    #[arg(long, default_value = "1000")]
     inc: u64,
 
     /// Number of games to play
