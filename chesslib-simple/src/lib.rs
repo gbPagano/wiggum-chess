@@ -261,6 +261,66 @@ impl Board {
         moves
     }
 
+    /// Generate pseudo-legal knight moves for the side to move.
+    ///
+    /// Generates moves to all 8 knight-jump targets that are on the board and
+    /// not occupied by a friendly piece.
+    pub fn pseudo_legal_knight_moves(&self) -> Vec<Move> {
+        let color = self.side_to_move;
+        let offsets: [(i8, i8); 8] = [
+            (-2, -1), (-2, 1),
+            (-1, -2), (-1, 2),
+            ( 1, -2), ( 1, 2),
+            ( 2, -1), ( 2, 1),
+        ];
+        self.short_range_moves(color, PieceKind::Knight, &offsets)
+    }
+
+    /// Generate pseudo-legal king moves for the side to move (no castling).
+    ///
+    /// Generates moves to all 8 adjacent squares that are on the board and
+    /// not occupied by a friendly piece.
+    pub fn pseudo_legal_king_moves(&self) -> Vec<Move> {
+        let color = self.side_to_move;
+        let offsets: [(i8, i8); 8] = [
+            (-1, -1), (-1, 0), (-1, 1),
+            ( 0, -1),           ( 0, 1),
+            ( 1, -1), ( 1, 0), ( 1, 1),
+        ];
+        self.short_range_moves(color, PieceKind::King, &offsets)
+    }
+
+    /// Helper: generate moves for a short-range piece (knight or king) given
+    /// a list of (rank_delta, file_delta) offsets.
+    fn short_range_moves(&self, color: Color, kind: PieceKind, offsets: &[(i8, i8)]) -> Vec<Move> {
+        let mut moves = Vec::new();
+        for rank in 0..8u8 {
+            for file in 0..8u8 {
+                let sq = Square::new(rank, file);
+                let Some(piece) = self.get(sq) else { continue };
+                if piece.kind != kind || piece.color != color {
+                    continue;
+                }
+                for &(dr, df) in offsets {
+                    let to_rank = rank as i8 + dr;
+                    let to_file = file as i8 + df;
+                    if to_rank < 0 || to_rank > 7 || to_file < 0 || to_file > 7 {
+                        continue;
+                    }
+                    let to_sq = Square::new(to_rank as u8, to_file as u8);
+                    // Allow only empty squares or captures of opposing pieces.
+                    if let Some(target) = self.get(to_sq) {
+                        if target.color == color {
+                            continue; // friendly piece — skip
+                        }
+                    }
+                    moves.push(Move::new(sq, to_sq));
+                }
+            }
+        }
+        moves
+    }
+
     /// Get the piece at a square (if any).
     pub fn get(&self, sq: Square) -> Option<Piece> {
         self.squares[sq.rank as usize][sq.file as usize]
@@ -535,5 +595,102 @@ mod tests {
         // White pawn e2→e3 single push
         let after = board.apply_move(Move::new(Square::new(1, 4), Square::new(2, 4)));
         assert_eq!(after.en_passant_file, None);
+    }
+
+    // --- US-005: knight and king pseudo-legal move generation tests ---
+
+    #[test]
+    fn knight_in_center_has_eight_moves() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White knight on e4 (rank 3, file 4)
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Knight, Color::White)));
+        let moves = board.pseudo_legal_knight_moves();
+        assert_eq!(moves.len(), 8);
+    }
+
+    #[test]
+    fn knight_in_corner_has_two_moves() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White knight on a1 (rank 0, file 0)
+        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Knight, Color::White)));
+        let moves = board.pseudo_legal_knight_moves();
+        assert_eq!(moves.len(), 2);
+        assert!(moves.contains(&Move::new(Square::new(0, 0), Square::new(1, 2))));
+        assert!(moves.contains(&Move::new(Square::new(0, 0), Square::new(2, 1))));
+    }
+
+    #[test]
+    fn knight_cannot_capture_friendly() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White knight on e4, white pawn blocking one target
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Knight, Color::White)));
+        board.set(Square::new(5, 5), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        let moves = board.pseudo_legal_knight_moves();
+        assert!(!moves.contains(&Move::new(Square::new(3, 4), Square::new(5, 5))));
+        assert_eq!(moves.len(), 7);
+    }
+
+    #[test]
+    fn knight_can_capture_enemy() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Knight, Color::White)));
+        board.set(Square::new(5, 5), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        let moves = board.pseudo_legal_knight_moves();
+        assert!(moves.contains(&Move::new(Square::new(3, 4), Square::new(5, 5))));
+    }
+
+    #[test]
+    fn black_knight_only_generates_for_side_to_move() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::Black;
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Knight, Color::Black)));
+        let moves = board.pseudo_legal_knight_moves();
+        assert_eq!(moves.len(), 8);
+    }
+
+    #[test]
+    fn king_in_center_has_eight_moves() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White king on e4 (rank 3, file 4)
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::King, Color::White)));
+        let moves = board.pseudo_legal_king_moves();
+        assert_eq!(moves.len(), 8);
+    }
+
+    #[test]
+    fn king_in_corner_has_three_moves() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White king on a1 (rank 0, file 0)
+        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::King, Color::White)));
+        let moves = board.pseudo_legal_king_moves();
+        assert_eq!(moves.len(), 3);
+    }
+
+    #[test]
+    fn king_cannot_move_to_friendly_square() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::King, Color::White)));
+        // Friendly pawn on one adjacent square
+        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        let moves = board.pseudo_legal_king_moves();
+        assert!(!moves.contains(&Move::new(Square::new(3, 4), Square::new(4, 4))));
+        assert_eq!(moves.len(), 7);
+    }
+
+    #[test]
+    fn king_can_capture_enemy() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::King, Color::White)));
+        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        let moves = board.pseudo_legal_king_moves();
+        assert!(moves.contains(&Move::new(Square::new(3, 4), Square::new(4, 4))));
     }
 }
