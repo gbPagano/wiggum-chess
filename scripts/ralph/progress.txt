@@ -17,3 +17,14 @@ Started: Thu Apr  9 01:47:41 PDT 2026
   - The `write_csv` function in `main.rs` will need a new `time_control` parameter for US-002
   - The `write_sprt_csv` function in `main.rs` will need a `time_control` parameter for US-003
 ---
+
+## 2026-04-09 - US-002
+- Added `time_control: &str` parameter to `write_csv` in `chess-runner/src/main.rs`
+- Added `time_control` to both the CSV header row and each data row
+- Updated both call sites (positions mode ~line 989, standard mode ~line 1051) to derive label via `match (args.time, args.inc)`: `(60000, 1000) => "LTC"`, `(10000, 100) => "STC"`, `_ => "custom"`
+- Files changed: `chess-runner/src/main.rs`
+- **Learnings for future iterations:**
+  - `run_report` reads CSV columns by positional index (0-7); `start_fen` (index 8) and `time_control` (index 9) are not currently read — US-007 will add that
+  - The `MatchRow` struct does not yet have `time_control` field; US-007 will need to add it
+  - LTC/STC label derivation uses `match (args.time, args.inc)` — keep consistent in future stories
+---
