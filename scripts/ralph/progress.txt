@@ -7,6 +7,7 @@
 - Skip promotion in pawn generation until US-010 — skip moves landing on promote_rank in `pseudo_legal_pawn_moves`.
 - En passant file set in `apply_move` for double pushes (white: rank 1→3, black: rank 6→4).
 - Short-range pieces (knight, king): use a shared `short_range_moves(color, kind, offsets)` helper — loop offsets, bounds-check, skip friendly squares.
+- Sliding pieces (bishop, rook, queen): use a shared `sliding_moves(kind, directions)` helper — extend ray one step at a time, stop on friendly or after capturing enemy.
 
 # Ralph Progress Log
 Started: Thu Apr  9 13:19:42 PDT 2026
@@ -67,4 +68,16 @@ Started: Thu Apr  9 13:19:42 PDT 2026
   - The `short_range_moves` helper can be reused for any short-range piece if more are needed
   - Pattern: iterate all 8x8 squares, find pieces of the right kind/color, then apply offsets
   - King moves do NOT include castling (handled separately in US-008)
+---
+
+## 2026-04-09 - US-006
+- Added `Board::pseudo_legal_bishop_moves()`, `pseudo_legal_rook_moves()`, `pseudo_legal_queen_moves()`
+- Backed by a private `sliding_moves(kind, directions)` helper: extend each ray until edge, friendly piece (stop, don't include), or enemy piece (include as capture, then stop)
+- Bishop directions: 4 diagonals; Rook directions: 4 axial; Queen: all 8
+- 8 new tests added; 37 total tests passing
+- Files changed: `chesslib-simple/src/lib.rs`
+- **Learnings for future iterations:**
+  - The `sliding_moves` helper is generic over piece kind and direction slice — reusable if needed
+  - A bishop on d4 (rank 3, file 3) on an open board has exactly 13 moves; a rook has 14 moves
+  - Sliding ray logic: `while in_bounds { match square { None => push, EnemyPiece => push + break, FriendlyPiece => break } }`
 ---

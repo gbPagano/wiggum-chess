@@ -94,8 +94,8 @@
         "Tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added pseudo_legal_bishop_moves(), pseudo_legal_rook_moves(), pseudo_legal_queen_moves() backed by a shared sliding_moves() helper. 8 new tests, 37 total passing."
     },
     {
       "id": "US-007",
