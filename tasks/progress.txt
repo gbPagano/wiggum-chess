@@ -38,3 +38,14 @@
 - **Learnings for future iterations:**
   - Always run tests before assuming a story needs implementation — prior stories may have already done the work
 ---
+
+## 2026-04-08 - US-004
+- Added Opera Game (Morphy vs Duke of Brunswick, Paris 1858) as embedded real-world PGN constant in `chesslib/src/pgn.rs`
+- Tests added: move count (33), final FEN assertion, perft(1) on checkmate (0 moves), O-O-O verification, file disambiguation (Rxd7), promotion via parse_san_token, both castling sides combined test
+- Final FEN of Opera Game: `1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 1`
+- Files changed: `chesslib/src/pgn.rs` (added 8 tests + OPERA_GAME_PGN constant), `tasks/prd.json` (passes: true)
+- **Learnings for future iterations:**
+  - Board::fmt always outputs fullmove number as 1 (not the actual game fullmove count)
+  - Checkmate position returns 0 from MoveGen::perft_test at depth 1
+  - When writing FEN-based tests, beware placing the black king ON the promotion square (makes promotion illegal)
+---
