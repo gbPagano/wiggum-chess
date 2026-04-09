@@ -282,6 +282,15 @@ run_match "2000" "$WRAPPER_2000" "$LTC_TIME_MS" "$LTC_INC_MS"
 run_match "2500" "$WRAPPER_2500" "$LTC_TIME_MS" "$LTC_INC_MS"
 run_match "max"  "$WRAPPER_MAX"  "$LTC_TIME_MS" "$LTC_INC_MS"
 
+echo ""
+echo "========================================="
+echo "Additional benchmark block: STC"
+echo "========================================="
+run_match "1500" "$WRAPPER_1500" "$STC_TIME_MS" "$STC_INC_MS"
+run_match "2000" "$WRAPPER_2000" "$STC_TIME_MS" "$STC_INC_MS"
+run_match "2500" "$WRAPPER_2500" "$STC_TIME_MS" "$STC_INC_MS"
+run_match "max"  "$WRAPPER_MAX"  "$STC_TIME_MS" "$STC_INC_MS"
+
 if [[ -n "$POSITIONS_FILE" ]]; then
     echo ""
     echo "========================================="
