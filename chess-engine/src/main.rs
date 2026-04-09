@@ -1,4 +1,5 @@
 use chess_engine::search::search;
+use chess_engine::uci::{parse_go, GoParams};
 use chess_engine::uci_engine_name;
 use chesslib::board::Board;
 use chesslib::chess_move::ChessMove;
@@ -41,8 +42,11 @@ fn main() {
         } else if line.starts_with("position") {
             current_board = parse_position(&line);
         } else if line.starts_with("go") {
-            // Parse time controls (wtime, btime, winc, binc) — ignored for depth-based search
+            let go_params: GoParams = parse_go(&line);
             if let Some(ref board) = current_board {
+                // Timed search will be implemented in later stories.
+                // For now, fall through to depth-based search regardless of time params.
+                let _ = &go_params;
                 let (mv, _) = search(board, depth);
                 let best = mv
                     .or_else(|| MoveGen::new_legal(board).next())
