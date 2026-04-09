@@ -290,6 +290,74 @@ impl Board {
         self.short_range_moves(color, PieceKind::King, &offsets)
     }
 
+    /// Generate pseudo-legal bishop moves for the side to move.
+    ///
+    /// Slides along the four diagonals, stopping at board edge, friendly piece,
+    /// or after capturing an enemy piece.
+    pub fn pseudo_legal_bishop_moves(&self) -> Vec<Move> {
+        let directions = [(-1i8, -1i8), (-1, 1), (1, -1), (1, 1)];
+        self.sliding_moves(PieceKind::Bishop, &directions)
+    }
+
+    /// Generate pseudo-legal rook moves for the side to move.
+    ///
+    /// Slides along ranks and files, stopping at board edge, friendly piece,
+    /// or after capturing an enemy piece.
+    pub fn pseudo_legal_rook_moves(&self) -> Vec<Move> {
+        let directions = [(-1i8, 0i8), (1, 0), (0, -1), (0, 1)];
+        self.sliding_moves(PieceKind::Rook, &directions)
+    }
+
+    /// Generate pseudo-legal queen moves for the side to move.
+    ///
+    /// Union of bishop and rook movement.
+    pub fn pseudo_legal_queen_moves(&self) -> Vec<Move> {
+        let directions = [
+            (-1i8, -1i8), (-1, 1), (1, -1), (1, 1),
+            (-1, 0), (1, 0), (0, -1), (0, 1),
+        ];
+        self.sliding_moves(PieceKind::Queen, &directions)
+    }
+
+    /// Helper: generate sliding moves for pieces of `kind` in the given ray directions.
+    ///
+    /// For each piece of `kind` belonging to `side_to_move`, rays are extended
+    /// one square at a time. A friendly blocker stops the ray (not included);
+    /// an enemy blocker allows capture on that square then stops the ray.
+    fn sliding_moves(&self, kind: PieceKind, directions: &[(i8, i8)]) -> Vec<Move> {
+        let color = self.side_to_move;
+        let mut moves = Vec::new();
+        for rank in 0..8u8 {
+            for file in 0..8u8 {
+                let sq = Square::new(rank, file);
+                let Some(piece) = self.get(sq) else { continue };
+                if piece.kind != kind || piece.color != color {
+                    continue;
+                }
+                for &(dr, df) in directions {
+                    let mut r = rank as i8 + dr;
+                    let mut f = file as i8 + df;
+                    while r >= 0 && r < 8 && f >= 0 && f < 8 {
+                        let to_sq = Square::new(r as u8, f as u8);
+                        match self.get(to_sq) {
+                            None => {
+                                moves.push(Move::new(sq, to_sq));
+                            }
+                            Some(blocker) if blocker.color != color => {
+                                moves.push(Move::new(sq, to_sq)); // capture
+                                break;
+                            }
+                            Some(_) => break, // friendly blocker
+                        }
+                        r += dr;
+                        f += df;
+                    }
+                }
+            }
+        }
+        moves
+    }
+
     /// Helper: generate moves for a short-range piece (knight or king) given
     /// a list of (rank_delta, file_delta) offsets.
     fn short_range_moves(&self, color: Color, kind: PieceKind, offsets: &[(i8, i8)]) -> Vec<Move> {
@@ -692,5 +760,106 @@ mod tests {
         board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::Black)));
         let moves = board.pseudo_legal_king_moves();
         assert!(moves.contains(&Move::new(Square::new(3, 4), Square::new(4, 4))));
+    }
+
+    // --- US-006: sliding piece pseudo-legal move generation tests ---
+
+    #[test]
+    fn bishop_in_center_open_board_has_13_moves() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White bishop on d4 (rank 3, file 3) — open board
+        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Bishop, Color::White)));
+        let moves = board.pseudo_legal_bishop_moves();
+        assert_eq!(moves.len(), 13);
+    }
+
+    #[test]
+    fn bishop_blocked_by_friendly() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Bishop, Color::White)));
+        // Friendly pawn on b5 (rank 4, file 1) — one step along NW diagonal
+        board.set(Square::new(4, 2), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        let moves = board.pseudo_legal_bishop_moves();
+        // NW diagonal: square (4,2) is blocked; squares further along (5,1),(6,0) not reachable
+        assert!(!moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 2))));
+        assert!(!moves.contains(&Move::new(Square::new(3, 3), Square::new(5, 1))));
+    }
+
+    #[test]
+    fn bishop_captures_enemy_and_stops() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Bishop, Color::White)));
+        // Black piece on e5 (rank 4, file 4) — one step along NE diagonal
+        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        let moves = board.pseudo_legal_bishop_moves();
+        // Capture allowed
+        assert!(moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 4))));
+        // Square beyond the black piece not reachable
+        assert!(!moves.contains(&Move::new(Square::new(3, 3), Square::new(5, 5))));
+    }
+
+    #[test]
+    fn rook_in_center_open_board_has_14_moves() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White rook on d4 (rank 3, file 3) — open board
+        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Rook, Color::White)));
+        let moves = board.pseudo_legal_rook_moves();
+        assert_eq!(moves.len(), 14);
+    }
+
+    #[test]
+    fn rook_blocked_by_friendly_and_stops() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Rook, Color::White)));
+        // Friendly on a3 (rank 2, file 0)
+        board.set(Square::new(2, 0), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        let moves = board.pseudo_legal_rook_moves();
+        assert!(moves.contains(&Move::new(Square::new(0, 0), Square::new(1, 0))));
+        assert!(!moves.contains(&Move::new(Square::new(0, 0), Square::new(2, 0))));
+    }
+
+    #[test]
+    fn rook_captures_enemy_and_stops() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Rook, Color::White)));
+        // Enemy on a3 (rank 2, file 0)
+        board.set(Square::new(2, 0), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        let moves = board.pseudo_legal_rook_moves();
+        assert!(moves.contains(&Move::new(Square::new(0, 0), Square::new(2, 0))));
+        assert!(!moves.contains(&Move::new(Square::new(0, 0), Square::new(3, 0))));
+    }
+
+    #[test]
+    fn queen_combines_bishop_and_rook_rays() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White queen on d1 (rank 0, file 3) — open board
+        board.set(Square::new(0, 3), Some(Piece::new(PieceKind::Queen, Color::White)));
+        let moves = board.pseudo_legal_queen_moves();
+        // Along file d: ranks 1-7 (7 squares)
+        assert!(moves.contains(&Move::new(Square::new(0, 3), Square::new(7, 3))));
+        // Along rank 0: files 0-2 left, files 4-7 right
+        assert!(moves.contains(&Move::new(Square::new(0, 3), Square::new(0, 0))));
+        assert!(moves.contains(&Move::new(Square::new(0, 3), Square::new(0, 7))));
+        // Diagonal move
+        assert!(moves.contains(&Move::new(Square::new(0, 3), Square::new(3, 6))));
+    }
+
+    #[test]
+    fn queen_blocked_by_friendly_on_diagonal() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(0, 3), Some(Piece::new(PieceKind::Queen, Color::White)));
+        // Friendly on e2 (rank 1, file 4)
+        board.set(Square::new(1, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        let moves = board.pseudo_legal_queen_moves();
+        assert!(!moves.contains(&Move::new(Square::new(0, 3), Square::new(1, 4))));
+        assert!(!moves.contains(&Move::new(Square::new(0, 3), Square::new(2, 5))));
     }
 }
