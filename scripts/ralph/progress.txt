@@ -6,6 +6,19 @@ Started: Wed Apr  8 21:53:00 PDT 2026
 - Download scripts follow the pattern in `scripts/download-stockfish.sh`: set -euo pipefail, check if file already exists and skip, use curl -fsSL, clean up temp files
 - `.gitignore` is at repo root with slash-prefixed entries like `/target`, `/engines/`, `/data/`
 
+## 2026-04-08 - US-002
+- Created `chesslib/src/analysis.rs` with `AnalysisError`, `StockfishProcess`, and `analyze_fen`
+- `StockfishProcess::new(path)` spawns the process, takes stdin/stdout, starts a reader thread with mpsc channel for timeout support, then performs UCI handshake (uci → uciok, isready → readyok)
+- `analyze_fen` sends `position fen <fen>` + `go depth <n>`, reads lines until `bestmove`, returns last `score cp` value or `None` if only mate scores appeared
+- Per-line timeout of 5 seconds via `mpsc::Receiver::recv_timeout`
+- Added `pub mod analysis;` to `chesslib/src/lib.rs`
+- Files changed: `chesslib/src/analysis.rs` (new), `chesslib/src/lib.rs`, `scripts/ralph/prd.json`
+- **Learnings for future iterations:**
+  - Synchronous subprocess I/O with timeout: use a reader thread + mpsc channel; `recv_timeout(Duration::from_secs(5))` gives clean per-line timeouts without async
+  - `StockfishProcess` implements `Drop` to send `quit` and call `child.wait()` for clean cleanup
+  - The mock script pattern from `uci_engine.rs` tests works well here too — shell script that responds to UCI commands via stdin/stdout
+---
+
 ## 2026-04-08 - US-001
 - Created `scripts/download-positions-dataset.sh` following the same pattern as `scripts/download-stockfish.sh`
 - Downloads `lichess_db_standard_rated_2016-01.pgn.zst` from `https://database.lichess.org/elite/`
