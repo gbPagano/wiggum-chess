@@ -39,3 +39,17 @@ Started: Thu Apr  9 01:47:41 PDT 2026
   - US-008 will need to read SPRT CSV `time_control` column in `version-report`
   - LTC/STC label derivation pattern is consistent across `write_csv` and `write_sprt_csv`
 ---
+
+## 2026-04-09 - US-004
+- Changed `benchmark-version.sh` primary match block to use LTC (60000ms + 1000ms)
+- Renamed `TIME_MS`/`INC_MS` to `LTC_TIME_MS`/`LTC_INC_MS` and added `STC_TIME_MS`/`STC_INC_MS`
+- Updated `run_match` and `run_balanced_match` to accept `time_ms`/`inc_ms` parameters
+- Updated SPRT block to use `STC_TIME_MS`/`STC_INC_MS` (prep for US-006)
+- Added "Primary benchmark block: LTC" print before the 4 match runs
+- Files changed: `scripts/benchmark-version.sh`
+- **Learnings for future iterations:**
+  - `run_match` and `run_balanced_match` now take 4 args: label, wrapper, time_ms, inc_ms
+  - `LTC_TIME_MS=60000`, `LTC_INC_MS=1000`, `STC_TIME_MS=10000`, `STC_INC_MS=100` are top-level vars
+  - US-005 should call `run_match` with `STC_TIME_MS`/`STC_INC_MS` for the second block
+  - The `time_control` CSV column is derived by chess-runner from `--time`/`--inc` args, so passing 60000/1000 automatically writes "LTC"
+---
