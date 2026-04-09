@@ -1,4 +1,4 @@
-#import "lib.typ": ieee
+#import "../lib.typ": ieee
 
 #let titulo = "Desenvolvimento de uma engine de decisão para Xadrez em Rust com busca Minimax e Poda Alfa-Beta"
 #let authors = ("Guilherme Borges Pagano", "João Marcos de Oliveira Calixto")

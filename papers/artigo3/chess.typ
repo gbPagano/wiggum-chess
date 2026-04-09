@@ -1,4 +1,4 @@
-#import "lib.typ": ieee
+#import "../lib.typ": ieee
 
 #let titulo = "Meta-otimização do ajuste heurístico em arquiteturas Minimax utilizando LLM Agent Loops."
 #let authors = ("Guilherme Borges Pagano", "João Marcos de Oliveira Calixto")

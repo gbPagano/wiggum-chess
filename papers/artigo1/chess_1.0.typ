@@ -1,4 +1,4 @@
-#import "lib.typ": ieee
+#import "../lib.typ": ieee
 
 #let titulo = "Desenvolvimento de um Gerador de Lances para Xadrez em Rust com Bitboards e Magic Bitboards"
 #let authors = ("Guilherme Borges Pagano", "João Marcos de Oliveira Calixto")
