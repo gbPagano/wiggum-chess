@@ -1,3 +1,4 @@
+pub mod analysis;
 pub mod bitboard;
 pub mod board;
 pub mod castle_rights;
