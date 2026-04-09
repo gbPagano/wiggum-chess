@@ -53,8 +53,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added validate_opening_book() to chess-runner/src/opening_book.rs — replays each line from Board::default() using ChessMove::from_uci(), collects all errors and returns them together, then fails if the validated set is empty. In run_match(), loads and validates the book early (before engine name queries) so the process exits fast on bad data."
     },
     {
       "id": "US-004",

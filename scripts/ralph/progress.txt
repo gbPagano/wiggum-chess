@@ -1,4 +1,5 @@
 ## Codebase Patterns
+- Board::default() gives the initial chess position; Board::make_move(m) returns a new Board after applying a move
 - Opening book format: plain-text, one UCI move sequence per line, space-separated; `#` comments and empty lines skipped
 - `data/` directory is gitignored — use `chess-runner/` or other tracked dirs for repository data files
 - git identity must be configured before committing: `git config user.email` and `git config user.name`
@@ -30,4 +31,19 @@ Started: Thu Apr  9 09:09:27 PDT 2026
 - **Learnings for future iterations:**
   - There is a `MatchArgs` struct literal near line 1300 inside `run_pgn_match()` — when new fields are added to `MatchArgs`, this literal must also be updated or it won't compile
   - `--opening-book-max-ply` defaults to 20; future stories should respect this field from `MatchArgs` when applying opening moves
+---
+
+## 2026-04-09 - US-003
+- Added `validate_opening_book(lines: Vec<OpeningLine>) -> anyhow::Result<Vec<OpeningLine>>` to `chess-runner/src/opening_book.rs`
+- Each line is replayed from `Board::default()` using `ChessMove::from_uci()`; all errors are collected and returned together so the user sees every bad line at once
+- If any line is invalid, returns error with descriptive message including the bad move, ply index, and full line
+- If the validated set is empty, returns error "opening book is empty: no valid opening lines found"
+- In `run_match()`, calls load+validate before the UCI engine name queries so the process exits fast on bad data
+- Added 3 tests: valid lines accepted, invalid move rejected with descriptive error, empty book rejected
+- Files changed: `chess-runner/src/opening_book.rs`, `chess-runner/src/main.rs`, `scripts/ralph/prd.json`
+- **Learnings for future iterations:**
+  - `Board::default()` is the initial chess position; use it as the starting board for replaying opening moves
+  - `board.make_move(m)` returns a *new* Board — reassign `board = board.make_move(m)` inside a loop
+  - Collect all errors from all lines before returning, so the user sees every invalid line at once (not just the first)
+  - The validated book is stored as `_validated_book` for now; US-004/US-005 will use it for selection and application
 ---
