@@ -1,0 +1,62 @@
+## Codebase Patterns
+- Board.side_to_move() returns Color (Color::White / Color::Black) — use .to_index() for array indexing
+- Existing search() in chess-engine/src/search.rs takes (board, depth) and returns (Option<ChessMove>, i32)
+- chess-engine main.rs handles UCI loop; go command handling is the entry point for search dispatch
+- Add new modules to chess-engine/src/lib.rs with `pub mod <name>` before using them from main.rs
+- Run `cargo test --workspace -- --skip gen_files::magics::name` to skip the intentional failing test
+---
+
+# Ralph Progress Log
+Started: Thu Apr  9 14:49:04 PDT 2026
+---
+
+## 2026-04-09 - US-001
+- Implemented GoParams struct and parse_go() function in chess-engine/src/uci.rs
+- GoParams captures movetime, wtime, btime, winc, binc from UCI go commands
+- Added remaining_time(color) and increment(color) accessors that select active side's clock
+- Updated main.rs to call parse_go() on go commands (depth-based search unchanged for now)
+- Files changed: chess-engine/src/uci.rs (new), chess-engine/src/lib.rs, chess-engine/src/main.rs
+- **Learnings for future iterations:**
+  - Board::side_to_move() returns Color, accessible via chesslib::color::Color
+  - GoParams.has_time_control() is the clean predicate for branching into timed vs depth search
+  - parse_go() silently ignores unknown tokens (infinite, depth, nodes) — safe for future extension
+---
+
+## 2026-04-09 - US-002
+- Added `compute_budget_ms(color: Color) -> Option<u64>` method to `GoParams` in chess-engine/src/uci.rs
+- Implements fixed movetime budgeting (returns movetime directly)
+- Implements clock-based budgeting: `remaining / 20 + increment / 2`, capped at `remaining - 50ms`
+- Added 6 tests covering movetime, clock-based, active-side selection, cap behavior, and no-time-control
+- Files changed: chess-engine/src/uci.rs
+- **Learnings for future iterations:**
+  - `compute_budget_ms` returns `None` when no time control present — use this to branch between timed and depth search
+  - Safety margin of 50ms is a named constant `SAFETY_MARGIN_MS` inside the method
+  - Budget formula is `remaining / 20 + increment / 2` (integer arithmetic, no floats)
+---
+
+## 2026-04-09 - US-003
+- Added `SearchContext` struct to `chess-engine/src/search.rs` with `deadline: Instant` and `max_depth: u8` fields
+- Added `MAX_TIMED_DEPTH = 64` constant as the explicit 64-ply guard
+- Added `SearchContext::from_budget_ms(budget_ms)` constructor and `is_expired()` helper
+- Added `search_timed(board, ctx)` entry point that threads the context; currently delegates to `alpha_beta` at depth 1 (loop added in US-004)
+- Updated `main.rs` to dispatch through `search_timed` when `compute_budget_ms` returns a budget, leaving depth search unchanged
+- Added 5 tests: max_depth assertion, expiry behavior (immediate and zero-budget), legal move returned, non-timed path unaffected
+- Files changed: `chess-engine/src/search.rs`, `chess-engine/src/main.rs`
+- **Learnings for future iterations:**
+  - `SearchContext::is_expired()` uses `Instant::now() >= self.deadline` — call this in the ID loop (US-004) and recursion (US-006)
+  - `search_timed` signature is `(board: &Board, ctx: &SearchContext) -> (Option<ChessMove>, i32)` — thread `ctx` into `alpha_beta` variant in US-006
+  - `let _ = ctx;` inside `search_timed` suppresses unused-variable warning while leaving the signature intact for future stories
+---
+
+## 2026-04-09 - US-004
+- Replaced single-depth call in `search_timed` with iterative deepening loop from depth 1 to `ctx.max_depth`
+- Loop checks `ctx.is_expired()` before each depth iteration; stores best move/score after each completed depth
+- Non-timed `search()` path is completely untouched
+- Updated comment in `main.rs` to remove outdated US-004 placeholder note
+- PRD updated for US-003 (which was implemented in a previous iteration but PRD not updated) and US-004
+- Files changed: `chess-engine/src/search.rs`, `chess-engine/src/main.rs`
+- **Learnings for future iterations:**
+  - `search_timed` now does real iterative deepening; US-005 needs to add a fallback move captured before the loop (in case time expires before depth 1 completes)
+  - US-006 will thread `ctx` into `alpha_beta` to enable mid-depth timeout; signature change needed there
+  - The ID loop uses `for depth in 1..=ctx.max_depth` — depth is `u8` so max 255, but `max_depth` is set to 64
+---
