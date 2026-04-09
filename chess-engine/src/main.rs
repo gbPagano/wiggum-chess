@@ -1,4 +1,4 @@
-use chess_engine::search::search;
+use chess_engine::search::{search, search_timed, SearchContext};
 use chess_engine::uci::{parse_go, GoParams};
 use chess_engine::uci_engine_name;
 use chesslib::board::Board;
@@ -44,10 +44,19 @@ fn main() {
         } else if line.starts_with("go") {
             let go_params: GoParams = parse_go(&line);
             if let Some(ref board) = current_board {
-                // Timed search will be implemented in later stories.
-                // For now, fall through to depth-based search regardless of time params.
-                let _ = &go_params;
-                let (mv, _) = search(board, depth);
+                let mv = if let Some(budget_ms) =
+                    go_params.compute_budget_ms(board.side_to_move())
+                {
+                    // Timed search: build a context from the computed budget and
+                    // dispatch through the timed entry point.  The iterative
+                    // deepening loop (US-004) and timeout checks (US-006) will
+                    // fill in this path; for now a single-depth call is made.
+                    let ctx = SearchContext::from_budget_ms(budget_ms);
+                    search_timed(board, &ctx).0
+                } else {
+                    // Depth-based search: existing non-timed behavior unchanged.
+                    search(board, depth).0
+                };
                 let best = mv
                     .or_else(|| MoveGen::new_legal(board).next())
                     .map(|m| m.to_uci())
