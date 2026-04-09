@@ -28,3 +28,14 @@ Started: Thu Apr  9 01:47:41 PDT 2026
   - The `MatchRow` struct does not yet have `time_control` field; US-007 will need to add it
   - LTC/STC label derivation uses `match (args.time, args.inc)` — keep consistent in future stories
 ---
+
+## 2026-04-09 - US-003
+- Added `time_control: &str` parameter to `write_sprt_csv` in `chess-runner/src/main.rs`
+- Added `time_control` to both the SPRT CSV header row and each data row
+- Updated call site (~line 1228) to derive label via `match (args.time, args.inc)`: `(10000, 100) => "STC"`, `(60000, 1000) => "LTC"`, `_ => "custom"`
+- Files changed: `chess-runner/src/main.rs`
+- **Learnings for future iterations:**
+  - SPRT CSV now has `time_control` at index 10 (after `sprt_result` at index 9)
+  - US-008 will need to read SPRT CSV `time_control` column in `version-report`
+  - LTC/STC label derivation pattern is consistent across `write_csv` and `write_sprt_csv`
+---
