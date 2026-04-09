@@ -5,8 +5,10 @@ use chesslib::movegen::MoveGen;
 use crate::eval::evaluate;
 
 pub const CHECKMATE_SCORE: i32 = 30000;
+const INF: i32 = CHECKMATE_SCORE + 1_000;
 
-/// Negamax search: returns the best (move, score) pair for the side to move.
+/// Negamax search with alpha-beta pruning: returns the best (move, score) pair
+/// for the side to move.
 ///
 /// Score is from the side-to-move's perspective (positive = good for mover).
 /// At depth 0, returns the material evaluation directly (no move).
@@ -15,6 +17,15 @@ pub fn search(board: &Board, depth: u8) -> (Option<ChessMove>, i32) {
         return (None, evaluate(board));
     }
 
+    alpha_beta_root(board, depth, -INF, INF)
+}
+
+fn alpha_beta_root(
+    board: &Board,
+    depth: u8,
+    mut alpha: i32,
+    beta: i32,
+) -> (Option<ChessMove>, i32) {
     let moves: Vec<ChessMove> = MoveGen::new_legal(board).collect();
 
     // Terminal position: checkmate or stalemate
@@ -23,20 +34,52 @@ pub fn search(board: &Board, depth: u8) -> (Option<ChessMove>, i32) {
     }
 
     let mut best_move = None;
-    let mut best_score = i32::MIN + 1; // avoid overflow on negation
+    let mut best_score = -INF;
 
     for mv in moves {
         let child = board.make_move(mv);
-        let (_, child_score) = search(&child, depth - 1);
-        // Negate child score (negamax: good for child = bad for us)
-        let score = -child_score;
+        let score = -alpha_beta(&child, depth - 1, -beta, -alpha);
+
         if score > best_score {
             best_score = score;
             best_move = Some(mv);
         }
+
+        alpha = alpha.max(score);
+        if alpha >= beta {
+            break;
+        }
     }
 
     (best_move, best_score)
+}
+
+fn alpha_beta(board: &Board, depth: u8, mut alpha: i32, beta: i32) -> i32 {
+    if depth == 0 {
+        return evaluate(board);
+    }
+
+    let moves: Vec<ChessMove> = MoveGen::new_legal(board).collect();
+
+    // Terminal position: checkmate or stalemate
+    if moves.is_empty() {
+        return evaluate(board);
+    }
+
+    let mut best_score = -INF;
+
+    for mv in moves {
+        let child = board.make_move(mv);
+        let score = -alpha_beta(&child, depth - 1, -beta, -alpha);
+        best_score = best_score.max(score);
+        alpha = alpha.max(score);
+
+        if alpha >= beta {
+            break;
+        }
+    }
+
+    best_score
 }
 
 #[cfg(test)]
@@ -62,9 +105,8 @@ mod tests {
 
     #[test]
     fn finds_mate_in_1() {
-        // White: King c7, Queen h1. Black: King a8.
-        // Qa1# is checkmate: queen attacks a-file (a8), king can't go to b8 (Kc7) or b7 (Kc7).
-        let board = Board::from_str("k7/2K5/8/8/8/8/8/7Q w - - 0 1").unwrap();
+        // White: King c7, Queen b1. Black: King a8.
+        let board = Board::from_str("k7/2K5/8/8/8/8/8/1Q6 w - - 0 1").unwrap();
         let (mv, score) = search(&board, 1);
         assert!(mv.is_some(), "Expected a move");
         // Score should reflect checkmate found
@@ -95,5 +137,13 @@ mod tests {
             59,
             "Engine should not hang the queen on d8"
         );
+    }
+
+    #[test]
+    fn terminal_positions_are_evaluated_without_searching_children() {
+        let board = Board::from_str("k7/2K5/1Q6/8/8/8/8/8 b - - 0 1").unwrap();
+        let (mv, score) = search(&board, 3);
+        assert!(mv.is_none(), "Expected no move in stalemate");
+        assert_eq!(score, 0);
     }
 }
