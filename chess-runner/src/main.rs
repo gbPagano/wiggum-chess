@@ -939,6 +939,18 @@ async fn run_match(args: MatchArgs) -> Result<()> {
         .as_ref()
         .map(|line| opening_book::opening_line_to_fen(line, args.opening_book_max_ply));
 
+    // Debug-log the chosen opening line so operators can audit which neutral opening was applied.
+    if let Some(ref line) = selected_opening {
+        let applied_ply = line.moves.len().min(args.opening_book_max_ply);
+        let applied_moves = line.moves[..applied_ply].join(" ");
+        eprintln!(
+            "[opening-book] selected line: {} ({} plies applied, max_ply={})",
+            applied_moves,
+            applied_ply,
+            args.opening_book_max_ply
+        );
+    }
+
     // Query engine names via UCI handshake before the match loop.
     let engine1_name = {
         let mut e = UciEngine::new(&args.engine1, args.timeout)

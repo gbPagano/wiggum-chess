@@ -120,8 +120,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added eprintln! debug log after opening_start_fen computation in run_match() — prints '[opening-book] selected line: <moves> (<N> plies applied, max_ply=<M>)' only when --opening-book is supplied. The applied-ply count respects max_ply truncation so the log matches what was actually applied."
     },
     {
       "id": "US-008",
@@ -137,8 +137,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added --opening-book, --opening-book-seed, and --opening-book-max-ply flags to benchmark-version.sh. Built OPENING_BOOK_ARGS array (empty when not provided) and appended it to all chess-runner match invocations in LTC, STC, and Stockfish blocks. When omitted, all existing behavior is unchanged."
     }
   ]
 }

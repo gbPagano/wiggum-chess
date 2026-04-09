@@ -84,3 +84,27 @@ Started: Thu Apr  9 09:09:27 PDT 2026
   - The ply limit is respected before engine search; both engines still receive the same truncated position
   - `args.opening_book_max_ply` is already populated (default 20) from the `--opening-book-max-ply` CLI flag added in US-002
 ---
+
+## 2026-04-09 - US-007
+- Added `eprintln!` debug log in `run_match()` (chess-runner/src/main.rs) immediately after `opening_start_fen` is computed
+- Log format: `[opening-book] selected line: <moves> (<N> plies applied, max_ply=<M>)`; only emitted when `--opening-book` is provided
+- `applied_ply` is computed as `line.moves.len().min(args.opening_book_max_ply)` so the log matches the actual truncated sequence
+- Without `--opening-book`, the `selected_opening` is `None` and the block is skipped entirely
+- Files changed: `chess-runner/src/main.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Debug output in chess-runner uses `eprintln!` to stderr; no separate logging crate is needed
+  - The `[opening-book]` prefix makes it easy to grep for or filter in automated test output
+---
+
+## 2026-04-09 - US-008
+- Added `--opening-book <path>`, `--opening-book-seed <u64>`, and `--opening-book-max-ply <N>` flags to `scripts/benchmark-version.sh`
+- Built `OPENING_BOOK_ARGS` array (empty when `--opening-book` is not provided) using the same pattern as `SPRT_MAX_GAMES_ARGS`
+- Appended `${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}` to all `chess-runner match` invocations: LTC startpos, LTC balanced, STC startpos, STC balanced, Stockfish LTC/STC startpos and balanced
+- Added validation that the opening-book file exists when provided
+- Added opening-book info to the header output block
+- Without `--opening-book`, all existing benchmark behavior is unchanged
+- Files changed: `scripts/benchmark-version.sh`, `chess-runner/src/main.rs` (US-007 debug log from prior iteration, not yet committed), `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - Use `"${ARRAY[@]+"${ARRAY[@]}"}"` idiom to safely expand arrays that may be empty under `set -u`
+  - `bash -n <script>` validates syntax without executing; always run this for shell script changes
+---

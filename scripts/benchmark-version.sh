@@ -16,6 +16,10 @@
 #   --positions-file    <path>    Path to balanced FEN positions file (one FEN per line)
 #   --num-positions     <N>       Number of positions to sample from --positions-file (default: 10)
 #   --sprt-max-games    <N>       Max games per SPRT run before stopping as inconclusive (default: unlimited)
+#   --opening-book      <path>    Path to an opening-book file; when provided, a neutral line is applied
+#                                 to both engines before engine search in every match block
+#   --opening-book-seed <u64>     RNG seed for reproducible opening-line selection (optional)
+#   --opening-book-max-ply <N>    Max opening-book plies to apply (default: 20)
 #   --run-ltc                     Run LTC fixed-game block vs prev-engine (requires --prev-engine)
 #   --run-stc                     Run STC fixed-game block vs prev-engine (requires --prev-engine)
 #
@@ -70,6 +74,9 @@ STC_INC_MS=100
 POSITIONS_FILE=""
 NUM_POSITIONS=10
 SPRT_MAX_GAMES=""
+OPENING_BOOK=""
+OPENING_BOOK_SEED=""
+OPENING_BOOK_MAX_PLY=""
 RUN_LTC=0
 RUN_STC=0
 
@@ -85,9 +92,12 @@ while [[ $# -gt 0 ]]; do
         --output-dir)       OUTPUT_DIR="$2";       shift 2 ;;
         --positions-file)   POSITIONS_FILE="$2";   shift 2 ;;
         --num-positions)    NUM_POSITIONS="$2";    shift 2 ;;
-        --sprt-max-games)   SPRT_MAX_GAMES="$2";   shift 2 ;;
-        --run-ltc)          RUN_LTC=1;             shift ;;
-        --run-stc)          RUN_STC=1;             shift ;;
+        --sprt-max-games)        SPRT_MAX_GAMES="$2";        shift 2 ;;
+        --opening-book)          OPENING_BOOK="$2";          shift 2 ;;
+        --opening-book-seed)     OPENING_BOOK_SEED="$2";     shift 2 ;;
+        --opening-book-max-ply)  OPENING_BOOK_MAX_PLY="$2";  shift 2 ;;
+        --run-ltc)               RUN_LTC=1;                  shift ;;
+        --run-stc)               RUN_STC=1;                  shift ;;
         -h|--help)
             sed -n '2,/^set -/p' "$0" | grep '^#' | sed 's/^# \?//'
             exit 0
@@ -118,6 +128,9 @@ fi
 if [[ -n "$POSITIONS_FILE" && ! -f "$POSITIONS_FILE" ]]; then
     echo "Error: positions file not found: $POSITIONS_FILE" >&2; exit 1
 fi
+if [[ -n "$OPENING_BOOK" && ! -f "$OPENING_BOOK" ]]; then
+    echo "Error: opening-book file not found: $OPENING_BOOK" >&2; exit 1
+fi
 if [[ "$RUN_LTC" -eq 1 && -z "$PREV_ENGINE" && -z "$STOCKFISH" ]]; then
     echo "Error: --run-ltc requires --prev-engine or --stockfish" >&2; exit 1
 fi
@@ -136,6 +149,18 @@ SPRT_BALANCED_CSV="${OUTPUT_DIR}/sprt_balanced.csv"
 LTC_CSV="${OUTPUT_DIR}/ltc.csv"
 STC_CSV="${OUTPUT_DIR}/stc.csv"
 STOCKFISH_CSV="${OUTPUT_DIR}/stockfish.csv"
+
+# ── Opening-book args (empty when --opening-book is not provided) ─────────────
+OPENING_BOOK_ARGS=()
+if [[ -n "$OPENING_BOOK" ]]; then
+    OPENING_BOOK_ARGS=(--opening-book "$OPENING_BOOK")
+    if [[ -n "$OPENING_BOOK_SEED" ]]; then
+        OPENING_BOOK_ARGS+=(--opening-book-seed "$OPENING_BOOK_SEED")
+    fi
+    if [[ -n "$OPENING_BOOK_MAX_PLY" ]]; then
+        OPENING_BOOK_ARGS+=(--opening-book-max-ply "$OPENING_BOOK_MAX_PLY")
+    fi
+fi
 
 # ── tag_last_match_row <csv_path> <label> ────────────────────────────────────
 #
@@ -183,6 +208,9 @@ echo "Games:     ${GAMES} per fixed match"
 echo "Output:    ${OUTPUT_DIR}"
 if [[ -n "$POSITIONS_FILE" ]]; then
     echo "Positions: ${POSITIONS_FILE} (${NUM_POSITIONS} sampled)"
+fi
+if [[ -n "$OPENING_BOOK" ]]; then
+    echo "OpeningBook: ${OPENING_BOOK}"
 fi
 echo "========================================="
 
@@ -240,7 +268,8 @@ if [[ "$RUN_LTC" -eq 1 ]]; then
         --time "$LTC_TIME_MS" \
         --inc "$LTC_INC_MS" \
         --games "$GAMES" \
-        --output "$LTC_CSV"
+        --output "$LTC_CSV" \
+        "${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}"
 
     if [[ -n "$POSITIONS_FILE" ]]; then
         echo "--- Match vs prev-engine LTC balanced (${GAMES} games, ${NUM_POSITIONS} positions) ---"
@@ -252,7 +281,8 @@ if [[ "$RUN_LTC" -eq 1 ]]; then
             --games "$GAMES" \
             --positions-file "$POSITIONS_FILE" \
             --num-positions "$NUM_POSITIONS" \
-            --output "$LTC_CSV"
+            --output "$LTC_CSV" \
+            "${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}"
     fi
 
     echo "LTC complete. Results in: ${LTC_CSV}"
@@ -272,7 +302,8 @@ if [[ "$RUN_STC" -eq 1 ]]; then
         --time "$STC_TIME_MS" \
         --inc "$STC_INC_MS" \
         --games "$GAMES" \
-        --output "$STC_CSV"
+        --output "$STC_CSV" \
+        "${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}"
 
     if [[ -n "$POSITIONS_FILE" ]]; then
         echo "--- Match vs prev-engine STC balanced (${GAMES} games, ${NUM_POSITIONS} positions) ---"
@@ -284,7 +315,8 @@ if [[ "$RUN_STC" -eq 1 ]]; then
             --games "$GAMES" \
             --positions-file "$POSITIONS_FILE" \
             --num-positions "$NUM_POSITIONS" \
-            --output "$STC_CSV"
+            --output "$STC_CSV" \
+            "${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}"
     fi
 
     echo "STC complete. Results in: ${STC_CSV}"
@@ -367,7 +399,8 @@ WRAPPER_EOF
                 --time "$LTC_TIME_MS" \
                 --inc "$LTC_INC_MS" \
                 --games "$GAMES" \
-                --output "$STOCKFISH_CSV"
+                --output "$STOCKFISH_CSV" \
+                "${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}"
             tag_last_match_row "$STOCKFISH_CSV" "${level}-LTC"
 
             if [[ -n "$POSITIONS_FILE" ]]; then
@@ -380,7 +413,8 @@ WRAPPER_EOF
                     --games "$GAMES" \
                     --positions-file "$POSITIONS_FILE" \
                     --num-positions "$NUM_POSITIONS" \
-                    --output "$STOCKFISH_CSV"
+                    --output "$STOCKFISH_CSV" \
+                    "${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}"
                 tag_last_match_row "$STOCKFISH_CSV" "${level}-LTC-balanced"
             fi
         fi
@@ -393,7 +427,8 @@ WRAPPER_EOF
                 --time "$STC_TIME_MS" \
                 --inc "$STC_INC_MS" \
                 --games "$GAMES" \
-                --output "$STOCKFISH_CSV"
+                --output "$STOCKFISH_CSV" \
+                "${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}"
             tag_last_match_row "$STOCKFISH_CSV" "${level}-STC"
 
             if [[ -n "$POSITIONS_FILE" ]]; then
@@ -406,7 +441,8 @@ WRAPPER_EOF
                     --games "$GAMES" \
                     --positions-file "$POSITIONS_FILE" \
                     --num-positions "$NUM_POSITIONS" \
-                    --output "$STOCKFISH_CSV"
+                    --output "$STOCKFISH_CSV" \
+                    "${OPENING_BOOK_ARGS[@]+"${OPENING_BOOK_ARGS[@]}"}"
                 tag_last_match_row "$STOCKFISH_CSV" "${level}-STC-balanced"
             fi
         fi
