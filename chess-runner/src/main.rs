@@ -53,7 +53,7 @@ struct MatchArgs {
     time: u64,
 
     /// Increment per move in milliseconds
-    #[arg(long, default_value = "0")]
+    #[arg(long, default_value = "1000")]
     inc: u64,
 
     /// Number of games to play
@@ -375,6 +375,7 @@ fn write_sprt_csv(
     elo0: f64,
     elo1: f64,
     sprt_result: &str,
+    time_control: &str,
 ) -> Result<()> {
     let file_exists = std::path::Path::new(path).exists()
         && std::fs::metadata(path)
@@ -402,6 +403,7 @@ fn write_sprt_csv(
             "elo0",
             "elo1",
             "sprt_result",
+            "time_control",
         ])?;
     }
 
@@ -418,6 +420,7 @@ fn write_sprt_csv(
         &format!("{:.2}", elo0),
         &format!("{:.2}", elo1),
         sprt_result,
+        time_control,
     ])?;
 
     wtr.flush()?;
@@ -434,6 +437,7 @@ fn write_csv(
     engine2_wins: usize,
     draws: usize,
     start_fen: &str,
+    time_control: &str,
 ) -> Result<()> {
     let file_exists = std::path::Path::new(path).exists()
         && std::fs::metadata(path)
@@ -460,6 +464,7 @@ fn write_csv(
             "draws",
             "engine1_win_rate",
             "start_fen",
+            "time_control",
         ])?;
     }
 
@@ -481,6 +486,7 @@ fn write_csv(
         &draws.to_string(),
         &format!("{:.4}", win_rate),
         start_fen,
+        time_control,
     ])?;
 
     wtr.flush()?;
@@ -978,6 +984,11 @@ async fn run_match(args: MatchArgs) -> Result<()> {
 
             // Write one CSV row per FEN position
             if let Some(ref output_path) = args.output {
+                let tc_label = match (args.time, args.inc) {
+                    (60000, 1000) => "LTC",
+                    (10000, 100) => "STC",
+                    _ => "custom",
+                };
                 write_csv(
                     output_path,
                     &engine1_name,
@@ -987,6 +998,7 @@ async fn run_match(args: MatchArgs) -> Result<()> {
                     e2w,
                     d,
                     fen,
+                    tc_label,
                 )?;
             }
 
@@ -1034,6 +1046,11 @@ async fn run_match(args: MatchArgs) -> Result<()> {
 
         if let Some(ref output_path) = args.output {
             let start_fen = args.start_fen.as_deref().unwrap_or("startpos");
+            let tc_label = match (args.time, args.inc) {
+                (60000, 1000) => "LTC",
+                (10000, 100) => "STC",
+                _ => "custom",
+            };
             write_csv(
                 output_path,
                 &engine1_name,
@@ -1043,6 +1060,7 @@ async fn run_match(args: MatchArgs) -> Result<()> {
                 engine2_wins,
                 draws,
                 start_fen,
+                tc_label,
             )?;
             println!("Match result appended to: {}", output_path);
         }
@@ -1210,6 +1228,11 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
     }
 
     if let Some(ref output_path) = args.output {
+        let time_control_label = match (args.time, args.inc) {
+            (10000, 100) => "STC",
+            (60000, 1000) => "LTC",
+            _ => "custom",
+        };
         write_sprt_csv(
             output_path,
             &engine1_name,
@@ -1221,6 +1244,7 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
             args.elo0,
             args.elo1,
             sprt_result,
+            time_control_label,
         )?;
         println!("SPRT result appended to: {}", output_path);
     }
@@ -1315,8 +1339,11 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
         .to_lowercase();
 
     // ---- Parse matches CSV ----
-    let mut opponent_map: std::collections::HashMap<String, OpponentStats> =
-        std::collections::HashMap::new();
+    // Keyed by (time_control, opponent) to avoid silently merging LTC and STC rows.
+    let mut tc_opponent_map: std::collections::BTreeMap<
+        String,
+        std::collections::HashMap<String, OpponentStats>,
+    > = std::collections::BTreeMap::new();
     let matches_note;
 
     if !std::path::Path::new(&args.matches_csv).exists() {
@@ -1336,6 +1363,12 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
             let e1_wins: usize = record[4].parse().unwrap_or(0);
             let e2_wins: usize = record[5].parse().unwrap_or(0);
             let draws: usize = record[6].parse().unwrap_or(0);
+            // index 7 = win_rate, index 8 = start_fen, index 9 = time_control
+            let time_control = if record.len() > 9 {
+                record[9].to_string()
+            } else {
+                "unknown".to_string()
+            };
 
             let target_is_e1 = engine1.to_lowercase().contains(&filter);
             let target_is_e2 = engine2.to_lowercase().contains(&filter);
@@ -1351,7 +1384,9 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
                 (engine1.clone(), e2_wins, e1_wins)
             };
 
-            let entry = opponent_map
+            let entry = tc_opponent_map
+                .entry(time_control)
+                .or_default()
                 .entry(opponent.clone())
                 .or_insert(OpponentStats {
                     opponent,
@@ -1384,6 +1419,7 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
         draws: usize,
         losses: usize,
         result: String,
+        time_control: String,
     }
     let mut sprt_rows: Vec<SprtRow> = Vec::new();
     let sprt_note;
@@ -1407,6 +1443,11 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
                 let draws: usize = record[5].parse().unwrap_or(0);
                 let losses: usize = record[6].parse().unwrap_or(0);
                 let result = record[9].to_string();
+                let time_control = if record.len() > 10 {
+                    record[10].to_string()
+                } else {
+                    "unknown".to_string()
+                };
 
                 let target_is_e1 = engine1.to_lowercase().contains(&filter);
                 let target_is_e2 = engine2.to_lowercase().contains(&filter);
@@ -1429,6 +1470,7 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
                     draws,
                     losses: l,
                     result,
+                    time_control,
                 });
             }
 
@@ -1461,67 +1503,71 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
         md.push_str(&matches_note);
         md.push('\n');
     } else {
-        // Summary table
-        md.push_str("| Opponent | Games | Wins | Draws | Losses | Win% |\n");
-        md.push_str("|----------|-------|------|-------|--------|------|\n");
+        // Render one sub-section per time control (LTC, STC, etc.) so rows are
+        // never silently merged across different time controls.
+        for (tc, opponent_map) in &tc_opponent_map {
+            md.push_str(&format!("### {}\n\n", tc));
+            md.push_str("| Opponent | Games | Wins | Draws | Losses | Win% |\n");
+            md.push_str("|----------|-------|------|-------|--------|------|\n");
 
-        let mut all_stats: Vec<&OpponentStats> = opponent_map.values().collect();
-        all_stats.sort_by(|a, b| a.opponent.cmp(&b.opponent));
+            let mut all_stats: Vec<&OpponentStats> = opponent_map.values().collect();
+            all_stats.sort_by(|a, b| a.opponent.cmp(&b.opponent));
 
-        let mut total_games = 0usize;
-        let mut total_wins = 0usize;
-        let mut total_draws = 0usize;
-        let mut total_losses = 0usize;
+            let mut total_games = 0usize;
+            let mut total_wins = 0usize;
+            let mut total_draws = 0usize;
+            let mut total_losses = 0usize;
 
-        for s in &all_stats {
+            for s in &all_stats {
+                md.push_str(&format!(
+                    "| {} | {} | {} | {} | {} | {:.1}% |\n",
+                    s.opponent,
+                    s.games,
+                    s.wins,
+                    s.draws,
+                    s.losses,
+                    s.win_pct()
+                ));
+                total_games += s.games;
+                total_wins += s.wins;
+                total_draws += s.draws;
+                total_losses += s.losses;
+            }
+
+            md.push('\n');
+
+            let overall_win_pct = if total_games > 0 {
+                total_wins as f64 / total_games as f64 * 100.0
+            } else {
+                0.0
+            };
+
             md.push_str(&format!(
-                "| {} | {} | {} | {} | {} | {:.1}% |\n",
-                s.opponent,
-                s.games,
-                s.wins,
-                s.draws,
-                s.losses,
-                s.win_pct()
+                "**Overall:** {} games, {} wins, {} draws, {} losses — **{:.1}% win rate**\n\n",
+                total_games, total_wins, total_draws, total_losses, overall_win_pct
             ));
-            total_games += s.games;
-            total_wins += s.wins;
-            total_draws += s.draws;
-            total_losses += s.losses;
-        }
 
-        md.push('\n');
+            let best = all_stats
+                .iter()
+                .max_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
+            let worst = all_stats
+                .iter()
+                .min_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
 
-        let overall_win_pct = if total_games > 0 {
-            total_wins as f64 / total_games as f64 * 100.0
-        } else {
-            0.0
-        };
-
-        md.push_str(&format!(
-            "**Overall:** {} games, {} wins, {} draws, {} losses — **{:.1}% win rate**\n\n",
-            total_games, total_wins, total_draws, total_losses, overall_win_pct
-        ));
-
-        let best = all_stats
-            .iter()
-            .max_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
-        let worst = all_stats
-            .iter()
-            .min_by(|a, b| a.win_pct().partial_cmp(&b.win_pct()).unwrap());
-
-        if let Some(b) = best {
-            md.push_str(&format!(
-                "**Best matchup:** {} ({:.1}%)\n\n",
-                b.opponent,
-                b.win_pct()
-            ));
-        }
-        if let Some(w) = worst {
-            md.push_str(&format!(
-                "**Worst matchup:** {} ({:.1}%)\n\n",
-                w.opponent,
-                w.win_pct()
-            ));
+            if let Some(b) = best {
+                md.push_str(&format!(
+                    "**Best matchup:** {} ({:.1}%)\n\n",
+                    b.opponent,
+                    b.win_pct()
+                ));
+            }
+            if let Some(w) = worst {
+                md.push_str(&format!(
+                    "**Worst matchup:** {} ({:.1}%)\n\n",
+                    w.opponent,
+                    w.win_pct()
+                ));
+            }
         }
     }
 
@@ -1533,16 +1579,29 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
             md.push_str(&sprt_note);
             md.push('\n');
         } else {
-            md.push_str("| Opponent | Games | W | D | L | Result |\n");
-            md.push_str("|----------|-------|---|---|---|--------|\n");
-
+            // Group SPRT rows by time_control so STC and LTC rows are not silently merged.
+            let mut tc_sprt_map: std::collections::BTreeMap<String, Vec<&SprtRow>> =
+                std::collections::BTreeMap::new();
             for row in &sprt_rows {
-                md.push_str(&format!(
-                    "| {} | {} | {} | {} | {} | {} |\n",
-                    row.opponent, row.games, row.wins, row.draws, row.losses, row.result
-                ));
+                tc_sprt_map
+                    .entry(row.time_control.clone())
+                    .or_default()
+                    .push(row);
             }
-            md.push('\n');
+
+            for (tc, rows) in &tc_sprt_map {
+                md.push_str(&format!("### {}\n\n", tc));
+                md.push_str("| Opponent | Games | W | D | L | Result |\n");
+                md.push_str("|----------|-------|---|---|---|--------|\n");
+
+                for row in rows {
+                    md.push_str(&format!(
+                        "| {} | {} | {} | {} | {} | {} |\n",
+                        row.opponent, row.games, row.wins, row.draws, row.losses, row.result
+                    ));
+                }
+                md.push('\n');
+            }
         }
     }
 
