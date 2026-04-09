@@ -1,2 +1,22 @@
 ## Ralph Progress
 
+## Codebase Patterns
+- PgnError: implement `std::error::Error`; anyhow's blanket `From<E>` covers it — do NOT add an explicit `impl From<PgnError> for anyhow::Error`
+- SAN disambiguation: strip piece letter + 'x', take last 2 chars as dest, preceding chars are disambiguation (1 char = file or rank, 2 chars = full square)
+- Board::make_move takes a ChessMove and returns a new Board (immutable move application)
+- MoveGen::new_legal(board) is an iterator over all legal ChessMove values for the position
+- Castling in UCI: e1g1 (kingside white), e1c1 (queenside white), e8g8/e8c8 for black
+- Board::from_str(fen) parses FEN; fmt::Display on Board outputs FEN
+
+## 2026-04-08 - US-001
+- Implemented `chesslib::pgn` module with `parse()`, `parse_nth()`, and `replay()` functions
+- Added `PgnError` type implementing `std::error::Error`
+- SAN parser handles: pawn pushes/captures, piece moves, castling (O-O/O-O-O), promotions (=Q etc.), file/rank/full disambiguation, check/annotation decorators stripped
+- Tokenizer strips: tag headers (`[...]` lines), inline comments (`{...}`), line comments (`;...`), move numbers, result tokens, NAGs (`$N`)
+- Files changed: `chesslib/src/pgn.rs` (new), `chesslib/src/lib.rs` (added `pub mod pgn`)
+- **Learnings for future iterations:**
+  - The `Board` Display impl outputs FEN with halfmove clock but no fullmove number (ends in `... N 1`)
+  - `MoveGen::new_legal` is an iterator, not a vec — call `.find()` / `.filter().collect()` on it
+  - `Piece::Pawn` is the implicit piece for lowercase SAN tokens
+  - Castling dest squares: kingside=G file, queenside=C file (same rank as king)
+---
