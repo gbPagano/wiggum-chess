@@ -1,0 +1,5 @@
+timestamp,engine1_name,engine2_name,games_played,engine1_wins,engine2_wins,draws,engine1_win_rate,start_fen
+2026-04-09T10:52:44.811266682+00:00,Wiggum Engine v0.4,Stockfish 17 (1500),3,0,3,0,0.0000,startpos
+2026-04-09T10:54:00.668063215+00:00,Wiggum Engine v0.4,Stockfish 17 (2000),3,0,3,0,0.0000,startpos
+2026-04-09T10:55:55.744876616+00:00,Wiggum Engine v0.4,Stockfish 17 (2500),3,0,3,0,0.0000,startpos
+2026-04-09T10:56:36.115043789+00:00,Wiggum Engine v0.4,Stockfish 17 (max),3,0,3,0,0.0000,startpos
