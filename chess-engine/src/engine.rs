@@ -24,7 +24,7 @@ impl WiggumEngine {
 
 impl Default for WiggumEngine {
     fn default() -> Self {
-        Self::new(4)
+        Self::new(5)
     }
 }
 

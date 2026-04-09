@@ -9,8 +9,8 @@ use std::io::{self, BufRead};
 #[derive(Parser)]
 #[command(name = "chess-engine", about = "Wiggum Engine UCI chess engine")]
 struct Args {
-    /// Search depth (default 4)
-    #[arg(long, default_value = "4")]
+    /// Search depth (default 5)
+    #[arg(long, default_value = "5")]
     depth: u8,
 }
 
