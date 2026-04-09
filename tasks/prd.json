@@ -25,7 +25,7 @@
       "id": "US-004",
       "title": "--positions-file, --num-positions, --seed flags on chess-runner match",
       "description": "Add balanced positions flags to match subcommand",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-005",
