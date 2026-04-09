@@ -49,3 +49,15 @@
   - Checkmate position returns 0 from MoveGen::perft_test at depth 1
   - When writing FEN-based tests, beware placing the black king ON the promotion square (makes promotion illegal)
 ---
+
+## 2026-04-08 - US-005
+- Added `PgnFen(PgnFenArgs)` variant to `Commands` enum in `chess-runner/src/main.rs`
+- Added `PgnFenArgs` struct with `--file`, `--move`, `--game` (1-based, default 1) fields
+- Implemented `run_pgn_fen()` using `pgn::parse_nth` + `pgn::replay` from chesslib
+- `--game` is 1-based in CLI; passes `game - 1` to `parse_nth`
+- Tests: starting position, file not found, game out of range, move out of range
+- Files changed: `chess-runner/src/main.rs`, `tasks/prd.json`
+- **Learnings for future iterations:**
+  - `r#move` is needed to use `move` as a field name in Rust (reserved keyword)
+  - `run_pgn_fen` returns `Result` with `anyhow::bail!` for validation errors — no process::exit needed
+---
