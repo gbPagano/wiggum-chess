@@ -1419,6 +1419,7 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
         draws: usize,
         losses: usize,
         result: String,
+        time_control: String,
     }
     let mut sprt_rows: Vec<SprtRow> = Vec::new();
     let sprt_note;
@@ -1442,6 +1443,11 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
                 let draws: usize = record[5].parse().unwrap_or(0);
                 let losses: usize = record[6].parse().unwrap_or(0);
                 let result = record[9].to_string();
+                let time_control = if record.len() > 10 {
+                    record[10].to_string()
+                } else {
+                    "unknown".to_string()
+                };
 
                 let target_is_e1 = engine1.to_lowercase().contains(&filter);
                 let target_is_e2 = engine2.to_lowercase().contains(&filter);
@@ -1464,6 +1470,7 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
                     draws,
                     losses: l,
                     result,
+                    time_control,
                 });
             }
 
@@ -1572,16 +1579,29 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
             md.push_str(&sprt_note);
             md.push('\n');
         } else {
-            md.push_str("| Opponent | Games | W | D | L | Result |\n");
-            md.push_str("|----------|-------|---|---|---|--------|\n");
-
+            // Group SPRT rows by time_control so STC and LTC rows are not silently merged.
+            let mut tc_sprt_map: std::collections::BTreeMap<String, Vec<&SprtRow>> =
+                std::collections::BTreeMap::new();
             for row in &sprt_rows {
-                md.push_str(&format!(
-                    "| {} | {} | {} | {} | {} | {} |\n",
-                    row.opponent, row.games, row.wins, row.draws, row.losses, row.result
-                ));
+                tc_sprt_map
+                    .entry(row.time_control.clone())
+                    .or_default()
+                    .push(row);
             }
-            md.push('\n');
+
+            for (tc, rows) in &tc_sprt_map {
+                md.push_str(&format!("### {}\n\n", tc));
+                md.push_str("| Opponent | Games | W | D | L | Result |\n");
+                md.push_str("|----------|-------|---|---|---|--------|\n");
+
+                for row in rows {
+                    md.push_str(&format!(
+                        "| {} | {} | {} | {} | {} | {} |\n",
+                        row.opponent, row.games, row.wins, row.draws, row.losses, row.result
+                    ));
+                }
+                md.push('\n');
+            }
         }
     }
 
