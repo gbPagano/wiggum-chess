@@ -1,3 +1,5 @@
+mod opening_book;
+
 use anyhow::Result;
 use chesslib::analysis::{StockfishProcess, analyze_fen};
 use chesslib::chess_move::ChessMove;
