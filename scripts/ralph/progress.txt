@@ -2,6 +2,7 @@
 - New workspace crates: use `cargo new --lib <name>` from workspace root — it auto-adds to Cargo.toml members.
 - Build check: `cargo build --workspace` covers all crates including newly added ones.
 - chesslib-simple board model: `squares[rank][file]`, rank 0 = white's back rank. `Square { rank, file }` both 0-based. All types in `src/lib.rs`.
+- `Board::apply_move` returns a new Board (immutable pattern). Captures handled implicitly: `replace()` on destination square overwrites any piece there.
 
 # Ralph Progress Log
 Started: Thu Apr  9 13:19:42 PDT 2026
@@ -26,4 +27,15 @@ Started: Thu Apr  9 13:19:42 PDT 2026
   - `squares[rank][file]`, rank 0 = white's back rank (rank 1), rank 7 = black's back rank (rank 8)
   - All core types live in `src/lib.rs` — future stories should add modules or extend this file
   - `Board::starting_position()` sets up the full start state with `CastlingRights::all()`
+---
+
+## 2026-04-09 - US-003
+- Added `Move { from: Square, to: Square }` struct and `Board::apply_move(&self, mv: Move) -> Board`
+- `apply_move` moves piece, handles captures implicitly (destination overwritten), toggles side_to_move, updates halfmove clock and fullmove number
+- Files changed: `chesslib-simple/src/lib.rs`
+- **Learnings for future iterations:**
+  - `apply_move` uses immutable pattern (returns new Board via clone), consistent with chesslib design
+  - Halfmove clock: reset on pawn move OR capture; increment otherwise
+  - Fullmove number: increment only after black's move
+  - `en_passant_file` is cleared in `apply_move`; pawn generation (US-004) will set it for double pushes
 ---

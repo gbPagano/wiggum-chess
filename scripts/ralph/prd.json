@@ -45,8 +45,8 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added Move struct with from/to squares. Board::apply_move returns new board with piece moved, capture handled implicitly, side_to_move toggled, halfmove clock and fullmove number updated."
     },
     {
       "id": "US-004",
