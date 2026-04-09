@@ -922,7 +922,7 @@ async fn run_match(args: MatchArgs) -> Result<()> {
     println!();
 
     // Load, validate, and select an opening line early so the match fails fast on bad data.
-    let _selected_opening: Option<opening_book::OpeningLine> =
+    let selected_opening: Option<opening_book::OpeningLine> =
         if let Some(ref book_path) = args.opening_book {
             let raw = opening_book::load_opening_book(std::path::Path::new(book_path))?;
             let validated = opening_book::validate_opening_book(raw)?;
@@ -931,6 +931,13 @@ async fn run_match(args: MatchArgs) -> Result<()> {
         } else {
             None
         };
+
+    // Compute the effective starting FEN from the opening book (no engine clock time is used).
+    // When an opening line is selected it overrides args.start_fen so both engines start from
+    // the same post-opening position.
+    let opening_start_fen: Option<String> = selected_opening
+        .as_ref()
+        .map(|line| opening_book::opening_line_to_fen(line));
 
     // Query engine names via UCI handshake before the match loop.
     let engine1_name = {
@@ -1041,7 +1048,7 @@ async fn run_match(args: MatchArgs) -> Result<()> {
             args.timeout,
             args.verbose,
             args.games,
-            args.start_fen.as_deref(),
+            opening_start_fen.as_deref().or(args.start_fen.as_deref()),
             0,
         )
         .await?;
@@ -1052,7 +1059,10 @@ async fn run_match(args: MatchArgs) -> Result<()> {
         println!("Draws: {}", draws);
 
         if let Some(ref output_path) = args.output {
-            let start_fen = args.start_fen.as_deref().unwrap_or("startpos");
+            let start_fen = opening_start_fen
+                .as_deref()
+                .or(args.start_fen.as_deref())
+                .unwrap_or("startpos");
             let tc_label = match (args.time, args.inc) {
                 (60000, 1000) => "LTC",
                 (10000, 100) => "STC",

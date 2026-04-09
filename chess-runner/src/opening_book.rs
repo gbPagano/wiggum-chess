@@ -106,6 +106,24 @@ pub fn validate_opening_book(lines: Vec<OpeningLine>) -> anyhow::Result<Vec<Open
     Ok(valid)
 }
 
+/// Replay an opening line from the initial position and return the resulting FEN string.
+///
+/// The returned string is suitable for passing to `Game::from_fen()` as a starting position.
+///
+/// # Panics
+///
+/// Panics if any move in the line is illegal — callers must ensure the line has already been
+/// validated by [`validate_opening_book`].
+pub fn opening_line_to_fen(line: &OpeningLine) -> String {
+    let mut board = Board::default();
+    for mv_str in &line.moves {
+        let m = ChessMove::from_uci(mv_str, &board)
+            .expect("validated opening line contained an illegal move");
+        board = board.make_move(m);
+    }
+    format!("{}", board)
+}
+
 /// Select one opening line uniformly at random from a non-empty validated set.
 ///
 /// If `seed` is `Some(s)`, the same seed and same input always select the same line.
@@ -208,6 +226,27 @@ mod tests {
         // Non-deterministic seed — just verify it returns a line without panicking.
         let line = select_opening_line(&validated, None);
         assert_eq!(line.moves, vec!["e2e4", "e7e5"]);
+    }
+
+    #[test]
+    fn test_opening_line_to_fen_initial_move() {
+        // After 1. e4 the board should reflect a pawn on e4 and it's Black's turn.
+        let lines = parse_opening_book("e2e4\n");
+        let validated = validate_opening_book(lines).unwrap();
+        let fen = opening_line_to_fen(&validated[0]);
+        // Side to move must be 'b' and e4 pawn should appear in the FEN.
+        assert!(fen.contains(" b "), "side to move should be Black after 1. e4");
+        assert!(fen.starts_with("rnbqkbnr/pppppppp/8/8/4P3/"), "pawn on e4");
+    }
+
+    #[test]
+    fn test_opening_line_to_fen_roundtrip() {
+        // Replaying two moves should leave us 2 plies into the game.
+        let lines = parse_opening_book("e2e4 e7e5\n");
+        let validated = validate_opening_book(lines).unwrap();
+        let fen = opening_line_to_fen(&validated[0]);
+        // After 1. e4 e5 it's White's turn again.
+        assert!(fen.contains(" w "), "side to move should be White after 1. e4 e5");
     }
 
     #[test]
