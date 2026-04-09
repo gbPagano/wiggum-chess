@@ -1,0 +1,137 @@
+neumann1944:
+    type: Book
+    author:
+        - von Neumann, John
+        - Morgenstern, Oskar
+    title: "Theory of Games and Economic Behavior"
+    publisher: Princeton University Press
+    date: 1944
+
+shannon1950:
+    type: Article
+    author:
+        - Shannon, Claude E.
+    title: "Programming a Computer for Playing Chess"
+    journal: "Philosophical Magazine"
+    volume: 41
+    issue: 314
+    page-range: 256-275
+    date: 1950
+
+chess2026:
+    type: Report
+    author:
+        - Pagano, Guilherme Borges
+        - Calixto, João Marcos
+    title: "Desenvolvimento de um Gerador de Lances para Xadrez em Rust com Bitboards e Magic Bitboards"
+    institution: "Universidade Federal de Uberlândia"
+    location: "Uberlândia, Brasil"
+    date: 2026
+
+pst2026:
+    type: Web
+    author:
+        - Chess Programming Wiki
+    title: "Piece-Square Tables"
+    publisher: "Chess Programming Wiki"
+    url: "https://www.chessprogramming.org/Piece-Square_Tables"
+    date: 2026
+
+tapered2026:
+    type: Web
+    author:
+        - Chess Programming Wiki
+    title: "Tapered Eval"
+    publisher: "Chess Programming Wiki"
+    url: "https://www.chessprogramming.org/Tapered_Eval"
+    date: 2026
+
+minimax2026:
+    type: Web
+    author:
+        - Chess Programming Wiki
+    title: "Minimax"
+    publisher: "Chess Programming Wiki"
+    url: "https://www.chessprogramming.org/Minimax"
+    date: 2026
+
+quiescence2026:
+    type: Web
+    author:
+        - Chess Programming Wiki
+    title: "Quiescence Search"
+    publisher: "Chess Programming Wiki"
+    url: "https://www.chessprogramming.org/Quiescence_Search"
+    date: 2026
+
+alphabeta2026:
+    type: Web
+    author:
+        - Chess Programming Wiki
+    title: "Alpha-Beta"
+    publisher: "Chess Programming Wiki"
+    url: "https://www.chessprogramming.org/Alpha-Beta"
+    date: 2026
+
+moveordering2026:
+    type: Web
+    author:
+        - Chess Programming Wiki
+    title: "Move Ordering"
+    publisher: "Chess Programming Wiki"
+    url: "https://www.chessprogramming.org/Move_Ordering"
+    date: 2026
+
+knuth1975:
+    type: Article
+    author:
+        - Knuth, Donald E.
+        - Moore, Ronald W.
+    title: "An Analysis of Alpha-Beta Pruning"
+    journal: "Artificial Intelligence"
+    volume: 6
+    issue: 4
+    page-range: 293-326
+    date: 1975
+
+zobrist2026:
+  type: Web
+  author:
+    - Chess Programming Wiki
+  title: "Zobrist Hashing"
+  publisher: "Chess Programming Wiki"
+  url: "https://www.chessprogramming.org/Zobrist_Hashing"
+  date: 2026
+
+zobrist1970:
+  type: Article
+  author:
+    - Zobrist, Albert L.
+  title: "A New Hashing Method with Application for Game Playing"
+  journal: "Technical Report #88, Computer Sciences Department, University of Wisconsin"
+  date: 1970
+
+edwards1994:
+  type: Web
+  author: "Chessprogramming wiki"
+  title: "Forsyth-Edwards Notation"
+  date: 2026
+  url: "https://www.chessprogramming.org/Forsyth-Edwards_Notation"
+
+reinfeld1958:
+  type: Book
+  author:
+    - Reinfeld, Fred
+  title: "Win at Chess"
+  publisher: "Dover Publications"
+  date: 1958
+
+kaufman1992:
+  type: Article
+  author:
+    - Kaufman, Larry
+  title: "A Chess Position Test"
+  journal: "Computer Chess Reports"
+  volume: 3
+  issue: 1
+  date: 1992
