@@ -1,0 +1,17 @@
+## Codebase Patterns
+- New workspace crates: use `cargo new --lib <name>` from workspace root — it auto-adds to Cargo.toml members.
+- Build check: `cargo build --workspace` covers all crates including newly added ones.
+
+# Ralph Progress Log
+Started: Thu Apr  9 13:19:42 PDT 2026
+---
+
+## 2026-04-09 - US-001
+- Created `chesslib-simple` library crate using `cargo new --lib chesslib-simple`
+- `cargo new` automatically added the crate to workspace `members` in root `Cargo.toml`
+- Files changed: `Cargo.toml` (workspace member added), `chesslib-simple/` (new crate with `Cargo.toml` and `src/lib.rs`)
+- **Learnings for future iterations:**
+  - `cargo new --lib` from the workspace root auto-adds the crate to workspace members
+  - The new crate is named `chesslib-simple` to distinguish it from `chesslib`
+  - `cargo build --workspace` confirms all crates compile together
+---

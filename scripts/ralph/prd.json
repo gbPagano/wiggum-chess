@@ -1,0 +1,213 @@
+{
+  "project": "Wiggum Chess",
+  "branchName": "ralph/non-bitboard-chess-lib",
+  "description": "Add a new workspace crate implementing a clean chess library without bitboards, using an 8x8 matrix board representation and supporting legal move generation, move application, tests, and perft for comparison with chesslib.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add non-bitboard crate to workspace",
+      "description": "As a developer, I want a dedicated library crate in the workspace so that I can build and test the non-bitboard implementation independently.",
+      "acceptanceCriteria": [
+        "Add a new library crate to the workspace members in the root Cargo.toml",
+        "Choose a crate name that clearly distinguishes it from chesslib",
+        "The workspace builds successfully with cargo build --workspace",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Created chesslib-simple crate with cargo new --lib, automatically added to workspace members."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement matrix-based board model",
+      "description": "As a developer, I want the board represented as an 8x8 matrix without bitboards so that the implementation is easy to read and reason about.",
+      "acceptanceCriteria": [
+        "Represent the board using an 8x8 matrix structure such as [[Option<Piece>; 8]; 8]",
+        "Model piece kind, color, side to move, castling rights, and en passant state explicitly",
+        "Do not use bitboards internally in the new crate",
+        "The crate builds successfully after introducing the board model",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Implement move type and basic move application",
+      "description": "As a developer, I want normal legal moves and captures to be represented and applied so that the library can produce child positions for search and perft.",
+      "acceptanceCriteria": [
+        "Define a move type that can represent at least normal moves and captures",
+        "Applying a normal move updates board squares and side to move correctly",
+        "Applying a capture removes the captured piece from the destination square correctly",
+        "Include automated tests covering representative normal move and capture cases",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Implement pawn pseudo-legal move generation",
+      "description": "As a developer, I want pawns to generate forward moves, double pushes, and captures so that the board can enumerate basic pawn moves.",
+      "acceptanceCriteria": [
+        "Generate pawn single pushes when the target square is empty",
+        "Generate pawn double pushes from the starting rank when both intermediate and target squares are empty",
+        "Generate pawn diagonal captures against opposing pieces",
+        "Include automated tests covering white and black pawn movement cases",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Implement knight and king pseudo-legal move generation",
+      "description": "As a developer, I want knights and kings to generate pseudo-legal moves so that the library can cover short-range piece movement.",
+      "acceptanceCriteria": [
+        "Generate knight moves to all valid target squares not occupied by friendly pieces",
+        "Generate king moves to adjacent valid target squares not occupied by friendly pieces",
+        "Do not include castling in this story",
+        "Include automated tests covering representative knight and king movement cases",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Implement bishop, rook, and queen pseudo-legal move generation",
+      "description": "As a developer, I want sliding pieces to generate pseudo-legal moves so that the library can enumerate long-range piece movement without bitboards.",
+      "acceptanceCriteria": [
+        "Generate bishop moves along diagonals until blocked",
+        "Generate rook moves along ranks and files until blocked",
+        "Generate queen moves as the union of bishop and rook movement",
+        "Stop sliding movement at the first blocking piece and allow capture of an opposing blocker only",
+        "Include automated tests covering representative bishop, rook, and queen movement cases",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Filter pseudo-legal moves into legal moves",
+      "description": "As a developer, I want the library to reject moves that leave my king in check so that generated moves are legal chess moves.",
+      "acceptanceCriteria": [
+        "Add legal move generation that filters out pseudo-legal moves leaving the moving side in check",
+        "Detect whether a king is currently attacked in a given board state",
+        "Exclude moves by pinned pieces when the move would expose the king illegally",
+        "Include automated tests covering check and pinned-piece scenarios",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Implement castling generation and application",
+      "description": "As a developer, I want castling to be generated and applied correctly so that legal move generation covers this special king move.",
+      "acceptanceCriteria": [
+        "Generate kingside and queenside castling only when castling rights, empty path, and legal attack conditions are satisfied",
+        "Applying a castling move relocates both king and rook correctly",
+        "Update castling rights correctly after king or rook movement",
+        "Include automated tests covering allowed and disallowed castling cases",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Implement en passant generation and application",
+      "description": "As a developer, I want en passant to be generated and applied correctly so that legal move generation matches the full chess rules.",
+      "acceptanceCriteria": [
+        "Track en passant availability after a legal pawn double push",
+        "Generate en passant captures only when the position allows them",
+        "Applying an en passant move removes the captured pawn from the correct square",
+        "Reject en passant moves that would leave the moving side in check",
+        "Include automated tests covering allowed and disallowed en passant cases",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Implement promotion generation and application",
+      "description": "As a developer, I want pawn promotions to be generated and applied correctly so that move generation and perft cover promotion branches.",
+      "acceptanceCriteria": [
+        "Generate promotion moves when a pawn reaches the last rank",
+        "Support promotion choices for queen, rook, bishop, and knight",
+        "Applying a promotion replaces the pawn with the selected promoted piece",
+        "Include automated tests covering promotion by quiet move and by capture",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Add perft function",
+      "description": "As a developer, I want a perft function that counts leaf nodes so that I can measure move generation correctness recursively.",
+      "acceptanceCriteria": [
+        "Expose a perft function that counts leaf nodes for a requested depth",
+        "Depth 0 returns 1 for a valid board state",
+        "Depth 1 returns the number of generated legal moves",
+        "Include automated tests covering basic low-depth perft behavior",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Add starting-position perft reference tests",
+      "description": "As a developer, I want perft tests for the standard starting position so that I can validate the implementation against canonical node counts.",
+      "acceptanceCriteria": [
+        "Add perft tests for the standard starting position at agreed reference depths",
+        "Expected node counts match canonical starting-position perft values for the tested depths",
+        "The tests run through the new crate public API",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Add special-case perft tests reused from chesslib",
+      "description": "As a developer, I want special-case perft reference positions adapted from chesslib so that I can compare the non-bitboard implementation against the existing library on the same scenarios.",
+      "acceptanceCriteria": [
+        "Add additional perft tests adapted from the same core reference scenarios already used by chesslib",
+        "Include at least one reference position covering castling rights",
+        "Include at least one reference position covering en passant availability",
+        "Include at least one reference position covering promotion opportunities",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
