@@ -90,6 +90,19 @@ struct MatchArgs {
     /// RNG seed for position selection (default: random); printed to stderr for reproducibility
     #[arg(long)]
     seed: Option<u64>,
+
+    /// Path to an opening-book file (one UCI move sequence per line); when provided, a line is
+    /// selected and applied to both engines before engine search begins
+    #[arg(long)]
+    opening_book: Option<String>,
+
+    /// RNG seed for opening-book line selection; same seed + same book always choose the same line
+    #[arg(long)]
+    opening_book_seed: Option<u64>,
+
+    /// Maximum number of opening-book plies to apply before handing off to engine search
+    #[arg(long, default_value = "20")]
+    opening_book_max_ply: usize,
 }
 
 #[derive(Parser)]
@@ -1297,6 +1310,9 @@ async fn run_pgn_match(args: PgnMatchArgs) -> Result<()> {
         positions_file: None,
         num_positions: 10,
         seed: None,
+        opening_book: None,
+        opening_book_seed: None,
+        opening_book_max_ply: 20,
     };
 
     run_match(match_args).await
