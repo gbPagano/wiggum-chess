@@ -434,6 +434,7 @@ fn write_csv(
     engine2_wins: usize,
     draws: usize,
     start_fen: &str,
+    time_control: &str,
 ) -> Result<()> {
     let file_exists = std::path::Path::new(path).exists()
         && std::fs::metadata(path)
@@ -460,6 +461,7 @@ fn write_csv(
             "draws",
             "engine1_win_rate",
             "start_fen",
+            "time_control",
         ])?;
     }
 
@@ -481,6 +483,7 @@ fn write_csv(
         &draws.to_string(),
         &format!("{:.4}", win_rate),
         start_fen,
+        time_control,
     ])?;
 
     wtr.flush()?;
@@ -978,6 +981,11 @@ async fn run_match(args: MatchArgs) -> Result<()> {
 
             // Write one CSV row per FEN position
             if let Some(ref output_path) = args.output {
+                let tc_label = match (args.time, args.inc) {
+                    (60000, 1000) => "LTC",
+                    (10000, 100) => "STC",
+                    _ => "custom",
+                };
                 write_csv(
                     output_path,
                     &engine1_name,
@@ -987,6 +995,7 @@ async fn run_match(args: MatchArgs) -> Result<()> {
                     e2w,
                     d,
                     fen,
+                    tc_label,
                 )?;
             }
 
@@ -1034,6 +1043,11 @@ async fn run_match(args: MatchArgs) -> Result<()> {
 
         if let Some(ref output_path) = args.output {
             let start_fen = args.start_fen.as_deref().unwrap_or("startpos");
+            let tc_label = match (args.time, args.inc) {
+                (60000, 1000) => "LTC",
+                (10000, 100) => "STC",
+                _ => "custom",
+            };
             write_csv(
                 output_path,
                 &engine1_name,
@@ -1043,6 +1057,7 @@ async fn run_match(args: MatchArgs) -> Result<()> {
                 engine2_wins,
                 draws,
                 start_fen,
+                tc_label,
             )?;
             println!("Match result appended to: {}", output_path);
         }
