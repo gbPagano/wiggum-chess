@@ -937,7 +937,7 @@ async fn run_match(args: MatchArgs) -> Result<()> {
     // the same post-opening position.
     let opening_start_fen: Option<String> = selected_opening
         .as_ref()
-        .map(|line| opening_book::opening_line_to_fen(line));
+        .map(|line| opening_book::opening_line_to_fen(line, args.opening_book_max_ply));
 
     // Query engine names via UCI handshake before the match loop.
     let engine1_name = {

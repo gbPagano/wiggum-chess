@@ -108,15 +108,18 @@ pub fn validate_opening_book(lines: Vec<OpeningLine>) -> anyhow::Result<Vec<Open
 
 /// Replay an opening line from the initial position and return the resulting FEN string.
 ///
-/// The returned string is suitable for passing to `Game::from_fen()` as a starting position.
+/// At most `max_ply` moves are applied; if the line is shorter than `max_ply`, all moves are
+/// applied. Pass `usize::MAX` to apply every move in the line.
+///
+/// The returned string is suitable for passing to `play_games()` as a starting position.
 ///
 /// # Panics
 ///
 /// Panics if any move in the line is illegal — callers must ensure the line has already been
 /// validated by [`validate_opening_book`].
-pub fn opening_line_to_fen(line: &OpeningLine) -> String {
+pub fn opening_line_to_fen(line: &OpeningLine, max_ply: usize) -> String {
     let mut board = Board::default();
-    for mv_str in &line.moves {
+    for mv_str in line.moves.iter().take(max_ply) {
         let m = ChessMove::from_uci(mv_str, &board)
             .expect("validated opening line contained an illegal move");
         board = board.make_move(m);
@@ -233,7 +236,7 @@ mod tests {
         // After 1. e4 the board should reflect a pawn on e4 and it's Black's turn.
         let lines = parse_opening_book("e2e4\n");
         let validated = validate_opening_book(lines).unwrap();
-        let fen = opening_line_to_fen(&validated[0]);
+        let fen = opening_line_to_fen(&validated[0], usize::MAX);
         // Side to move must be 'b' and e4 pawn should appear in the FEN.
         assert!(fen.contains(" b "), "side to move should be Black after 1. e4");
         assert!(fen.starts_with("rnbqkbnr/pppppppp/8/8/4P3/"), "pawn on e4");
@@ -244,9 +247,33 @@ mod tests {
         // Replaying two moves should leave us 2 plies into the game.
         let lines = parse_opening_book("e2e4 e7e5\n");
         let validated = validate_opening_book(lines).unwrap();
-        let fen = opening_line_to_fen(&validated[0]);
+        let fen = opening_line_to_fen(&validated[0], usize::MAX);
         // After 1. e4 e5 it's White's turn again.
         assert!(fen.contains(" w "), "side to move should be White after 1. e4 e5");
+    }
+
+    #[test]
+    fn test_opening_line_to_fen_max_ply_truncates() {
+        // A 4-move line truncated to 1 ply should look the same as a 1-move line.
+        let lines_full = parse_opening_book("e2e4 e7e5 g1f3 b8c6\n");
+        let validated_full = validate_opening_book(lines_full).unwrap();
+        let fen_truncated = opening_line_to_fen(&validated_full[0], 1);
+
+        let lines_one = parse_opening_book("e2e4\n");
+        let validated_one = validate_opening_book(lines_one).unwrap();
+        let fen_one = opening_line_to_fen(&validated_one[0], usize::MAX);
+
+        assert_eq!(fen_truncated, fen_one, "truncating to 1 ply should match a 1-move line");
+    }
+
+    #[test]
+    fn test_opening_line_to_fen_max_ply_zero_returns_initial() {
+        // max_ply=0 should replay no moves, returning the initial position FEN.
+        let lines = parse_opening_book("e2e4 e7e5\n");
+        let validated = validate_opening_book(lines).unwrap();
+        let fen = opening_line_to_fen(&validated[0], 0);
+        let initial = format!("{}", Board::default());
+        assert_eq!(fen, initial, "max_ply=0 should return the initial position");
     }
 
     #[test]
