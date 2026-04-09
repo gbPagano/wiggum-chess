@@ -66,3 +66,13 @@ Started: Thu Apr  9 01:47:41 PDT 2026
   - US-006 (SPRT in STC) is already wired up from US-004 — the SPRT block already uses `STC_TIME_MS`/`STC_INC_MS`
   - US-007 and US-008 need `version-report` to read `time_control` from CSVs and group/label output
 ---
+
+## 2026-04-09 - US-006
+- Added "SPRT block: STC" print header before the SPRT run in `scripts/benchmark-version.sh`
+- SPRT block was already using `STC_TIME_MS`/`STC_INC_MS` from US-004; only the missing print was needed
+- Files changed: `scripts/benchmark-version.sh`
+- **Learnings for future iterations:**
+  - The SPRT block condition is `if [[ -n "$PREV_ENGINE" ]]` — changes here only apply when `--prev-engine` is provided
+  - `time_control` column value ("STC") is derived automatically by chess-runner from `--time 10000 --inc 100` args
+  - US-007 and US-008 still need `version-report` to read `time_control` from match and SPRT CSVs respectively
+---
