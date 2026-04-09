@@ -219,6 +219,9 @@ echo "========================================="
 # ── Optional SPRT vs previous engine ─────────────────────────────────────────
 if [[ -n "$PREV_ENGINE" ]]; then
     echo ""
+    echo "========================================="
+    echo "SPRT block: STC"
+    echo "========================================="
     echo "--- SPRT vs previous engine ---"
     SPRT_POSITIONS_ARGS=()
     if [[ -n "$POSITIONS_FILE" ]]; then
