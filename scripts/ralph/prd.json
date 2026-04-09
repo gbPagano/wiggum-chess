@@ -87,8 +87,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added opening_line_to_fen(line) to chess-runner/src/opening_book.rs — replays moves from Board::default() and formats the resulting Board via Display (FEN). In run_match(), opening_start_fen is computed from the selected opening and passed as the effective start_fen to play_games(), overriding args.start_fen. Clock only starts when engines search, so opening moves cost no clock time."
     },
     {
       "id": "US-006",

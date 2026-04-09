@@ -60,3 +60,15 @@ Started: Thu Apr  9 09:09:27 PDT 2026
   - The selected line is now `_selected_opening: Option<opening_book::OpeningLine>` in `run_match()` — US-005 should rename it and use `.moves` to replay and get the starting FEN
   - `play_games()` takes `start_fen: Option<&str>` — US-005 replays the selected opening moves from `Board::default()` to get the FEN string
 ---
+
+## 2026-04-09 - US-005
+- Added `opening_line_to_fen(line: &OpeningLine) -> String` to `chess-runner/src/opening_book.rs` — replays moves from `Board::default()` and formats the result via `Board::Display` which produces a valid FEN
+- In `run_match()`, renamed `_selected_opening` to `selected_opening` and computed `opening_start_fen: Option<String>` from it
+- `opening_start_fen.as_deref().or(args.start_fen.as_deref())` is passed to `play_games()` so the opening position overrides the default start; both engines receive the same resulting position
+- Opening moves never consume engine clock time because the clock only starts when engines begin searching
+- Added 2 tests: `test_opening_line_to_fen_initial_move` (verifies side-to-move and piece position after 1.e4) and `test_opening_line_to_fen_roundtrip` (verifies side-to-move after 1.e4 e5)
+- Files changed: `chess-runner/src/opening_book.rs`, `chess-runner/src/main.rs`, `scripts/ralph/prd.json`
+- **Learnings for future iterations:**
+  - `Board::Display` outputs a FEN string (piece placement + side-to-move + castling + en-passant + halfmove clock + "1" for fullmove). This is already used in `run_pgn_match()` for start_fen, so it's the approved pattern.
+  - `opening_start_fen.as_deref().or(args.start_fen.as_deref())` is the effective start_fen passed to `play_games()` — US-006 can use `opening_start_fen` or extend the approach to limit plies
+---
