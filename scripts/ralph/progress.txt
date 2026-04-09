@@ -5,6 +5,7 @@
 - git identity must be configured before committing: `git config user.email` and `git config user.name`
 - ChessMove::from_uci(s, board) validates a move string against legal moves on a given Board
 - Match execution is in `run_match()` / `play_games()` in chess-runner/src/main.rs
+- opening_line_to_fen(line, max_ply) accepts usize::MAX to replay all moves; pass args.opening_book_max_ply from MatchArgs
 
 # Ralph Progress Log
 Started: Thu Apr  9 09:09:27 PDT 2026
@@ -71,4 +72,15 @@ Started: Thu Apr  9 09:09:27 PDT 2026
 - **Learnings for future iterations:**
   - `Board::Display` outputs a FEN string (piece placement + side-to-move + castling + en-passant + halfmove clock + "1" for fullmove). This is already used in `run_pgn_match()` for start_fen, so it's the approved pattern.
   - `opening_start_fen.as_deref().or(args.start_fen.as_deref())` is the effective start_fen passed to `play_games()` — US-006 can use `opening_start_fen` or extend the approach to limit plies
+---
+
+## 2026-04-09 - US-006
+- Updated `opening_line_to_fen(line: &OpeningLine, max_ply: usize) -> String` to accept `max_ply` and truncate replay with `.take(max_ply)`
+- In `run_match()`, the call now passes `args.opening_book_max_ply` (default 20) so the ply limit is always respected
+- Added 2 new tests: `test_opening_line_to_fen_max_ply_truncates` (4-move line truncated to 1 matches a 1-move line), `test_opening_line_to_fen_max_ply_zero_returns_initial` (max_ply=0 yields initial FEN)
+- Files changed: `chess-runner/src/opening_book.rs`, `chess-runner/src/main.rs`, `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`
+- **Learnings for future iterations:**
+  - `opening_line_to_fen` now has signature `(line, max_ply: usize)` — pass `usize::MAX` in tests that want all moves applied
+  - The ply limit is respected before engine search; both engines still receive the same truncated position
+  - `args.opening_book_max_ply` is already populated (default 20) from the `--opening-book-max-ply` CLI flag added in US-002
 ---

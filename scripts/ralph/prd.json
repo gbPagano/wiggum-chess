@@ -104,8 +104,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated opening_line_to_fen(line, max_ply) to accept a max_ply parameter and truncate the replay with .take(max_ply). In run_match(), passes args.opening_book_max_ply (default 20) to the function. Added tests for zero-ply (returns initial position FEN) and truncation."
     },
     {
       "id": "US-007",
