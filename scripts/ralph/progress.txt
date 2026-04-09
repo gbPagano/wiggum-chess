@@ -89,3 +89,15 @@ Started: Thu Apr  9 01:47:41 PDT 2026
   - `time_control` column value ("STC") is derived automatically by chess-runner from `--time 10000 --inc 100` args
   - US-007 and US-008 still need `version-report` to read `time_control` from match and SPRT CSVs respectively
 ---
+
+## 2026-04-09 - US-008
+- Added `time_control` field to `SprtRow` struct in `chess-runner/src/main.rs`
+- Read `time_control` from CSV index 10 (falls back to `"unknown"` for old-format rows with <11 fields)
+- Grouped SPRT rows by `time_control` using `BTreeMap<String, Vec<&SprtRow>>` for deterministic ordering
+- Rendered separate `### STC` / `### LTC` sub-sections per time control under `## SPRT Results`
+- Files changed: `chess-runner/src/main.rs`
+- **Learnings for future iterations:**
+  - SPRT CSV `time_control` is at index 10; `sprt_result` is at index 9
+  - Old SPRT rows (<11 fields) fall back to `"unknown"` for backward compat — same pattern as match rows
+  - `BTreeMap` used consistently for TC grouping (alphabetical order: LTC before STC before unknown)
+---
