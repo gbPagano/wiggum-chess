@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chesslib::analysis::{analyze_fen, StockfishProcess};
 use chesslib::chess_move::ChessMove;
 use chesslib::clock::Clock;
 use chesslib::engine::Engine;
@@ -7,6 +8,10 @@ use chesslib::match_runner::{Match, MatchObserver};
 use chesslib::pgn;
 use chesslib::uci_engine::UciEngine;
 use clap::{Parser, Subcommand};
+use rand::seq::SliceRandom;
+use rand::SeedableRng;
+use std::collections::HashSet;
+use std::io::Write;
 
 #[derive(Parser)]
 #[command(name = "chess-runner", about = "Run engine vs engine chess matches")]
@@ -29,6 +34,8 @@ enum Commands {
     PgnFen(PgnFenArgs),
     /// Run an engine match starting from a position loaded from a PGN file
     PgnMatch(PgnMatchArgs),
+    /// Extract balanced positions from a PGN file using Stockfish evaluation
+    ExtractPositions(ExtractPositionsArgs),
 }
 
 #[derive(Parser)]
@@ -68,6 +75,19 @@ struct MatchArgs {
     /// Print board diagram and move details for every move (default: quiet mode)
     #[arg(long)]
     verbose: bool,
+
+    /// Optional path to a file of balanced FEN positions (one per line); when provided, each
+    /// game starts from a randomly-selected FEN instead of the initial position
+    #[arg(long)]
+    positions_file: Option<String>,
+
+    /// Number of positions to sample from --positions-file (default: 10)
+    #[arg(long, default_value = "10")]
+    num_positions: usize,
+
+    /// RNG seed for position selection (default: random); printed to stderr for reproducibility
+    #[arg(long)]
+    seed: Option<u64>,
 }
 
 #[derive(Parser)]
@@ -118,6 +138,18 @@ struct SprtArgs {
     /// Optional path to CSV file for appending SPRT results
     #[arg(long)]
     output: Option<String>,
+
+    /// Optional path to a file of balanced FEN positions (one per line); games cycle through them
+    #[arg(long)]
+    positions_file: Option<String>,
+
+    /// Number of positions to sample from --positions-file (default: 10)
+    #[arg(long, default_value = "10")]
+    num_positions: usize,
+
+    /// RNG seed for position selection (default: random); printed to stderr for reproducibility
+    #[arg(long)]
+    seed: Option<u64>,
 }
 
 #[derive(Parser)]
@@ -199,6 +231,41 @@ struct PgnMatchArgs {
     /// Optional path to CSV file for appending match results
     #[arg(long)]
     csv: Option<String>,
+}
+
+#[derive(Parser)]
+struct ExtractPositionsArgs {
+    /// Path to the PGN input file
+    #[arg(long)]
+    pgn: String,
+
+    /// Path to the Stockfish executable
+    #[arg(long)]
+    stockfish: String,
+
+    /// Path to the output file (one FEN per line)
+    #[arg(long)]
+    output: String,
+
+    /// Maximum centipawn imbalance to consider a position balanced
+    #[arg(long, default_value = "50")]
+    threshold: u32,
+
+    /// Minimum half-move (ply) to sample from each game
+    #[arg(long, default_value = "20")]
+    min_ply: usize,
+
+    /// Maximum half-move (ply) to sample from each game
+    #[arg(long, default_value = "80")]
+    max_ply: usize,
+
+    /// Stockfish search depth for evaluation
+    #[arg(long, default_value = "12")]
+    depth: u8,
+
+    /// Maximum number of unique balanced positions to collect
+    #[arg(long, default_value = "50000")]
+    max_positions: usize,
 }
 
 /// Observer that prints moves and game-over events to stdout.
@@ -366,6 +433,7 @@ fn write_csv(
     engine1_wins: usize,
     engine2_wins: usize,
     draws: usize,
+    start_fen: &str,
 ) -> Result<()> {
     let file_exists = std::path::Path::new(path).exists()
         && std::fs::metadata(path)
@@ -391,6 +459,7 @@ fn write_csv(
             "engine2_wins",
             "draws",
             "engine1_win_rate",
+            "start_fen",
         ])?;
     }
 
@@ -411,6 +480,7 @@ fn write_csv(
         &engine2_wins.to_string(),
         &draws.to_string(),
         &format!("{:.4}", win_rate),
+        start_fen,
     ])?;
 
     wtr.flush()?;
@@ -611,9 +681,201 @@ async fn main() -> Result<()> {
         Commands::PgnMatch(args) => {
             run_pgn_match(args).await?;
         }
+        Commands::ExtractPositions(args) => {
+            run_extract_positions(&args)?;
+        }
     }
 
     Ok(())
+}
+
+fn run_extract_positions(args: &ExtractPositionsArgs) -> Result<()> {
+    use std::io::BufWriter;
+    use std::path::Path;
+
+    let pgn_content = std::fs::read_to_string(&args.pgn)
+        .map_err(|e| anyhow::anyhow!("cannot read PGN file '{}': {}", args.pgn, e))?;
+
+    let mut sf = StockfishProcess::new(Path::new(&args.stockfish))
+        .map_err(|e| anyhow::anyhow!("failed to start Stockfish '{}': {}", args.stockfish, e))?;
+
+    let out_file = std::fs::File::create(&args.output)
+        .map_err(|e| anyhow::anyhow!("cannot create output file '{}': {}", args.output, e))?;
+    let mut writer = BufWriter::new(out_file);
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut game_idx = 0usize;
+    let mut evaluated = 0usize;
+    let mut kept = 0usize;
+
+    loop {
+        if kept >= args.max_positions {
+            break;
+        }
+
+        let moves = match pgn::parse_nth(&pgn_content, game_idx) {
+            Ok(m) => m,
+            Err(_) => break, // out-of-bounds: no more games
+        };
+
+        game_idx += 1;
+
+        let end_ply = args.max_ply.min(moves.len());
+        if args.min_ply > end_ply {
+            if game_idx % 100 == 0 {
+                eprintln!("Games: {} | Evaluated: {} | Kept: {}", game_idx, evaluated, kept);
+            }
+            continue;
+        }
+
+        for ply in args.min_ply..=end_ply {
+            if kept >= args.max_positions {
+                break;
+            }
+
+            let board = match pgn::replay(&moves, ply) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+
+            let fen = format!("{}", board);
+
+            if seen.contains(&fen) {
+                continue;
+            }
+
+            let score = match analyze_fen(&mut sf, &fen, args.depth) {
+                Ok(s) => s,
+                Err(e) => {
+                    anyhow::bail!("Stockfish communication failure: {}", e);
+                }
+            };
+
+            evaluated += 1;
+
+            match score {
+                None => {} // mate score — skip
+                Some(cp) if cp.unsigned_abs() <= args.threshold => {
+                    seen.insert(fen.clone());
+                    writeln!(writer, "{}", fen)?;
+                    kept += 1;
+                }
+                _ => {}
+            }
+        }
+
+        if game_idx % 100 == 0 {
+            eprintln!("Games: {} | Evaluated: {} | Kept: {}", game_idx, evaluated, kept);
+        }
+    }
+
+    writer.flush()?;
+    Ok(())
+}
+
+/// Play `num_games` games from `start_fen` (or initial position if `None`) and return
+/// (engine1_wins, engine2_wins, draws). `game_offset` is added to displayed game numbers.
+async fn play_games(
+    engine1: &str,
+    engine2: &str,
+    time: u64,
+    inc: u64,
+    timeout: u64,
+    verbose: bool,
+    num_games: usize,
+    start_fen: Option<&str>,
+    game_offset: usize,
+) -> Result<(usize, usize, usize)> {
+    let mut engine1_wins = 0usize;
+    let mut engine2_wins = 0usize;
+    let mut draws = 0usize;
+
+    for game_idx in 0..num_games {
+        let game_number = game_offset + game_idx + 1;
+        let engine1_is_white = game_idx % 2 == 0;
+
+        let (white_path, black_path) = if engine1_is_white {
+            (engine1, engine2)
+        } else {
+            (engine2, engine1)
+        };
+
+        if verbose {
+            println!(
+                "=== Game {}: {} (white) vs {} (black) ===",
+                game_number, white_path, black_path
+            );
+        }
+
+        let white_engine = Box::new(
+            UciEngine::new(white_path, timeout)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to start white engine: {}", e))?,
+        );
+        let black_engine = Box::new(
+            UciEngine::new(black_path, timeout)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to start black engine: {}", e))?,
+        );
+
+        let game = match start_fen {
+            Some(fen) => Game::from_fen(fen)?,
+            None => Game::new(),
+        };
+
+        let clock = Clock::new(time, inc);
+        let observer = Box::new(PrintObserver {
+            game_number,
+            verbose,
+        });
+
+        let mut chess_match = Match::new(white_engine, black_engine)
+            .with_game(game)
+            .with_clock(clock)
+            .with_observer(observer);
+
+        let result = chess_match.run().await;
+
+        match &result {
+            GameResult::WhiteWins => {
+                if engine1_is_white {
+                    engine1_wins += 1;
+                } else {
+                    engine2_wins += 1;
+                }
+            }
+            GameResult::BlackWins => {
+                if engine1_is_white {
+                    engine2_wins += 1;
+                } else {
+                    engine1_wins += 1;
+                }
+            }
+            GameResult::Draw(_) => draws += 1,
+            GameResult::Ongoing => {
+                eprintln!(
+                    "Warning: game {} ended in unexpected Ongoing state",
+                    game_number
+                );
+                draws += 1;
+            }
+        }
+
+        if !verbose {
+            println!(
+                "Game {}: {} | Score: {}-{}-{}",
+                game_number,
+                format_result(&result),
+                engine1_wins,
+                engine2_wins,
+                draws
+            );
+        } else {
+            println!();
+        }
+    }
+
+    Ok((engine1_wins, engine2_wins, draws))
 }
 
 async fn run_match(args: MatchArgs) -> Result<()> {
@@ -650,117 +912,130 @@ async fn run_match(args: MatchArgs) -> Result<()> {
     println!("Engine 2 UCI name: {}", engine2_name);
     println!();
 
-    // Score: [engine1_wins, engine2_wins, draws]
-    let mut engine1_wins = 0usize;
-    let mut engine2_wins = 0usize;
-    let mut draws = 0usize;
+    if let Some(ref positions_path) = args.positions_file {
+        // --- Balanced positions mode ---
+        let content = std::fs::read_to_string(positions_path)
+            .map_err(|e| anyhow::anyhow!("cannot read positions file '{}': {}", positions_path, e))?;
 
-    for game_idx in 0..args.games {
-        let game_number = game_idx + 1;
+        let mut fens: Vec<String> = content
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
 
-        // Alternate colors each game: even games engine1=white, odd games engine1=black
-        let engine1_is_white = game_idx % 2 == 0;
-
-        let (white_path, black_path) = if engine1_is_white {
-            (args.engine1.as_str(), args.engine2.as_str())
-        } else {
-            (args.engine2.as_str(), args.engine1.as_str())
-        };
-
-        if args.verbose {
-            println!(
-                "=== Game {}/{}: {} (white) vs {} (black) ===",
-                game_number, args.games, white_path, black_path
-            );
+        if fens.is_empty() {
+            anyhow::bail!("positions file '{}' is empty", positions_path);
         }
 
-        let white_engine = Box::new(
-            UciEngine::new(white_path, args.timeout)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to start white engine: {}", e))?,
+        let seed = args.seed.unwrap_or_else(|| rand::random::<u64>());
+        eprintln!("Seed: {}", seed);
+
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+        fens.shuffle(&mut rng);
+        fens.truncate(args.num_positions);
+
+        let total_games = fens.len() * args.games;
+        println!(
+            "Positions mode: {} position(s) × {} game(s) = {} total game(s)",
+            fens.len(),
+            args.games,
+            total_games
         );
-        let black_engine = Box::new(
-            UciEngine::new(black_path, args.timeout)
-                .await
-                .map_err(|e| anyhow::anyhow!("Failed to start black engine: {}", e))?,
-        );
+        println!();
 
-        let game = match &args.start_fen {
-            Some(fen) => Game::from_fen(fen)?,
-            None => Game::new(),
-        };
+        let mut total_e1_wins = 0usize;
+        let mut total_e2_wins = 0usize;
+        let mut total_draws = 0usize;
+        let mut game_offset = 0usize;
 
-        let clock = Clock::new(args.time, args.inc);
-        let observer = Box::new(PrintObserver {
-            game_number,
-            verbose: args.verbose,
-        });
+        for (pos_idx, fen) in fens.iter().enumerate() {
+            println!("--- Position {}/{}: {} ---", pos_idx + 1, fens.len(), fen);
 
-        let mut chess_match = Match::new(white_engine, black_engine)
-            .with_game(game)
-            .with_clock(clock)
-            .with_observer(observer);
-
-        let result = chess_match.run().await;
-
-        // Record score from engine1's perspective
-        match &result {
-            GameResult::WhiteWins => {
-                if engine1_is_white {
-                    engine1_wins += 1;
-                } else {
-                    engine2_wins += 1;
-                }
-            }
-            GameResult::BlackWins => {
-                if engine1_is_white {
-                    engine2_wins += 1;
-                } else {
-                    engine1_wins += 1;
-                }
-            }
-            GameResult::Draw(_) => draws += 1,
-            GameResult::Ongoing => {
-                eprintln!(
-                    "Warning: game {} ended in unexpected Ongoing state",
-                    game_number
-                );
-                draws += 1;
-            }
-        }
-
-        if !args.verbose {
-            println!(
-                "Game {}/{}: {} | Score: {}-{}-{}",
-                game_number,
+            let (e1w, e2w, d) = play_games(
+                &args.engine1,
+                &args.engine2,
+                args.time,
+                args.inc,
+                args.timeout,
+                args.verbose,
                 args.games,
-                format_result(&result),
-                engine1_wins,
-                engine2_wins,
-                draws
+                Some(fen.as_str()),
+                game_offset,
+            )
+            .await?;
+
+            total_e1_wins += e1w;
+            total_e2_wins += e2w;
+            total_draws += d;
+            game_offset += args.games;
+
+            // Write one CSV row per FEN position
+            if let Some(ref output_path) = args.output {
+                write_csv(
+                    output_path,
+                    &engine1_name,
+                    &engine2_name,
+                    args.games,
+                    e1w,
+                    e2w,
+                    d,
+                    fen,
+                )?;
+            }
+
+            println!(
+                "Position {}/{} result: {}-{}-{}",
+                pos_idx + 1,
+                fens.len(),
+                e1w,
+                e2w,
+                d
             );
-        } else {
             println!();
         }
-    }
 
-    println!("=== Match Complete ===");
-    println!("{}: {} win(s)", args.engine1, engine1_wins);
-    println!("{}: {} win(s)", args.engine2, engine2_wins);
-    println!("Draws: {}", draws);
+        println!("=== Match Complete ===");
+        println!("{}: {} win(s)", args.engine1, total_e1_wins);
+        println!("{}: {} win(s)", args.engine2, total_e2_wins);
+        println!("Draws: {}", total_draws);
 
-    // Write CSV output if requested.
-    if let Some(ref output_path) = args.output {
-        write_csv(
-            output_path,
-            &engine1_name,
-            &engine2_name,
+        if args.output.is_some() {
+            println!("Match results appended to: {}", args.output.as_ref().unwrap());
+        }
+    } else {
+        // --- Standard mode (single starting position or initial position) ---
+        let (engine1_wins, engine2_wins, draws) = play_games(
+            &args.engine1,
+            &args.engine2,
+            args.time,
+            args.inc,
+            args.timeout,
+            args.verbose,
             args.games,
-            engine1_wins,
-            engine2_wins,
-            draws,
-        )?;
-        println!("Match result appended to: {}", output_path);
+            args.start_fen.as_deref(),
+            0,
+        )
+        .await?;
+
+        println!("=== Match Complete ===");
+        println!("{}: {} win(s)", args.engine1, engine1_wins);
+        println!("{}: {} win(s)", args.engine2, engine2_wins);
+        println!("Draws: {}", draws);
+
+        if let Some(ref output_path) = args.output {
+            let start_fen = args.start_fen.as_deref().unwrap_or("startpos");
+            write_csv(
+                output_path,
+                &engine1_name,
+                &engine2_name,
+                args.games,
+                engine1_wins,
+                engine2_wins,
+                draws,
+                start_fen,
+            )?;
+            println!("Match result appended to: {}", output_path);
+        }
     }
 
     Ok(())
@@ -803,6 +1078,27 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
     println!("Engine 2 UCI name: {}", engine2_name);
     println!();
 
+    // Load balanced positions if provided
+    let fens: Vec<String> = if let Some(ref positions_path) = args.positions_file {
+        let content = std::fs::read_to_string(positions_path)
+            .map_err(|e| anyhow::anyhow!("cannot read positions file '{}': {}", positions_path, e))?;
+        let mut fens: Vec<String> = content
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        let seed = args.seed.unwrap_or_else(|| rand::random::<u64>());
+        eprintln!("Seed: {}", seed);
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+        fens.shuffle(&mut rng);
+        fens.truncate(args.num_positions);
+        println!("Positions mode: {} position(s), cycling through SPRT games", fens.len());
+        println!();
+        fens
+    } else {
+        Vec::new()
+    };
+
     let mut wins = 0usize;
     let mut draws = 0usize;
     let mut losses = 0usize;
@@ -837,7 +1133,19 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
             verbose: false,
         });
 
+        let start_fen = if !fens.is_empty() {
+            Some(fens[game_idx % fens.len()].as_str())
+        } else {
+            None
+        };
+
+        let game = match start_fen {
+            Some(fen) => Game::from_fen(fen)?,
+            None => Game::new(),
+        };
+
         let mut chess_match = Match::new(white_engine, black_engine)
+            .with_game(game)
             .with_clock(clock)
             .with_observer(observer);
 
@@ -962,6 +1270,9 @@ async fn run_pgn_match(args: PgnMatchArgs) -> Result<()> {
         timeout: args.timeout,
         output: args.csv,
         verbose: false,
+        positions_file: None,
+        num_positions: 10,
+        seed: None,
     };
 
     run_match(match_args).await
