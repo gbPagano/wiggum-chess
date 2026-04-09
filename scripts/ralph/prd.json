@@ -29,8 +29,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented Color, PieceKind, Piece, CastlingRights, Square, and Board types in lib.rs. Board uses [[Option<Piece>; 8]; 8] matrix. No bitboards."
     },
     {
       "id": "US-003",

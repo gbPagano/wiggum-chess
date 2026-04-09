@@ -1,6 +1,7 @@
 ## Codebase Patterns
 - New workspace crates: use `cargo new --lib <name>` from workspace root — it auto-adds to Cargo.toml members.
 - Build check: `cargo build --workspace` covers all crates including newly added ones.
+- chesslib-simple board model: `squares[rank][file]`, rank 0 = white's back rank. `Square { rank, file }` both 0-based. All types in `src/lib.rs`.
 
 # Ralph Progress Log
 Started: Thu Apr  9 13:19:42 PDT 2026
@@ -14,4 +15,15 @@ Started: Thu Apr  9 13:19:42 PDT 2026
   - `cargo new --lib` from the workspace root auto-adds the crate to workspace members
   - The new crate is named `chesslib-simple` to distinguish it from `chesslib`
   - `cargo build --workspace` confirms all crates compile together
+---
+
+## 2026-04-09 - US-002
+- Implemented `Color`, `PieceKind`, `Piece`, `CastlingRights`, `Square`, and `Board` types in `chesslib-simple/src/lib.rs`
+- Board uses `[[Option<Piece>; 8]; 8]` matrix — no bitboards
+- `en_passant_file: Option<u8>` tracks file for potential en passant capture
+- Files changed: `chesslib-simple/src/lib.rs`
+- **Learnings for future iterations:**
+  - `squares[rank][file]`, rank 0 = white's back rank (rank 1), rank 7 = black's back rank (rank 8)
+  - All core types live in `src/lib.rs` — future stories should add modules or extend this file
+  - `Board::starting_position()` sets up the full start state with `CastlingRights::all()`
 ---
