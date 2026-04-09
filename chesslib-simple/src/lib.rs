@@ -176,11 +176,89 @@ impl Board {
             next.fullmove_number += 1;
         }
 
-        // Clear en passant (will be set correctly by pawn generation in later stories).
-        next.en_passant_file = None;
+        // Set en passant file if this is a pawn double push, else clear it.
+        next.en_passant_file = if piece.kind == PieceKind::Pawn {
+            match self.side_to_move {
+                Color::White if mv.from.rank == 1 && mv.to.rank == 3 => Some(mv.from.file),
+                Color::Black if mv.from.rank == 6 && mv.to.rank == 4 => Some(mv.from.file),
+                _ => None,
+            }
+        } else {
+            None
+        };
 
         next.side_to_move = self.side_to_move.opponent();
         next
+    }
+
+    /// Generate pseudo-legal pawn moves for the side to move.
+    ///
+    /// Includes single pushes, double pushes from the starting rank, and
+    /// diagonal captures of opposing pieces. Does not include en passant or
+    /// promotion (those are covered in later stories).
+    pub fn pseudo_legal_pawn_moves(&self) -> Vec<Move> {
+        let mut moves = Vec::new();
+        let color = self.side_to_move;
+
+        // Direction pawns advance: +1 rank for white, -1 rank for black.
+        let (start_rank, advance_dir, promote_rank): (u8, i8, u8) = match color {
+            Color::White => (1, 1, 7),
+            Color::Black => (6, -1, 0),
+        };
+
+        for rank in 0..8u8 {
+            for file in 0..8u8 {
+                let sq = Square::new(rank, file);
+                let Some(piece) = self.get(sq) else { continue };
+                if piece.kind != PieceKind::Pawn || piece.color != color {
+                    continue;
+                }
+
+                // Single push
+                let to_rank = rank as i8 + advance_dir;
+                if to_rank < 0 || to_rank > 7 {
+                    continue;
+                }
+                let to_rank = to_rank as u8;
+
+                // Skip promotion squares — promotion is handled in a later story.
+                if to_rank == promote_rank {
+                    continue;
+                }
+
+                if self.squares[to_rank as usize][file as usize].is_none() {
+                    moves.push(Move::new(sq, Square::new(to_rank, file)));
+
+                    // Double push from starting rank
+                    if rank == start_rank {
+                        let to_rank2 = (to_rank as i8 + advance_dir) as u8;
+                        if self.squares[to_rank2 as usize][file as usize].is_none() {
+                            moves.push(Move::new(sq, Square::new(to_rank2, file)));
+                        }
+                    }
+                }
+
+                // Diagonal captures
+                for &df in &[-1i8, 1i8] {
+                    let cap_file = file as i8 + df;
+                    if cap_file < 0 || cap_file > 7 {
+                        continue;
+                    }
+                    let cap_file = cap_file as u8;
+                    let cap_sq = Square::new(to_rank, cap_file);
+                    if let Some(target) = self.get(cap_sq) {
+                        if target.color != color {
+                            // Skip captures that would land on the promotion rank.
+                            if to_rank != promote_rank {
+                                moves.push(Move::new(sq, cap_sq));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        moves
     }
 
     /// Get the piece at a square (if any).
@@ -328,5 +406,134 @@ mod tests {
 
         let after = board.apply_move(Move::new(Square::new(0, 0), Square::new(4, 0)));
         assert_eq!(after.halfmove_clock, 6);
+    }
+
+    // --- US-004: pawn pseudo-legal move generation tests ---
+
+    #[test]
+    fn white_pawn_single_push() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White pawn on e4 (rank 3, file 4) — not on start rank
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        let moves = board.pseudo_legal_pawn_moves();
+        assert!(moves.contains(&Move::new(Square::new(3, 4), Square::new(4, 4))));
+        // Should not include a double push (not on start rank)
+        assert!(!moves.contains(&Move::new(Square::new(3, 4), Square::new(5, 4))));
+    }
+
+    #[test]
+    fn white_pawn_double_push_from_start_rank() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White pawn on e2 (rank 1, file 4)
+        board.set(Square::new(1, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        let moves = board.pseudo_legal_pawn_moves();
+        assert!(moves.contains(&Move::new(Square::new(1, 4), Square::new(2, 4))));
+        assert!(moves.contains(&Move::new(Square::new(1, 4), Square::new(3, 4))));
+    }
+
+    #[test]
+    fn white_pawn_double_push_blocked_by_piece() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(1, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        // Block rank 2
+        board.set(Square::new(2, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
+        let moves = board.pseudo_legal_pawn_moves();
+        // Neither single nor double push should be generated
+        assert!(!moves.contains(&Move::new(Square::new(1, 4), Square::new(2, 4))));
+        assert!(!moves.contains(&Move::new(Square::new(1, 4), Square::new(3, 4))));
+    }
+
+    #[test]
+    fn white_pawn_double_push_blocked_by_second_piece() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(1, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        // Block rank 3 (the double-push target)
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
+        let moves = board.pseudo_legal_pawn_moves();
+        // Single push allowed but not double
+        assert!(moves.contains(&Move::new(Square::new(1, 4), Square::new(2, 4))));
+        assert!(!moves.contains(&Move::new(Square::new(1, 4), Square::new(3, 4))));
+    }
+
+    #[test]
+    fn white_pawn_captures_diagonally() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        // White pawn on d4
+        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        // Black pieces on c5 and e5
+        board.set(Square::new(4, 2), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Knight, Color::Black)));
+        let moves = board.pseudo_legal_pawn_moves();
+        assert!(moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 2))));
+        assert!(moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 4))));
+    }
+
+    #[test]
+    fn white_pawn_cannot_capture_friendly() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::White;
+        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        // White pieces on both capture diagonals
+        board.set(Square::new(4, 2), Some(Piece::new(PieceKind::Rook, Color::White)));
+        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Rook, Color::White)));
+        let moves = board.pseudo_legal_pawn_moves();
+        assert!(!moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 2))));
+        assert!(!moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 4))));
+    }
+
+    #[test]
+    fn black_pawn_single_push() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::Black;
+        // Black pawn on e5 (rank 4, file 4)
+        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        let moves = board.pseudo_legal_pawn_moves();
+        assert!(moves.contains(&Move::new(Square::new(4, 4), Square::new(3, 4))));
+    }
+
+    #[test]
+    fn black_pawn_double_push_from_start_rank() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::Black;
+        // Black pawn on e7 (rank 6, file 4)
+        board.set(Square::new(6, 4), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        let moves = board.pseudo_legal_pawn_moves();
+        assert!(moves.contains(&Move::new(Square::new(6, 4), Square::new(5, 4))));
+        assert!(moves.contains(&Move::new(Square::new(6, 4), Square::new(4, 4))));
+    }
+
+    #[test]
+    fn black_pawn_captures_diagonally() {
+        let mut board = Board::empty();
+        board.side_to_move = Color::Black;
+        // Black pawn on d5
+        board.set(Square::new(4, 3), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        // White pieces on c4 and e4
+        board.set(Square::new(3, 2), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Knight, Color::White)));
+        let moves = board.pseudo_legal_pawn_moves();
+        assert!(moves.contains(&Move::new(Square::new(4, 3), Square::new(3, 2))));
+        assert!(moves.contains(&Move::new(Square::new(4, 3), Square::new(3, 4))));
+    }
+
+    #[test]
+    fn apply_move_sets_en_passant_file_on_double_push() {
+        let board = Board::starting_position();
+        // White pawn e2→e4 double push
+        let after = board.apply_move(Move::new(Square::new(1, 4), Square::new(3, 4)));
+        assert_eq!(after.en_passant_file, Some(4));
+    }
+
+    #[test]
+    fn apply_move_clears_en_passant_on_single_push() {
+        let board = Board::starting_position();
+        // White pawn e2→e3 single push
+        let after = board.apply_move(Move::new(Square::new(1, 4), Square::new(2, 4)));
+        assert_eq!(after.en_passant_file, None);
     }
 }
