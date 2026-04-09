@@ -1,280 +1,74 @@
 ## Ralph Progress
 
-## 2026-04-08 - US-015
-- Deleted `scripts/evolution-loop.sh` (2344 lines removed).
-- Updated three lines in root `CLAUDE.md` that referenced `scripts/evolution-loop.sh`: replaced with `./target/debug/evolution-loop` / `./target/release/evolution-loop` or generic `evolution-loop`.
-- Verified `cargo build --workspace` still compiles (Finished dev profile in 5.42s).
-- All 162 workspace tests still pass.
-- `.claude/skills/*/SKILL.md` and `.claude/evolution/CLAUDE.md` reference updates were blocked by permission restrictions on `.claude/`; those files still contain the old path but do not affect runtime behavior.
-- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh` (deleted), `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Files under `.claude/` require explicit user permission grants and cannot be edited via the standard Edit/Bash tools in this environment — plan for those edits to require manual follow-up.
----
-
-## 2026-04-08 - US-014
-- Implemented structured logging with chrono-based timestamps and verbose-mode prefix:
-  - Added `static VERBOSE_MODE: AtomicBool` global; set in `run_start`/`run_resume` before the iteration loop.
-  - Implemented `EvolutionFmt` custom `FormatEvent` that writes `%Y-%m-%dT%H:%M:%S%.3fZ` timestamp, log level, target, and optionally `[evolution-loop]` prefix when `VERBOSE_MODE` is set.
-  - Added `use tracing_subscriber::fmt::FormatFields;` import required to call `ctx.format_fields()` in the custom formatter.
-  - Updated tracing init to use `.event_format(EvolutionFmt)` instead of `.with_target(true)`.
-- Added DEBUG logging for git commands in `worktree.rs`: `debug!(cmd="git", args=..., cwd=..., ...)` in `run_git_command`.
-- Added DEBUG logging for cargo commands in `correctness.rs`: `debug!(cmd=program, args=..., timeout_secs=..., ...)` in `run_with_timeout`.
-- All 31 evolution-loop tests pass.
-- Files changed: `evolution-loop/src/main.rs`, `evolution-loop/src/worktree.rs`, `evolution-loop/src/correctness.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - `tracing_subscriber::fmt::FormatFields` must be imported explicitly with `use` for `ctx.format_fields()` to resolve even though `N: FormatFields` is a where-clause bound.
-  - A `static AtomicBool` set early in the subcommand handler is the cleanest way to propagate a CLI flag to a custom `tracing_subscriber::fmt::FormatEvent` without needing to reinitialize the subscriber after arg parsing.
----
-
-## 2026-04-08 - US-013
-- Replaced the stub `run_resume` with a full implementation:
-  - Validates `active_baseline_path` / `active_baseline_binary` from session.env before proceeding.
-  - Finds the latest iteration number from `iterations/` directory.
-  - Infers the resume phase from `iteration.json.state` via `phase_from_state()` when `--from` is not given (initialized/proposing→propose, proposed/implementing→implement, implemented/validating→validate, benchmarking→benchmark, benchmarked/deciding→decide).
-  - Validates candidate workspace (from `iteration.json.candidate.workspace`) and baseline artifacts still exist; if not, marks iteration failed and writes summary.
-  - Executes phases from the resume phase onward via new `run_iteration_from_phase()` function.
-  - Handles outcome identically to the main loop (promotion, idea marking, worktree cleanup).
-  - Does NOT start a new iteration after the resumed one completes.
-- Added `iteration_paths_from_dir()` helper to reconstruct `IterationPaths` from an existing directory without creating any files.
-- All 31 evolution-loop tests pass.
-- Files changed: `evolution-loop/src/main.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - `run_iteration_from_phase` replicates phase execution logic from `run_iteration`; if these diverge further, consider extracting per-phase functions.
-  - `serde_json::to_value(&iter_state.state).as_str()` is a clean way to get the camelCase string representation of a serde enum without adding a custom Display impl.
----
-
-## 2026-04-08 - US-012
-- Completed the main iteration loop in `evolution-loop/src/main.rs` with all required state verification, stopping conditions, and binary copy step.
-- Added `record_phase_failure` function: writes to iteration.json via serde_json::Value to set state/decision/benchmark fields, and writes benchmark.md and decision.md with phase-specific failure messages.
-- Added `check_iteration_state_is` to read the current state string from iteration.json after each Claude phase.
-- Added `iteration_has_no_hypothesis` to detect the `no_hypothesis` stop signal in raw JSON (checks state, hypothesis.status, hypothesis.state, hypothesis.stopSignal).
-- Added `copy_candidate_binary` to copy `target/debug/chess-engine` → `target/debug/wiggum-engine` after the correctness gate.
-- Fixed candidate versioning timing: was applied before propose, now applied after propose using actual `proposal_source` from iteration.json.
-- Added `stop_session: Option<(String, String)>` to `IterationResult` so `no_hypothesis` and other session-stopping conditions propagate to `run_loop`.
-- All 31 evolution-loop tests pass; 162 total workspace tests pass.
-- Files changed: `evolution-loop/src/main.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Use `serde_json::Value` for mutation of iteration.json in `record_phase_failure` to avoid struct limitations when the propose/implement skills may add non-standard fields.
-  - The candidate binary copy step (`chess-engine` → `wiggum-engine`) belongs after the correctness gate, not before it, because the gate's `cargo build --workspace` is what produces the binary.
-  - Candidate versioning must be orchestration-owned but timing-sensitive: compute the real version from `proposal_source` after propose succeeds, then apply manifest versions before implement runs.
----
-
-## 2026-04-08 - US-011
-- `evolution-loop/src/artifacts.rs` already had `create_iteration_artifacts` fully wired into `main.rs`; added 4 unit tests to verify: directory creation, initialized-state JSON for successful setup, failed-state JSON (state=failed, correctness.status=skipped, decision.outcome=failed), and phase log paths recorded in iteration.json.
-- All 31 evolution-loop tests pass.
-- Files changed: `evolution-loop/src/artifacts.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - US-011 had no "Tests pass" requirement in its acceptance criteria (unlike most prior stories), but tests were added to verify the failed-setup branch populates all expected fields.
-  - The `tempfile` dev-dependency was already present, so TempDir-based tests were straightforward to add.
----
-
-## 2026-04-08 - US-010
-- Extended `evolution-loop/src/summary.rs` per-iteration artifact table to include all required columns: implementation.md, correctness/results.md, benchmark.md, and stockfish-comparison/results.md (previously only iteration.json, hypothesis.md, and decision.md were linked).
-- Both `write_placeholder_summary` and `write_session_summary` already existed and were wired into main.rs; only the table columns needed updating.
-- All 27 evolution-loop tests pass; full workspace test suite passes.
-- Files changed: `evolution-loop/src/summary.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - The summary writer was already scaffolded in prior iterations; this story only required completing the per-iteration artifact link columns.
-  - Named format args (`{p = iter_dir.display()}`) keep format strings readable when the same value repeats many times.
----
-
-## 2026-04-08 - US-009
-- Verified `evolution-loop/src/promotion.rs` implementation: `persist_promoted_artifact`, `promote_candidate`, and `baseline_version_path` all implemented and tested.
-- All 4 promotion tests pass; full workspace test suite (27 tests) passes.
-- PRD updated to mark US-009 as passing.
-- Files changed: `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Promotion state must be written to both `iteration.json.decision.promotion` and `SessionMetadata` active/accepted baseline fields atomically before removing the candidate worktree.
-  - `persist_promoted_artifact` creates the destination directory if needed, so callers don't need to pre-create `chess-engine/versions/<tag>/`.
----
-
-## 2026-04-07 22:43:01 PDT - US-008
-- Hardened `evolution-loop/src/ideas.rs` so checklist parsing now accepts indented `- [ ]` entries with flexible spacing, marks the first trimmed matching unchecked idea, and resolves relative/absolute ideas paths by pending unchecked entries instead of silently treating missing work as empty.
-- Added focused unit coverage for marking behavior, relative path resolution, zero-pending files, and session metadata refresh when the last checklist item is consumed.
-- Files changed: `evolution-loop/src/ideas.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Treat Markdown checklist parsing as whitespace-tolerant because operator-maintained idea files may be indented or aligned manually.
-  - Refresh `ideas_file_pending_count` after both successful marks and `NotFound` outcomes so session metadata reflects the actual checklist state even when the selected idea text drifts.
----
-
-## 2026-04-07 22:15:57 PDT - US-005
-- Updated `evolution-loop/src/worktree.rs` so git worktree helpers consistently capture command output, surface non-zero git failures with stderr/stdout detail, create iteration branches explicitly, and treat `git diff --quiet` exit code `1` as "changes present" instead of a hard error.
-- Wired `evolution-loop/src/main.rs` to create the candidate branch immediately after `git worktree add`, and to clean up the new worktree if branch creation fails before artifact initialization proceeds.
-- Files changed: `evolution-loop/src/main.rs`, `evolution-loop/src/worktree.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Candidate worktree setup is a two-step operation in this codebase: detached worktree creation from the repo root, then branch creation inside the candidate workspace.
-  - For git status-style checks such as `git diff --quiet`, exit code `1` means "changes found" and should not be treated as command failure.
----
-
-## 2026-04-07 22:35:56 PDT - US-007
-- Reworked `evolution-loop/src/phase.rs` so Claude phase execution now builds the full shell-script guidance prompt, invokes `$CLAUDE_BIN --dangerously-skip-permissions --add-dir <session_dir> --add-dir <repo_root> --print` from the candidate workspace, enforces per-phase timeouts, and writes logs to the stable logical phase filenames (`propose.log`, `implement.log`, `benchmark.log`, `decide.log`).
-- Added focused unit tests covering prompt content, successful log capture, non-zero exit handling, and timeout behavior via temporary fake Claude binaries.
-- Files changed: `CLAUDE.md`, `evolution-loop/src/phase.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Keep phase log filenames keyed by the logical phase name even when the invoked skill name includes the `evolution-` prefix, otherwise later artifact consumers look in the wrong place.
-  - Stream raw stdout/stderr bytes into the phase log from background reader threads so quiet and verbose mode capture the same Claude output without line-buffering artifacts.
----
-
-## 2026-04-07 22:08:00 PDT - US-004
-
-- Verified and completed `evolution-loop/src/versioning.rs` for version tag parsing, proposal-source-based candidate bumps, Cargo semver conversion, and package-version-only manifest syncing across the three workspace crates.
-- Fixed a compile blocker in `evolution-loop/src/state.rs` by deriving `PartialEq, Eq` for `CheckResult`, allowing the versioning tests and crate build to pass.
-- Files changed: `evolution-loop/src/state.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Shared state structs used inside result enums may need `PartialEq`/`Eq` derives even when the story itself targets a different module, because compileability of the crate gates story completion.
-  - The versioning helper should keep manifest edits scoped to the `[package]` version line only so dependency version requirements remain untouched.
----
-
-
-## 2026-04-07 21:55:36 PDT - US-004
-- Added `evolution-loop/src/versioning.rs` helpers for parsing `vMAJOR.MINOR` tags, computing proposal-source-based candidate tags, converting them to Cargo semver, and syncing package versions across `chess-engine`, `chess-runner`, and `chesslib`.
-- Added focused unit coverage for valid/invalid tag parsing, source-based candidate bumps, semver conversion, manifest updates across all three crates, and missing-version failure handling.
-- Files changed: `CLAUDE.md`, `evolution-loop/src/versioning.rs`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Candidate manifest version sync should replace only the package `version = "..."` line in each Cargo manifest so dependency declarations are not rewritten by accident.
-  - Versioning tests are easiest to keep isolated by creating temporary workspace manifests and asserting the exact rewritten semver in each crate.
----
-
-## 2026-04-07 - US-001
-- Created `evolution-loop/` crate with `Cargo.toml` (name = "evolution-loop", binary target named `evolution-loop`)
-- Added `evolution-loop` to `members` array in root `Cargo.toml`
-- Declared all required dependencies: serde (derive), serde_json, clap (derive), anyhow, chrono (serde), tracing, tracing-subscriber (env-filter), ctrlc
-- Created `evolution-loop/src/main.rs` with `fn main()` that prints "evolution-loop"
-- Files changed: `evolution-loop/Cargo.toml`, `evolution-loop/src/main.rs`, `Cargo.toml`
-- **Learnings for future iterations:**
-  - Cargo is not available in the devcontainer environment; structure must be verified by code review rather than build execution.
-  - New workspace crates must be added to both the `members` array in root Cargo.toml and have their own Cargo.toml with the correct package name and binary target.
----
-
 ## Codebase Patterns
-- For evolution-loop phase execution, keep terminal output concise and write raw skill stdout/stderr to per-iteration log files under `iterations/<N>/phase-logs/`; record those paths in `iteration.json` so later phases and operators can inspect failures without banner noise.
-- Keep the loop's operator-facing phase list in one ordered sequence and derive both the full plan and remaining-phase output from it so progress text stays synchronized across iterations.
-- Optional propose inputs should be normalized by the loop before invoking the skill: record the resolved source in both `session.env` and `iteration.json`, but collapse empty Markdown checklist files back to the same self-propose path as no input.
-- When a proposal comes from an operator checklist, store the exact selected idea text plus `ideas.proposalSource` in `iteration.json`, then have the orchestration layer mark that checklist entry as `[x]` only after the iteration reaches a tested terminal outcome.
-- Candidate versioning belongs to the orchestration layer: once `ideas.proposalSource` is known, compute the tag there, sync all workspace Cargo versions, and persist the generated `target/debug/wiggum-engine` path into both `session.env` and `iteration.json` before benchmark/decision phases consume it.
-- Baseline resolution for the evolution loop is also orchestration-owned: expose `accepted_baseline_path` / `accepted_baseline_binary` in `session.env` and `baselinePath` / `baselineBinary` in `iteration.json`, while keeping any git ref only as internal setup state for creating candidate worktrees.
-- Candidate worktree setup is a two-step git contract: create the detached worktree from the repo root, then create the iteration branch inside that workspace; if branch creation fails, remove the worktree immediately so later runs do not inherit an orphaned checkout.
-- Promotion persistence should copy the built candidate binary into `chess-engine/versions/<tag>/wiggum-engine` and then update both `iteration.json.decision.promotion` and `session.env` from that stored artifact path, so future iterations never depend on the candidate worktree or target layout.
-- Treat `session.env` `active_baseline_*` fields as the stable operator-facing alias for the current promoted baseline, and keep the final session summary's promotion history derived from per-iteration decision metadata so accepted baseline changes are auditable in order.
-- Stockfish follow-up for inconclusive direct benchmarks should use pre-seeded `iteration.json.stockfishComparison` metadata plus `stockfish-comparison/results.md`, including whether the stored baseline report exists, whether the follow-up changed the recommendation, and any explicit limitation.
-- Positive-signal promotion after inconclusive evidence is decision-owned and must be explicit: seed `iteration.json.stockfishComparison.positiveSignal`, and only let a decision promote with `benchmark.sufficientForPromotion = false` when both the structured evidence and `decision.md` repeat the exact positive-signal rationale.
-- Quiet-vs-verbose phase execution should branch only at the shell wrapper: keep default runs redirecting skill output to per-phase logs, and implement `--verbose` by teeing the exact same phase stream so logging artifacts and iteration semantics stay identical.
-- `evolution-loop/src/phase.rs` should keep invoking the `evolution-*` skills while writing logs to the stable logical phase filenames (`propose.log`, `implement.log`, `benchmark.log`, `decide.log`); stream raw stdout/stderr bytes into those logs so captured Claude output matches quiet and verbose runs.
-- The correctness gate contract is build-first, test-second: run `cargo build --workspace`, then `cargo test --workspace -- --skip gen_files::magics::name`, stop on the first failure or timeout, write the per-check outcome to `correctness/results.md`, and make `iteration.json.correctness.benchmarkEligible` true only when both checks pass.
-- Checklist idea parsing should accept leading indentation and extra spaces between `-` and `[ ]`, and `update_session_after_mark` should refresh `ideas_file_pending_count` after both successful marks and `NotFound` outcomes so session metadata stays aligned with the file.
+- PgnError: implement `std::error::Error`; anyhow's blanket `From<E>` covers it — do NOT add an explicit `impl From<PgnError> for anyhow::Error`
+- SAN disambiguation: strip piece letter + 'x', take last 2 chars as dest, preceding chars are disambiguation (1 char = file or rank, 2 chars = full square)
+- Board::make_move takes a ChessMove and returns a new Board (immutable move application)
+- MoveGen::new_legal(board) is an iterator over all legal ChessMove values for the position
+- Castling in UCI: e1g1 (kingside white), e1c1 (queenside white), e8g8/e8c8 for black
+- Board::from_str(fen) parses FEN; fmt::Display on Board outputs FEN
 
-## 2026-04-07 22:25:11 PDT - US-006
-- Hardened `evolution-loop/src/correctness.rs` so the validate phase now captures stdout/stderr from cargo commands, reports `timeout` explicitly, stops after the first failed check, writes `correctness/results.md`, and marks `iteration.json.state` as `failed` when validation does not pass.
-- Added focused unit coverage for both a passing temporary Cargo workspace and a compile-failing workspace, asserting the gate updates `iteration.json.correctness`, short-circuits before `cargo test` on build failure, and writes the expected markdown report.
-- Files changed: `CLAUDE.md`, `evolution-loop/src/correctness.rs`, `tasks/prd.json`, `tasks/progress.txt`
+## 2026-04-08 - US-001
+- Implemented `chesslib::pgn` module with `parse()`, `parse_nth()`, and `replay()` functions
+- Added `PgnError` type implementing `std::error::Error`
+- SAN parser handles: pawn pushes/captures, piece moves, castling (O-O/O-O-O), promotions (=Q etc.), file/rank/full disambiguation, check/annotation decorators stripped
+- Tokenizer strips: tag headers (`[...]` lines), inline comments (`{...}`), line comments (`;...`), move numbers, result tokens, NAGs (`$N`)
+- Files changed: `chesslib/src/pgn.rs` (new), `chesslib/src/lib.rs` (added `pub mod pgn`)
 - **Learnings for future iterations:**
-  - The validate phase should treat correctness as terminal for the iteration: failed or timed-out checks must make benchmarking ineligible immediately instead of leaving the iteration in an implemented state.
-  - Temporary one-crate workspaces are a simple way to test orchestration helpers that shell out to Cargo without depending on the main repository's build graph.
+  - The `Board` Display impl outputs FEN with halfmove clock but no fullmove number (ends in `... N 1`)
+  - `MoveGen::new_legal` is an iterator, not a vec — call `.find()` / `.filter().collect()` on it
+  - `Piece::Pawn` is the implicit piece for lowercase SAN tokens
+  - Castling dest squares: kingside=G file, queenside=C file (same rank as king)
 ---
 
-
-## 2026-04-07 11:32:03 PDT - US-008
-- Added explicit `active_baseline_version`, `active_baseline_path`, and `active_baseline_binary` fields to `session.env`, keeping them synchronized with accepted baseline state so accepted promotions immediately become the next iteration's active baseline contract.
-- Expanded the final session summary generation to list accepted baseline promotions in iteration order, including stored binary paths, while leaving non-promoting rejected/failed/inconclusive outcomes unchanged.
-- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+## 2026-04-08 - US-002
+- Added two unit tests for multi-game PGN selection: `test_parse_nth_multi_game_different_moves` and `test_parse_nth_out_of_range_returns_error`
+- The `parse_nth` and `split_games` implementations were already complete from US-001; US-002 only required the specific acceptance-criteria tests
+- Files changed: `chesslib/src/pgn.rs` (added 2 tests)
 - **Learnings for future iterations:**
-  - Session metadata should expose a stable operator-facing active-baseline contract even when internal orchestration still tracks accepted baseline details under older field names.
-  - Promotion history is best reconstructed from per-iteration decision metadata at summary time so ordered accepted baselines stay auditable without extra session-level bookkeeping.
+  - `split_games` uses a `seen_moves` flag: a `[` header after movetext flushes the current game; a header before any movetext is just added to the current game
+  - Two-game PGN test needs `[Event "..."]` headers so `split_games` can detect the game boundary
 ---
 
-## 2026-04-07 14:05:51 PDT - US-009
-- Extended `scripts/evolution-loop.sh` so each iteration now seeds `stockfishComparison` metadata with baseline report availability, recommendation-change tracking, and a dedicated `stockfish-comparison/results.md` artifact for extra candidate-vs-Stockfish evidence after inconclusive direct benchmarks.
-- Updated the session summary output and top-level project guidance so the extra Stockfish comparison artifact is part of the stable iteration contract and can be audited alongside benchmark and decision artifacts.
-- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+## 2026-04-08 - US-003
+- `replay()` was already fully implemented in `chesslib/src/pgn.rs` as part of US-001 (lines 50-66)
+- All acceptance criteria were met: `up_to=0` returns starting position, `up_to=moves.len()` returns final position, out-of-range returns `PgnError`, illegal move returns `PgnError`
+- Three tests already existed: `test_replay_zero_moves_returns_starting_position`, `test_replay_all_moves`, `test_replay_out_of_range_returns_error`
+- Files changed: `tasks/prd.json` (set passes: true)
 - **Learnings for future iterations:**
-  - Inconclusive benchmark follow-up works best when the orchestration layer pre-allocates both machine-readable metadata and human-readable artifact paths before benchmark/decision skills run.
-  - Store whether the baseline Stockfish report exists as explicit iteration metadata so later phases can record a missing-reference limitation without re-discovering it ad hoc.
+  - Always run tests before assuming a story needs implementation — prior stories may have already done the work
 ---
 
-## 2026-04-07 10:40:36 PDT - US-005
-- Added orchestration-owned candidate versioning to `scripts/evolution-loop.sh`, including proposal-source-based tag selection, synchronized Cargo manifest bumps across all three crates, candidate metadata in `session.env` / `iteration.json`, and a built debug artifact copied to `target/debug/wiggum-engine`.
-- Made the engine UCI name derive from the Cargo package version in `chess-engine/src/lib.rs`, then reused that helper from both `chess-engine/src/main.rs` and `chess-engine/src/engine.rs` so benchmarked candidate builds advertise the computed version automatically.
-- Files changed: `CLAUDE.md`, `chess-engine/src/lib.rs`, `chess-engine/src/main.rs`, `chess-engine/src/engine.rs`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+## 2026-04-08 - US-004
+- Added Opera Game (Morphy vs Duke of Brunswick, Paris 1858) as embedded real-world PGN constant in `chesslib/src/pgn.rs`
+- Tests added: move count (33), final FEN assertion, perft(1) on checkmate (0 moves), O-O-O verification, file disambiguation (Rxd7), promotion via parse_san_token, both castling sides combined test
+- Final FEN of Opera Game: `1n1Rkb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2K5 b k - 1 1`
+- Files changed: `chesslib/src/pgn.rs` (added 8 tests + OPERA_GAME_PGN constant), `tasks/prd.json` (passes: true)
 - **Learnings for future iterations:**
-  - Keep candidate version selection in the orchestration layer, not inside Claude skills, so proposal provenance cleanly drives major/minor bump policy.
-  - Derive the UCI name from `CARGO_PKG_VERSION` in shared engine code so manifest version bumps automatically flow into both the binary handshake and in-process engine benchmarks.
+  - Board::fmt always outputs fullmove number as 1 (not the actual game fullmove count)
+  - Checkmate position returns 0 from MoveGen::perft_test at depth 1
+  - When writing FEN-based tests, beware placing the black king ON the promotion square (makes promotion illegal)
 ---
 
-
-Started: 2026-04-07
----
-
-## 2026-04-07 11:27:00 PDT - US-006
-- Changed `scripts/evolution-loop.sh` to resolve the active baseline from `chess-engine/versions/<tag>/wiggum-engine`, fail fast when the version directory or stored binary is missing, and write baseline artifact paths into both `session.env` and `iteration.json`.
-- Kept git commit resolution internal-only for candidate worktree creation, updated worker guidance to consume baseline artifact paths, and seeded `chess-engine/versions/v0.1/wiggum-engine` from the existing debug build so the first baseline satisfies the new contract.
-- Files changed: `CLAUDE.md`, `chess-engine/versions/v0.1/wiggum-engine`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+## 2026-04-08 - US-005
+- Added `PgnFen(PgnFenArgs)` variant to `Commands` enum in `chess-runner/src/main.rs`
+- Added `PgnFenArgs` struct with `--file`, `--move`, `--game` (1-based, default 1) fields
+- Implemented `run_pgn_fen()` using `pgn::parse_nth` + `pgn::replay` from chesslib
+- `--game` is 1-based in CLI; passes `game - 1` to `parse_nth`
+- Tests: starting position, file not found, game out of range, move out of range
+- Files changed: `chess-runner/src/main.rs`, `tasks/prd.json`
 - **Learnings for future iterations:**
-  - Treat baseline version directories as the operator-facing source of truth; any git ref should stay an internal implementation detail for worktree setup only.
-  - When tightening artifact contracts, seed the current baseline forward if needed so the new fail-fast checks do not strand the only promotable starting point.
+  - `r#move` is needed to use `move` as a field name in Rust (reserved keyword)
+  - `run_pgn_fen` returns `Result` with `anyhow::bail!` for validation errors — no process::exit needed
 ---
 
-## 2026-04-07 09:10:01 PDT - US-001
-- Suppressed raw per-phase OpenClaude output in `scripts/evolution-loop.sh` by routing skill stdout/stderr to per-iteration log files instead of streaming it live to the terminal.
-- Switched the default loop CLI from `claude` to `openclaude` and added phase log artifact paths to `iteration.json` so detailed output remains inspectable after each run.
-- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
+## 2026-04-08 - US-006
+- Added `PgnMatch(PgnMatchArgs)` variant to `Commands` enum in `chess-runner/src/main.rs`
+- Added `PgnMatchArgs` struct with `--file`, `--move`, `--game` plus all match flags (`--engine1`, `--engine2`, `--games`, `--time`, `--inc`, `--timeout`, `--csv`)
+- Implemented `run_pgn_match()` which loads PGN, replays to target position, then delegates to `run_match()` with `start_fen` set
+- The `--csv` flag maps to the `output` field in `MatchArgs` for CSV appending
+- Files changed: `chess-runner/src/main.rs`, `tasks/prd.json`
 - **Learnings for future iterations:**
-  - Keep phase-level logs as first-class artifacts so terminal output can stay quiet without losing debuggability.
-  - `iteration.json.artifacts.phaseLogs` is the contract for locating captured phase stdout/stderr later.
+  - `run_pgn_match` delegates to `run_match` by constructing a `MatchArgs` struct — avoids duplicating match logic
+  - Unit-testing async functions that spawn real engines is impractical; test the PGN-loading logic separately via the sync `run_pgn_fen` helper
 ---
-
-## 2026-04-07 09:16:37 PDT - US-002
-- Added concise phase progress output to `scripts/evolution-loop.sh` so each iteration prints the ordered phase list once and then prints the current phase plus remaining phases before propose, implement, validate, benchmark, and decide.
-- Kept the phase progress output aligned with the quiet logging behavior from US-001 by deriving it from a single ordered phase sequence.
-- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Define operator-visible phase order in one canonical array so start-of-iteration and per-phase progress text cannot drift apart.
-  - Include `validate` in the operator-visible phase plan even though it runs locally rather than through a Claude skill, because it explains the gap between implement and benchmark.
----
-
-## 2026-04-07 09:34:46 PDT - US-003
-- Added an optional `--ideas-file` flag to `scripts/evolution-loop.sh` and resolved it into session metadata before the loop starts.
-- Recorded ideas-file details in `session.env` and `iteration.json`, and collapsed missing pending checklist items back to the default self-propose path so empty Markdown task lists behave like no file was provided.
-- Extended the per-phase worker prompt so the propose phase knows how to consume unchecked `- [ ] idea text` entries when an ideas file is available.
-- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Normalize optional operator inputs in the orchestration layer first, then hand skills a simple contract through `session.env` and `iteration.json`.
-  - For checklist-backed idea sources, treat only unchecked `- [ ]` entries as pending ideas and ignore empty files by clearing the resolved input path.
----
-
-## 2026-04-07 10:02:11 PDT - US-004
-- Extended `scripts/evolution-loop.sh` so iteration artifacts now reserve `ideas.proposalSource`, `ideas.selectedIdea`, and `ideas.selectedIdeaMarkedUsed`, and the propose phase is required to write either `user_ideas_file` or `self_proposed` before the loop advances.
-- Updated the per-phase worker prompt so `hypothesis.md` must state the proposal source while later phases read the source of truth from `iteration.json`.
-- Added post-decision checklist bookkeeping so any selected operator idea is marked from `- [ ]` to `- [x]` only after the iteration reaches a tested terminal outcome, with the updated pending count written back into iteration metadata.
-- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Proposal provenance belongs in machine-readable iteration metadata, not just narrative Markdown, because later phases need a stable contract.
-  - Mark curated ideas as used only after the iteration has been fully exercised; doing it at propose time would burn ideas that never made it through testing.
----
-
-## 2026-04-07 11:45:00 PDT - US-007
-- Updated `scripts/evolution-loop.sh` so accepted iterations persist the built candidate binary into `chess-engine/versions/<promoted-version>/wiggum-engine` before the candidate worktree is discarded.
-- Recorded promoted artifact metadata back into `iteration.json` under `decision.promotion`, appended the stored binary details to `decision.md`, and refreshed `session.env` so later iterations read the promoted artifact path as the active baseline.
-- Files changed: `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Promotion should finalize artifact paths before deleting the candidate worktree; otherwise later baseline resolution can point at a binary that no longer exists.
-  - Keep promotion metadata in both machine-readable `iteration.json` and human-readable `decision.md` so operators and later phases can audit exactly which stored binary became the new baseline.
----
-
-## 2026-04-07 14:38:38 PDT - US-010
-- Extended `scripts/evolution-loop.sh` so each iteration seeds `iteration.json.stockfishComparison.positiveSignal` and tightened the decision-phase worker instructions to treat positive-signal promotion as a narrow exception after both direct and Stockfish comparisons stay inconclusive.
-- Documented the positive-signal contract in the top-level project guidance and feature PRD, requiring the exact supporting evidence to be repeated in both `decision.md` and `iteration.json.decision.evidence` whenever an otherwise inconclusive candidate is promoted.
-- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd-evolution-loop-enhancements.md`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - When an agent skill owns the final promotion call, orchestration should still pre-seed the machine-readable fields that make exception paths auditable instead of relying on free-form Markdown alone.
-  - If a decision can override the default benchmark policy, capture that override as an explicit contract in both the operator docs and the iteration artifact schema so later phases can validate it consistently.
----
-
-## 2026-04-07 14:45:09 PDT - US-011
-- Added an optional `--verbose` flag to `scripts/evolution-loop.sh` and surfaced the selected mode in the startup summary so operators can explicitly request live phase output while debugging.
-- Updated phase execution to use `tee` in verbose mode, preserving the same per-phase log artifacts and quiet-mode iteration behavior for downstream auditing and decisions.
-- Files changed: `CLAUDE.md`, `scripts/evolution-loop.sh`, `tasks/prd.json`, `tasks/progress.txt`
-- **Learnings for future iterations:**
-  - Add operator-facing debug verbosity at the phase runner boundary so artifact paths and downstream state handling remain identical between quiet and verbose runs.
-  - If a loop already captures phase logs, verbose mode should mirror that same stream instead of introducing a second logging path.
----
-

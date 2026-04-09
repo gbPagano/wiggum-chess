@@ -4,6 +4,7 @@ use chesslib::clock::Clock;
 use chesslib::engine::Engine;
 use chesslib::game::{DrawReason, Game, GameResult};
 use chesslib::match_runner::{Match, MatchObserver};
+use chesslib::pgn;
 use chesslib::uci_engine::UciEngine;
 use clap::{Parser, Subcommand};
 
@@ -24,6 +25,10 @@ enum Commands {
     Sprt(SprtArgs),
     /// Generate a markdown version report for a specific engine version
     VersionReport(VersionReportArgs),
+    /// Print the FEN at a specific move from a PGN file
+    PgnFen(PgnFenArgs),
+    /// Run an engine match starting from a position loaded from a PGN file
+    PgnMatch(PgnMatchArgs),
 }
 
 #[derive(Parser)]
@@ -136,6 +141,64 @@ struct VersionReportArgs {
     /// Output path for the generated markdown report
     #[arg(long)]
     output: String,
+}
+
+#[derive(Parser)]
+struct PgnFenArgs {
+    /// Path to the PGN file
+    #[arg(long)]
+    file: String,
+
+    /// Half-move number to replay up to (default: all moves → final position)
+    #[arg(long)]
+    r#move: Option<usize>,
+
+    /// 1-based game index within a multi-game PGN file (default: 1)
+    #[arg(long, default_value = "1")]
+    game: usize,
+}
+
+#[derive(Parser)]
+struct PgnMatchArgs {
+    /// Path to the PGN file
+    #[arg(long)]
+    file: String,
+
+    /// Half-move number to replay up to (default: final position)
+    #[arg(long)]
+    r#move: Option<usize>,
+
+    /// 1-based game index within a multi-game PGN file (default: 1)
+    #[arg(long, default_value = "1")]
+    game: usize,
+
+    /// Path to the first engine executable
+    #[arg(long)]
+    engine1: String,
+
+    /// Path to the second engine executable
+    #[arg(long)]
+    engine2: String,
+
+    /// Time per player in milliseconds
+    #[arg(long, default_value = "60000")]
+    time: u64,
+
+    /// Increment per move in milliseconds
+    #[arg(long, default_value = "0")]
+    inc: u64,
+
+    /// Number of games to play
+    #[arg(long, default_value = "1")]
+    games: usize,
+
+    /// Engine response timeout in milliseconds
+    #[arg(long, default_value = "5000")]
+    timeout: u64,
+
+    /// Optional path to CSV file for appending match results
+    #[arg(long)]
+    csv: Option<String>,
 }
 
 /// Observer that prints moves and game-over events to stdout.
@@ -542,6 +605,12 @@ async fn main() -> Result<()> {
         Commands::VersionReport(args) => {
             run_version_report(&args)?;
         }
+        Commands::PgnFen(args) => {
+            run_pgn_fen(&args)?;
+        }
+        Commands::PgnMatch(args) => {
+            run_pgn_match(args).await?;
+        }
     }
 
     Ok(())
@@ -840,6 +909,64 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
     Ok(())
 }
 
+fn run_pgn_fen(args: &PgnFenArgs) -> Result<()> {
+    let pgn_text = std::fs::read_to_string(&args.file)
+        .map_err(|e| anyhow::anyhow!("cannot read '{}': {}", args.file, e))?;
+
+    // game is 1-based; parse_nth expects 0-based
+    if args.game == 0 {
+        anyhow::bail!("--game must be >= 1");
+    }
+    let game_index = args.game - 1;
+
+    let moves = pgn::parse_nth(&pgn_text, game_index)
+        .map_err(|e| anyhow::anyhow!("PGN parse error: {}", e))?;
+
+    let up_to = args.r#move.unwrap_or(moves.len());
+
+    let board = pgn::replay(&moves, up_to)
+        .map_err(|e| anyhow::anyhow!("replay error: {}", e))?;
+
+    println!("{}", board);
+    Ok(())
+}
+
+async fn run_pgn_match(args: PgnMatchArgs) -> Result<()> {
+    // Load and validate the PGN position first
+    let pgn_text = std::fs::read_to_string(&args.file)
+        .map_err(|e| anyhow::anyhow!("cannot read '{}': {}", args.file, e))?;
+
+    if args.game == 0 {
+        anyhow::bail!("--game must be >= 1");
+    }
+    let game_index = args.game - 1;
+
+    let moves = pgn::parse_nth(&pgn_text, game_index)
+        .map_err(|e| anyhow::anyhow!("PGN parse error: {}", e))?;
+
+    let up_to = args.r#move.unwrap_or(moves.len());
+
+    let start_board = pgn::replay(&moves, up_to)
+        .map_err(|e| anyhow::anyhow!("replay error: {}", e))?;
+
+    let start_fen = format!("{}", start_board);
+
+    // Delegate to match logic with the reconstructed FEN
+    let match_args = MatchArgs {
+        engine1: args.engine1,
+        engine2: args.engine2,
+        time: args.time,
+        inc: args.inc,
+        games: args.games,
+        start_fen: Some(start_fen),
+        timeout: args.timeout,
+        output: args.csv,
+        verbose: false,
+    };
+
+    run_match(match_args).await
+}
+
 /// Per-opponent aggregated stats from the perspective of the target engine.
 struct OpponentStats {
     opponent: String,
@@ -1121,6 +1248,67 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pgn_match_invalid_file_returns_error() {
+        // pgn-match should fail with a helpful error when the file doesn't exist
+        // We test run_pgn_fen (same logic) since run_pgn_match is async and requires engines
+        let args = PgnFenArgs {
+            file: "/no/such/file.pgn".to_string(),
+            r#move: None,
+            game: 1,
+        };
+        let err = run_pgn_fen(&args).unwrap_err();
+        assert!(err.to_string().contains("cannot read"), "got: {}", err);
+    }
+
+    #[test]
+    fn test_pgn_fen_starting_position() {
+        // --move 0 should return the standard starting FEN
+        let pgn_path = std::env::temp_dir().join("test_pgn_fen.pgn");
+        std::fs::write(&pgn_path, "1. e4 e5 2. Nf3 Nc6\n").unwrap();
+        let args = PgnFenArgs {
+            file: pgn_path.to_str().unwrap().to_string(),
+            r#move: Some(0),
+            game: 1,
+        };
+        // Should not error
+        run_pgn_fen(&args).unwrap();
+    }
+
+    #[test]
+    fn test_pgn_fen_file_not_found() {
+        let args = PgnFenArgs {
+            file: "/nonexistent/path/game.pgn".to_string(),
+            r#move: None,
+            game: 1,
+        };
+        assert!(run_pgn_fen(&args).is_err());
+    }
+
+    #[test]
+    fn test_pgn_fen_game_out_of_range() {
+        let pgn_path = std::env::temp_dir().join("test_pgn_fen_range.pgn");
+        std::fs::write(&pgn_path, "1. e4 e5\n").unwrap();
+        let args = PgnFenArgs {
+            file: pgn_path.to_str().unwrap().to_string(),
+            r#move: None,
+            game: 99,
+        };
+        assert!(run_pgn_fen(&args).is_err());
+    }
+
+    #[test]
+    fn test_pgn_fen_move_out_of_range() {
+        let pgn_path = std::env::temp_dir().join("test_pgn_fen_move.pgn");
+        std::fs::write(&pgn_path, "1. e4 e5\n").unwrap();
+        let args = PgnFenArgs {
+            file: pgn_path.to_str().unwrap().to_string(),
+            r#move: Some(999),
+            game: 1,
+        };
+        assert!(run_pgn_fen(&args).is_err());
+    }
 
     #[test]
     fn test_sprt_bounds_alpha05_beta05() {
