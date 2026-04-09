@@ -53,3 +53,16 @@ Started: Thu Apr  9 01:47:41 PDT 2026
   - US-005 should call `run_match` with `STC_TIME_MS`/`STC_INC_MS` for the second block
   - The `time_control` CSV column is derived by chess-runner from `--time`/`--inc` args, so passing 60000/1000 automatically writes "LTC"
 ---
+
+## 2026-04-09 - US-005
+- Added STC match block after the LTC block in `scripts/benchmark-version.sh`
+- Prints "Additional benchmark block: STC" before the 4 STC match runs
+- Calls `run_match` with `STC_TIME_MS`/`STC_INC_MS` for all 4 Stockfish levels
+- Balanced-position matches remain in their own section using LTC, writing "LTC" to the time_control CSV column
+- Files changed: `scripts/benchmark-version.sh`
+- **Learnings for future iterations:**
+  - The STC block writes to the same `RESULTS_CSV` as the LTC block; rows are distinguishable by the `time_control` column ("STC" vs "LTC"), derived automatically from `--time`/`--inc` args
+  - Balanced-position matches in `BALANCED_RESULTS_CSV` remain LTC and are already distinguishable by being in a separate file
+  - US-006 (SPRT in STC) is already wired up from US-004 — the SPRT block already uses `STC_TIME_MS`/`STC_INC_MS`
+  - US-007 and US-008 need `version-report` to read `time_control` from CSVs and group/label output
+---
