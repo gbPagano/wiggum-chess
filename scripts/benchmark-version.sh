@@ -44,8 +44,10 @@ STOCKFISH=""
 GAMES=100
 OUTPUT_DIR=""
 CHESS_RUNNER="${CHESS_RUNNER:-chess-runner}"
-TIME_MS=10000
-INC_MS=100
+LTC_TIME_MS=60000
+LTC_INC_MS=1000
+STC_TIME_MS=10000
+STC_INC_MS=100
 POSITIONS_FILE=""
 NUM_POSITIONS=10
 
@@ -225,8 +227,8 @@ if [[ -n "$PREV_ENGINE" ]]; then
     "$CHESS_RUNNER" sprt \
         --engine1 "$ENGINE" \
         --engine2 "$PREV_ENGINE" \
-        --time "$TIME_MS" \
-        --inc "$INC_MS" \
+        --time "$STC_TIME_MS" \
+        --inc "$STC_INC_MS" \
         --output "$SPRT_CSV" \
         "${SPRT_POSITIONS_ARGS[@]+"${SPRT_POSITIONS_ARGS[@]}"}"
     echo "SPRT complete. Results in: ${SPRT_CSV}"
@@ -236,14 +238,16 @@ fi
 run_match() {
     local label="$1"
     local sf_wrapper="$2"
+    local time_ms="$3"
+    local inc_ms="$4"
 
     echo ""
     echo "--- Match vs Stockfish ${label} (${GAMES} games) ---"
     "$CHESS_RUNNER" match \
         --engine1 "$ENGINE" \
         --engine2 "$sf_wrapper" \
-        --time "$TIME_MS" \
-        --inc "$INC_MS" \
+        --time "$time_ms" \
+        --inc "$inc_ms" \
         --games "$GAMES" \
         --output "$RESULTS_CSV"
     tag_last_match_row "$RESULTS_CSV" "$label"
@@ -252,14 +256,16 @@ run_match() {
 run_balanced_match() {
     local label="$1"
     local sf_wrapper="$2"
+    local time_ms="$3"
+    local inc_ms="$4"
 
     echo ""
     echo "--- Balanced match vs Stockfish ${label} (${GAMES} games, ${NUM_POSITIONS} positions) ---"
     "$CHESS_RUNNER" match \
         --engine1 "$ENGINE" \
         --engine2 "$sf_wrapper" \
-        --time "$TIME_MS" \
-        --inc "$INC_MS" \
+        --time "$time_ms" \
+        --inc "$inc_ms" \
         --games "$GAMES" \
         --positions-file "$POSITIONS_FILE" \
         --num-positions "$NUM_POSITIONS" \
@@ -267,20 +273,24 @@ run_balanced_match() {
     tag_last_match_row "$BALANCED_RESULTS_CSV" "$label"
 }
 
-run_match "1500" "$WRAPPER_1500"
-run_match "2000" "$WRAPPER_2000"
-run_match "2500" "$WRAPPER_2500"
-run_match "max"  "$WRAPPER_MAX"
+echo ""
+echo "========================================="
+echo "Primary benchmark block: LTC"
+echo "========================================="
+run_match "1500" "$WRAPPER_1500" "$LTC_TIME_MS" "$LTC_INC_MS"
+run_match "2000" "$WRAPPER_2000" "$LTC_TIME_MS" "$LTC_INC_MS"
+run_match "2500" "$WRAPPER_2500" "$LTC_TIME_MS" "$LTC_INC_MS"
+run_match "max"  "$WRAPPER_MAX"  "$LTC_TIME_MS" "$LTC_INC_MS"
 
 if [[ -n "$POSITIONS_FILE" ]]; then
     echo ""
     echo "========================================="
     echo "Running balanced-position matches"
     echo "========================================="
-    run_balanced_match "1500" "$WRAPPER_1500"
-    run_balanced_match "2000" "$WRAPPER_2000"
-    run_balanced_match "2500" "$WRAPPER_2500"
-    run_balanced_match "max"  "$WRAPPER_MAX"
+    run_balanced_match "1500" "$WRAPPER_1500" "$LTC_TIME_MS" "$LTC_INC_MS"
+    run_balanced_match "2000" "$WRAPPER_2000" "$LTC_TIME_MS" "$LTC_INC_MS"
+    run_balanced_match "2500" "$WRAPPER_2500" "$LTC_TIME_MS" "$LTC_INC_MS"
+    run_balanced_match "max"  "$WRAPPER_MAX"  "$LTC_TIME_MS" "$LTC_INC_MS"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
