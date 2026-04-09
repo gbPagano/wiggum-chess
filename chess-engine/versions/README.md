@@ -17,5 +17,5 @@ Each subfolder contains:
 1. Create `versions/<tag>/` with a `CHANGES.md` describing what changed.
 2. Add a `.gitkeep` so the folder is tracked before the report exists.
 3. Run `scripts/benchmark-version.sh --version <tag> ...` to generate match results.
-4. Run `chess-runner version-report --version <tag> ...` to generate `report.md`.
+4. Run `target/release/chess-runner version-report --version <tag> ...` to generate `report.md`.
 5. Remove `.gitkeep` once `report.md` is committed.
