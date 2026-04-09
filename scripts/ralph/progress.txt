@@ -1,49 +1,19 @@
 # Ralph Progress Log
-Started: Wed Apr  8 21:53:00 PDT 2026
+Started: Thu Apr  9 01:47:41 PDT 2026
 ---
 
 ## Codebase Patterns
-- Download scripts follow the pattern in `scripts/download-stockfish.sh`: set -euo pipefail, check if file already exists and skip, use curl -fsSL, clean up temp files
-- `.gitignore` is at repo root with slash-prefixed entries like `/target`, `/engines/`, `/data/`
+- `chess-runner/src/main.rs` contains all CLI arg structs (`MatchArgs`, `SprtArgs`, `PgnMatchArgs`) and subcommand logic in one file (~1655 lines)
+- Default values for CLI args are set via `#[arg(long, default_value = "...")]` clap annotations on struct fields
+- `MatchArgs` and `PgnMatchArgs` are separate structs with similar but distinct fields — changes to one don't affect the other
+- `write_csv` and `write_sprt_csv` functions are in `main.rs` and write CSV rows with headers on first write
 
-## 2026-04-08 - US-003
-- Added `ExtractPositions(ExtractPositionsArgs)` variant to `Commands` enum in `chess-runner/src/main.rs`
-- Added `ExtractPositionsArgs` struct with clap args: `--pgn`, `--stockfish`, `--output`, `--threshold` (50), `--min-ply` (20), `--max-ply` (80), `--depth` (12), `--max-positions` (50000)
-- Implemented `run_extract_positions`: reads entire PGN file, loops `parse_nth` game-by-game until out-of-bounds error, replays positions between min/max ply, evaluates each with `analyze_fen`, keeps balanced positions (|cp| <= threshold), deduplicates with HashSet, writes FENs to output file
-- Progress reported to stderr every 100 games: `Games: N | Evaluated: M | Kept: K`
-- Exits non-zero with descriptive message on Stockfish communication failure
-- Added `use chesslib::analysis::{analyze_fen, StockfishProcess}`, `use std::collections::HashSet`, `use std::io::Write` imports
-- Files changed: `chess-runner/src/main.rs`, `scripts/ralph/prd.json`
+## 2026-04-09 - US-001
+- Changed `MatchArgs.inc` default from `"0"` to `"1000"` in `chess-runner/src/main.rs`
+- `SprtArgs` already had the correct defaults (time=10000, inc=100)
+- Files changed: `chess-runner/src/main.rs`
 - **Learnings for future iterations:**
-  - `Board` implements `Display` as FEN (confirmed in pgn.rs tests via `format!("{}", board)`)
-  - `cp.unsigned_abs()` is the idiomatic way to get absolute value of i32 as u32 for comparison with u32 threshold
-  - `parse_nth` loads the entire PGN into memory and re-splits every call — fine for small/medium files but O(n²) for large ones; the spec mandates this API
-  - The `analyze_fen` cp score is from the side-to-move perspective (raw UCI); `|cp| <= threshold` still correctly identifies balanced positions
----
-
-## 2026-04-08 - US-002
-- Created `chesslib/src/analysis.rs` with `AnalysisError`, `StockfishProcess`, and `analyze_fen`
-- `StockfishProcess::new(path)` spawns the process, takes stdin/stdout, starts a reader thread with mpsc channel for timeout support, then performs UCI handshake (uci → uciok, isready → readyok)
-- `analyze_fen` sends `position fen <fen>` + `go depth <n>`, reads lines until `bestmove`, returns last `score cp` value or `None` if only mate scores appeared
-- Per-line timeout of 5 seconds via `mpsc::Receiver::recv_timeout`
-- Added `pub mod analysis;` to `chesslib/src/lib.rs`
-- Files changed: `chesslib/src/analysis.rs` (new), `chesslib/src/lib.rs`, `scripts/ralph/prd.json`
-- **Learnings for future iterations:**
-  - Synchronous subprocess I/O with timeout: use a reader thread + mpsc channel; `recv_timeout(Duration::from_secs(5))` gives clean per-line timeouts without async
-  - `StockfishProcess` implements `Drop` to send `quit` and call `child.wait()` for clean cleanup
-  - The mock script pattern from `uci_engine.rs` tests works well here too — shell script that responds to UCI commands via stdin/stdout
----
-
-## 2026-04-08 - US-001
-- Created `scripts/download-positions-dataset.sh` following the same pattern as `scripts/download-stockfish.sh`
-- Downloads `lichess_db_standard_rated_2016-01.pgn.zst` from `https://database.lichess.org/elite/`
-- Decompresses using `unzstd` or `zstd`, removes the `.zst` temp file afterward
-- Checks if `data/lichess-elite-2016-01.pgn` already exists — prints "already exists — skipping" and exits 0
-- Added `/data/` to `.gitignore`
-- Script is chmod +x; `bash -n` syntax check passes
-- Files changed: `scripts/download-positions-dataset.sh` (new), `.gitignore`
-- **Learnings for future iterations:**
-  - The existing download script pattern: check existence → mkdir -p → curl → extract → verify
-  - `.gitignore` only had two entries; new large data dirs should be added with leading `/`
-  - Use `command -v` to check for tools like `zstd`/`unzstd` before use
+  - `PgnMatchArgs` also has `time` and `inc` fields with separate defaults — it was not changed for this story (acceptance criteria scoped to `match` and `sprt`)
+  - The `write_csv` function in `main.rs` will need a new `time_control` parameter for US-002
+  - The `write_sprt_csv` function in `main.rs` will need a `time_control` parameter for US-003
 ---
