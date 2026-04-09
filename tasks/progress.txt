@@ -62,3 +62,14 @@
   - SPRT cycles through positions (modulo), unlike match which plays N games per position
   - Seed printed to stderr; positions count and cycling reported to stdout
 ---
+
+## 2026-04-09 - US-006
+- Added `--positions-file` and `--num-positions` flags to `scripts/benchmark-version.sh`
+- When `--positions-file` provided: SPRT gets `--positions-file` / `--num-positions` args
+- Added `run_balanced_match` function that runs all 4 Stockfish levels using `--positions-file`; results written to `balanced_results.csv` (separate from standard `results.csv`)
+- Summary section reports both CSVs when positions are used
+- Files changed: `scripts/benchmark-version.sh`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - Bash array expansion: `"${arr[@]+"${arr[@]}"}"` handles empty arrays safely with `set -u`
+  - Balanced results go to separate CSV to avoid mixing row formats (per-FEN vs aggregate)
+---

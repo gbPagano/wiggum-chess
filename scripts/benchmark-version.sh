@@ -5,13 +5,17 @@
 #   scripts/benchmark-version.sh [FLAGS]
 #
 # Flags:
-#   --version      <string>  Version label, e.g. v0.1 (required)
-#   --engine       <path>    Path to the engine binary being benchmarked (required)
-#   --prev-engine  <path>    Path to the previous version binary (optional); if provided,
-#                            runs a SPRT match to verify improvement
-#   --stockfish    <path>    Path to the Stockfish binary (required)
-#   --games        <N>       Number of games per fixed match (default: 100)
-#   --output-dir   <path>    Directory for storing results (default: chess-engine/versions/<version>)
+#   --version        <string>  Version label, e.g. v0.1 (required)
+#   --engine         <path>    Path to the engine binary being benchmarked (required)
+#   --prev-engine    <path>    Path to the previous version binary (optional); if provided,
+#                              runs a SPRT match to verify improvement
+#   --stockfish      <path>    Path to the Stockfish binary (required)
+#   --games          <N>       Number of games per fixed match (default: 100)
+#   --output-dir     <path>    Directory for storing results (default: chess-engine/versions/<version>)
+#   --positions-file <path>    Optional path to balanced FEN positions file; when provided,
+#                              also runs balanced-position matches (written to balanced_results.csv)
+#                              and passes positions to SPRT match
+#   --num-positions  <N>       Number of positions to sample from --positions-file (default: 10)
 #
 # Stockfish setoption limitation:
 #   chess-runner match does not support passing setoption commands to engines at startup.
@@ -42,16 +46,20 @@ OUTPUT_DIR=""
 CHESS_RUNNER="${CHESS_RUNNER:-chess-runner}"
 TIME_MS=10000
 INC_MS=100
+POSITIONS_FILE=""
+NUM_POSITIONS=10
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --version)    VERSION="$2";    shift 2 ;;
-        --engine)     ENGINE="$2";     shift 2 ;;
-        --prev-engine) PREV_ENGINE="$2"; shift 2 ;;
-        --stockfish)  STOCKFISH="$2";  shift 2 ;;
-        --games)      GAMES="$2";      shift 2 ;;
-        --output-dir) OUTPUT_DIR="$2"; shift 2 ;;
+        --version)         VERSION="$2";         shift 2 ;;
+        --engine)          ENGINE="$2";          shift 2 ;;
+        --prev-engine)     PREV_ENGINE="$2";     shift 2 ;;
+        --stockfish)       STOCKFISH="$2";       shift 2 ;;
+        --games)           GAMES="$2";           shift 2 ;;
+        --output-dir)      OUTPUT_DIR="$2";      shift 2 ;;
+        --positions-file)  POSITIONS_FILE="$2";  shift 2 ;;
+        --num-positions)   NUM_POSITIONS="$2";   shift 2 ;;
         -h|--help)
             sed -n '2,/^set -/p' "$0" | grep '^#' | sed 's/^# \?//'
             exit 0
@@ -83,6 +91,9 @@ fi
 if [[ -n "$PREV_ENGINE" && ! -x "$PREV_ENGINE" ]]; then
     echo "Error: prev-engine binary not found or not executable: $PREV_ENGINE" >&2; exit 1
 fi
+if [[ -n "$POSITIONS_FILE" && ! -f "$POSITIONS_FILE" ]]; then
+    echo "Error: positions file not found: $POSITIONS_FILE" >&2; exit 1
+fi
 
 if [[ -z "$OUTPUT_DIR" ]]; then
     OUTPUT_DIR="chess-engine/versions/${VERSION}"
@@ -91,6 +102,7 @@ fi
 mkdir -p "$OUTPUT_DIR"
 
 RESULTS_CSV="${OUTPUT_DIR}/results.csv"
+BALANCED_RESULTS_CSV="${OUTPUT_DIR}/balanced_results.csv"
 SPRT_CSV="${OUTPUT_DIR}/sprt_results.csv"
 
 # tag_last_match_row <csv_path> <label>
@@ -197,18 +209,26 @@ echo "Engine:    ${ENGINE}"
 echo "Stockfish: ${STOCKFISH}"
 echo "Games:     ${GAMES} per match"
 echo "Output:    ${OUTPUT_DIR}"
+if [[ -n "$POSITIONS_FILE" ]]; then
+    echo "Positions: ${POSITIONS_FILE} (${NUM_POSITIONS} sampled)"
+fi
 echo "========================================="
 
 # ── Optional SPRT vs previous engine ─────────────────────────────────────────
 if [[ -n "$PREV_ENGINE" ]]; then
     echo ""
     echo "--- SPRT vs previous engine ---"
+    SPRT_POSITIONS_ARGS=()
+    if [[ -n "$POSITIONS_FILE" ]]; then
+        SPRT_POSITIONS_ARGS=(--positions-file "$POSITIONS_FILE" --num-positions "$NUM_POSITIONS")
+    fi
     "$CHESS_RUNNER" sprt \
         --engine1 "$ENGINE" \
         --engine2 "$PREV_ENGINE" \
         --time "$TIME_MS" \
         --inc "$INC_MS" \
-        --output "$SPRT_CSV"
+        --output "$SPRT_CSV" \
+        "${SPRT_POSITIONS_ARGS[@]+"${SPRT_POSITIONS_ARGS[@]}"}"
     echo "SPRT complete. Results in: ${SPRT_CSV}"
 fi
 
@@ -229,16 +249,48 @@ run_match() {
     tag_last_match_row "$RESULTS_CSV" "$label"
 }
 
+run_balanced_match() {
+    local label="$1"
+    local sf_wrapper="$2"
+
+    echo ""
+    echo "--- Balanced match vs Stockfish ${label} (${GAMES} games, ${NUM_POSITIONS} positions) ---"
+    "$CHESS_RUNNER" match \
+        --engine1 "$ENGINE" \
+        --engine2 "$sf_wrapper" \
+        --time "$TIME_MS" \
+        --inc "$INC_MS" \
+        --games "$GAMES" \
+        --positions-file "$POSITIONS_FILE" \
+        --num-positions "$NUM_POSITIONS" \
+        --output "$BALANCED_RESULTS_CSV"
+    tag_last_match_row "$BALANCED_RESULTS_CSV" "$label"
+}
+
 run_match "1500" "$WRAPPER_1500"
 run_match "2000" "$WRAPPER_2000"
 run_match "2500" "$WRAPPER_2500"
 run_match "max"  "$WRAPPER_MAX"
+
+if [[ -n "$POSITIONS_FILE" ]]; then
+    echo ""
+    echo "========================================="
+    echo "Running balanced-position matches"
+    echo "========================================="
+    run_balanced_match "1500" "$WRAPPER_1500"
+    run_balanced_match "2000" "$WRAPPER_2000"
+    run_balanced_match "2500" "$WRAPPER_2500"
+    run_balanced_match "max"  "$WRAPPER_MAX"
+fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "========================================="
 echo "All matches complete for ${VERSION}"
 echo "Match results: ${RESULTS_CSV}"
+if [[ -n "$POSITIONS_FILE" ]]; then
+    echo "Balanced results: ${BALANCED_RESULTS_CSV}"
+fi
 if [[ -n "$PREV_ENGINE" ]]; then
     echo "SPRT results:  ${SPRT_CSV}"
 fi
@@ -249,6 +301,13 @@ if [[ -f "$RESULTS_CSV" ]]; then
     # Print header + all rows for this engine (simple grep-based filter)
     head -1 "$RESULTS_CSV"
     grep -i "$ENGINE" "$RESULTS_CSV" || true
+fi
+
+if [[ -n "$POSITIONS_FILE" && -f "$BALANCED_RESULTS_CSV" ]]; then
+    echo ""
+    echo "Balanced results summary:"
+    head -1 "$BALANCED_RESULTS_CSV"
+    grep -i "$ENGINE" "$BALANCED_RESULTS_CSV" || true
 fi
 
 echo "========================================="

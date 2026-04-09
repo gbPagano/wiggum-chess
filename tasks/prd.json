@@ -37,7 +37,7 @@
       "id": "US-006",
       "title": "Update scripts/benchmark-version.sh to run both standard and balanced-position matches",
       "description": "Update benchmark script to support positions file",
-      "passes": false
+      "passes": true
     }
   ]
 }
