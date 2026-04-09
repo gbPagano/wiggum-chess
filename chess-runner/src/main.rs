@@ -1,4 +1,5 @@
 use anyhow::Result;
+use chesslib::analysis::{analyze_fen, StockfishProcess};
 use chesslib::chess_move::ChessMove;
 use chesslib::clock::Clock;
 use chesslib::engine::Engine;
@@ -7,6 +8,8 @@ use chesslib::match_runner::{Match, MatchObserver};
 use chesslib::pgn;
 use chesslib::uci_engine::UciEngine;
 use clap::{Parser, Subcommand};
+use std::collections::HashSet;
+use std::io::Write;
 
 #[derive(Parser)]
 #[command(name = "chess-runner", about = "Run engine vs engine chess matches")]
@@ -29,6 +32,8 @@ enum Commands {
     PgnFen(PgnFenArgs),
     /// Run an engine match starting from a position loaded from a PGN file
     PgnMatch(PgnMatchArgs),
+    /// Extract balanced positions from a PGN file using Stockfish evaluation
+    ExtractPositions(ExtractPositionsArgs),
 }
 
 #[derive(Parser)]
@@ -199,6 +204,41 @@ struct PgnMatchArgs {
     /// Optional path to CSV file for appending match results
     #[arg(long)]
     csv: Option<String>,
+}
+
+#[derive(Parser)]
+struct ExtractPositionsArgs {
+    /// Path to the PGN input file
+    #[arg(long)]
+    pgn: String,
+
+    /// Path to the Stockfish executable
+    #[arg(long)]
+    stockfish: String,
+
+    /// Path to the output file (one FEN per line)
+    #[arg(long)]
+    output: String,
+
+    /// Maximum centipawn imbalance to consider a position balanced
+    #[arg(long, default_value = "50")]
+    threshold: u32,
+
+    /// Minimum half-move (ply) to sample from each game
+    #[arg(long, default_value = "20")]
+    min_ply: usize,
+
+    /// Maximum half-move (ply) to sample from each game
+    #[arg(long, default_value = "80")]
+    max_ply: usize,
+
+    /// Stockfish search depth for evaluation
+    #[arg(long, default_value = "12")]
+    depth: u8,
+
+    /// Maximum number of unique balanced positions to collect
+    #[arg(long, default_value = "50000")]
+    max_positions: usize,
 }
 
 /// Observer that prints moves and game-over events to stdout.
@@ -611,8 +651,95 @@ async fn main() -> Result<()> {
         Commands::PgnMatch(args) => {
             run_pgn_match(args).await?;
         }
+        Commands::ExtractPositions(args) => {
+            run_extract_positions(&args)?;
+        }
     }
 
+    Ok(())
+}
+
+fn run_extract_positions(args: &ExtractPositionsArgs) -> Result<()> {
+    use std::io::BufWriter;
+    use std::path::Path;
+
+    let pgn_content = std::fs::read_to_string(&args.pgn)
+        .map_err(|e| anyhow::anyhow!("cannot read PGN file '{}': {}", args.pgn, e))?;
+
+    let mut sf = StockfishProcess::new(Path::new(&args.stockfish))
+        .map_err(|e| anyhow::anyhow!("failed to start Stockfish '{}': {}", args.stockfish, e))?;
+
+    let out_file = std::fs::File::create(&args.output)
+        .map_err(|e| anyhow::anyhow!("cannot create output file '{}': {}", args.output, e))?;
+    let mut writer = BufWriter::new(out_file);
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut game_idx = 0usize;
+    let mut evaluated = 0usize;
+    let mut kept = 0usize;
+
+    loop {
+        if kept >= args.max_positions {
+            break;
+        }
+
+        let moves = match pgn::parse_nth(&pgn_content, game_idx) {
+            Ok(m) => m,
+            Err(_) => break, // out-of-bounds: no more games
+        };
+
+        game_idx += 1;
+
+        let end_ply = args.max_ply.min(moves.len());
+        if args.min_ply > end_ply {
+            if game_idx % 100 == 0 {
+                eprintln!("Games: {} | Evaluated: {} | Kept: {}", game_idx, evaluated, kept);
+            }
+            continue;
+        }
+
+        for ply in args.min_ply..=end_ply {
+            if kept >= args.max_positions {
+                break;
+            }
+
+            let board = match pgn::replay(&moves, ply) {
+                Ok(b) => b,
+                Err(_) => continue,
+            };
+
+            let fen = format!("{}", board);
+
+            if seen.contains(&fen) {
+                continue;
+            }
+
+            let score = match analyze_fen(&mut sf, &fen, args.depth) {
+                Ok(s) => s,
+                Err(e) => {
+                    anyhow::bail!("Stockfish communication failure: {}", e);
+                }
+            };
+
+            evaluated += 1;
+
+            match score {
+                None => {} // mate score — skip
+                Some(cp) if cp.unsigned_abs() <= args.threshold => {
+                    seen.insert(fen.clone());
+                    writeln!(writer, "{}", fen)?;
+                    kept += 1;
+                }
+                _ => {}
+            }
+        }
+
+        if game_idx % 100 == 0 {
+            eprintln!("Games: {} | Evaluated: {} | Kept: {}", game_idx, evaluated, kept);
+        }
+    }
+
+    writer.flush()?;
     Ok(())
 }
 
