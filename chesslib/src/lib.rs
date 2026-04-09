@@ -11,6 +11,7 @@ pub mod gen_files;
 pub mod magic;
 pub mod match_runner;
 pub mod movegen;
+pub mod pgn;
 pub mod piece_moves;
 pub mod pieces;
 pub mod rank;
