@@ -67,6 +67,19 @@ Started: Thu Apr  9 01:47:41 PDT 2026
   - US-007 and US-008 need `version-report` to read `time_control` from CSVs and group/label output
 ---
 
+## 2026-04-09 - US-007
+- Changed `run_version_report` to group match rows by `time_control` using `BTreeMap<String, HashMap<String, OpponentStats>>`
+- Read `time_control` from CSV index 9 (or `"unknown"` for old-format rows with fewer columns)
+- Rendered a separate `### LTC` / `### STC` sub-section per time control under `## Match Results`
+- Each sub-section has its own table, overall summary, and best/worst matchup — LTC and STC rows are never silently merged
+- Files changed: `chess-runner/src/main.rs`
+- **Learnings for future iterations:**
+  - `tc_opponent_map` is a `BTreeMap<String, HashMap<String, OpponentStats>>` keyed by `time_control` then `opponent`
+  - `BTreeMap` used for time_control key so output order is deterministic (alphabetical: LTC before STC before unknown)
+  - Old CSV rows (<10 fields) fall back to `"unknown"` time_control label for backward compat
+  - US-008 needs similar grouping for SPRT rows (currently `SprtRow` has no `time_control` field yet)
+---
+
 ## 2026-04-09 - US-006
 - Added "SPRT block: STC" print header before the SPRT run in `scripts/benchmark-version.sh`
 - SPRT block was already using `STC_TIME_MS`/`STC_INC_MS` from US-004; only the missing print was needed
