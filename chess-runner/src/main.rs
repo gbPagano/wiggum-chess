@@ -921,12 +921,13 @@ async fn run_match(args: MatchArgs) -> Result<()> {
     }
     println!();
 
-    // Load and validate opening book early so the match fails fast on bad data.
-    let _validated_book: Option<Vec<opening_book::OpeningLine>> =
+    // Load, validate, and select an opening line early so the match fails fast on bad data.
+    let _selected_opening: Option<opening_book::OpeningLine> =
         if let Some(ref book_path) = args.opening_book {
             let raw = opening_book::load_opening_book(std::path::Path::new(book_path))?;
             let validated = opening_book::validate_opening_book(raw)?;
-            Some(validated)
+            let chosen = opening_book::select_opening_line(&validated, args.opening_book_seed);
+            Some(chosen.clone())
         } else {
             None
         };

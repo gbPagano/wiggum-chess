@@ -17,6 +17,8 @@
 /// or from any local path supplied at runtime.
 use chesslib::board::Board;
 use chesslib::chess_move::ChessMove;
+use rand::SeedableRng;
+use rand::seq::SliceRandom;
 use std::path::Path;
 
 /// A single opening line: a sequence of UCI move strings from the initial position.
@@ -104,6 +106,22 @@ pub fn validate_opening_book(lines: Vec<OpeningLine>) -> anyhow::Result<Vec<Open
     Ok(valid)
 }
 
+/// Select one opening line uniformly at random from a non-empty validated set.
+///
+/// If `seed` is `Some(s)`, the same seed and same input always select the same line.
+/// If `seed` is `None`, a random non-deterministic seed is used.
+///
+/// # Panics
+///
+/// Panics if `lines` is empty (callers must ensure the book is non-empty, e.g. via
+/// [`validate_opening_book`]).
+pub fn select_opening_line(lines: &[OpeningLine], seed: Option<u64>) -> &OpeningLine {
+    assert!(!lines.is_empty(), "select_opening_line called with empty book");
+    let effective_seed = seed.unwrap_or_else(rand::random::<u64>);
+    let mut rng = rand::rngs::SmallRng::seed_from_u64(effective_seed);
+    lines.choose(&mut rng).expect("non-empty slice always yields Some")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,5 +179,44 @@ mod tests {
         let result = validate_opening_book(lines);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_select_same_seed_same_line() {
+        let lines = parse_opening_book("e2e4 e7e5\nd2d4 d7d5\nc2c4\n");
+        let validated = validate_opening_book(lines).unwrap();
+        let a = select_opening_line(&validated, Some(42)).moves.clone();
+        let b = select_opening_line(&validated, Some(42)).moves.clone();
+        assert_eq!(a, b, "same seed must produce same line");
+    }
+
+    #[test]
+    fn test_select_different_seeds_may_differ() {
+        // With 3 lines and two very different seeds, it's overwhelmingly likely they differ.
+        let lines = parse_opening_book("e2e4 e7e5\nd2d4 d7d5\nc2c4\n");
+        let validated = validate_opening_book(lines).unwrap();
+        // Just verify selection succeeds for two distinct seeds; we don't assert they differ
+        // since that would be flaky for edge cases.
+        let _ = select_opening_line(&validated, Some(1));
+        let _ = select_opening_line(&validated, Some(u64::MAX));
+    }
+
+    #[test]
+    fn test_select_no_seed_succeeds() {
+        let lines = parse_opening_book("e2e4 e7e5\n");
+        let validated = validate_opening_book(lines).unwrap();
+        // Non-deterministic seed — just verify it returns a line without panicking.
+        let line = select_opening_line(&validated, None);
+        assert_eq!(line.moves, vec!["e2e4", "e7e5"]);
+    }
+
+    #[test]
+    fn test_select_single_line_always_chosen() {
+        let lines = parse_opening_book("e2e4 e7e5\n");
+        let validated = validate_opening_book(lines).unwrap();
+        for seed in [0u64, 1, 42, u64::MAX] {
+            let chosen = select_opening_line(&validated, Some(seed));
+            assert_eq!(chosen.moves, vec!["e2e4", "e7e5"]);
+        }
     }
 }
