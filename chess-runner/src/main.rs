@@ -375,6 +375,7 @@ fn write_sprt_csv(
     elo0: f64,
     elo1: f64,
     sprt_result: &str,
+    time_control: &str,
 ) -> Result<()> {
     let file_exists = std::path::Path::new(path).exists()
         && std::fs::metadata(path)
@@ -402,6 +403,7 @@ fn write_sprt_csv(
             "elo0",
             "elo1",
             "sprt_result",
+            "time_control",
         ])?;
     }
 
@@ -418,6 +420,7 @@ fn write_sprt_csv(
         &format!("{:.2}", elo0),
         &format!("{:.2}", elo1),
         sprt_result,
+        time_control,
     ])?;
 
     wtr.flush()?;
@@ -1225,6 +1228,11 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
     }
 
     if let Some(ref output_path) = args.output {
+        let time_control_label = match (args.time, args.inc) {
+            (10000, 100) => "STC",
+            (60000, 1000) => "LTC",
+            _ => "custom",
+        };
         write_sprt_csv(
             output_path,
             &engine1_name,
@@ -1236,6 +1244,7 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
             args.elo0,
             args.elo1,
             sprt_result,
+            time_control_label,
         )?;
         println!("SPRT result appended to: {}", output_path);
     }
