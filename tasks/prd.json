@@ -31,7 +31,7 @@
       "id": "US-005",
       "title": "--positions-file, --num-positions, --seed flags on chess-runner sprt",
       "description": "Add balanced positions flags to sprt subcommand",
-      "passes": false
+      "passes": true
     },
     {
       "id": "US-006",

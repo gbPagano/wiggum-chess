@@ -138,6 +138,18 @@ struct SprtArgs {
     /// Optional path to CSV file for appending SPRT results
     #[arg(long)]
     output: Option<String>,
+
+    /// Optional path to a file of balanced FEN positions (one per line); games cycle through them
+    #[arg(long)]
+    positions_file: Option<String>,
+
+    /// Number of positions to sample from --positions-file (default: 10)
+    #[arg(long, default_value = "10")]
+    num_positions: usize,
+
+    /// RNG seed for position selection (default: random); printed to stderr for reproducibility
+    #[arg(long)]
+    seed: Option<u64>,
 }
 
 #[derive(Parser)]
@@ -1066,6 +1078,27 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
     println!("Engine 2 UCI name: {}", engine2_name);
     println!();
 
+    // Load balanced positions if provided
+    let fens: Vec<String> = if let Some(ref positions_path) = args.positions_file {
+        let content = std::fs::read_to_string(positions_path)
+            .map_err(|e| anyhow::anyhow!("cannot read positions file '{}': {}", positions_path, e))?;
+        let mut fens: Vec<String> = content
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+        let seed = args.seed.unwrap_or_else(|| rand::random::<u64>());
+        eprintln!("Seed: {}", seed);
+        let mut rng = rand::rngs::SmallRng::seed_from_u64(seed);
+        fens.shuffle(&mut rng);
+        fens.truncate(args.num_positions);
+        println!("Positions mode: {} position(s), cycling through SPRT games", fens.len());
+        println!();
+        fens
+    } else {
+        Vec::new()
+    };
+
     let mut wins = 0usize;
     let mut draws = 0usize;
     let mut losses = 0usize;
@@ -1100,7 +1133,19 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
             verbose: false,
         });
 
+        let start_fen = if !fens.is_empty() {
+            Some(fens[game_idx % fens.len()].as_str())
+        } else {
+            None
+        };
+
+        let game = match start_fen {
+            Some(fen) => Game::from_fen(fen)?,
+            None => Game::new(),
+        };
+
         let mut chess_match = Match::new(white_engine, black_engine)
+            .with_game(game)
             .with_clock(clock)
             .with_observer(observer);
 

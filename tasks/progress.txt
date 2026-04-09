@@ -52,3 +52,13 @@
   - `write_csv` adds `start_fen` as column 9 (0-indexed); old CSVs without it will have trailing empty field
   - Seed is `Option<u64>` in args; `rand::random::<u64>()` generates a random seed when None
 ---
+
+## 2026-04-09 - US-005
+- Added `--positions-file`, `--num-positions` (default 10), `--seed` to `SprtArgs`
+- Updated `run_sprt` to load/shuffle/truncate FENs before the loop, then cycle through them with `game_idx % fens.len()` to set the starting position for each game via `Game::from_fen`
+- In standard mode (no positions_file): behavior unchanged
+- Files changed: `chess-runner/src/main.rs`, `tasks/prd.json`, `tasks/progress.txt`
+- **Learnings for future iterations:**
+  - SPRT cycles through positions (modulo), unlike match which plays N games per position
+  - Seed printed to stderr; positions count and cycling reported to stdout
+---
