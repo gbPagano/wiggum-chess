@@ -1,0 +1,144 @@
+{
+  "project": "Wiggum Chess Engine",
+  "branchName": "ralph/opening-book-neutral",
+  "description": "Neutral Opening Book for Engine Matches - Let chess-runner apply an optional neutral opening line to both engines before search begins, preserving fairness and reducing time spent on basic opening theory.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Define efficient opening book format",
+      "description": "As a developer, I want an efficient opening-book source format so that chess-runner can load neutral opening lines from repository data or local files with low implementation overhead.",
+      "acceptanceCriteria": [
+        "Use a plain-text opening-book format with one opening line per file line",
+        "Each opening-book line stores UCI moves separated by spaces from the initial position",
+        "Empty lines are ignored during loading",
+        "The format can be loaded from a repository file or a local external file",
+        "CLI help or adjacent documentation states which initial format is supported",
+        "`cargo build --workspace` passes",
+        "`cargo test --workspace -- --skip gen_files::magics::name` passes",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Opening book format defined: plain-text, one UCI move sequence per line, comments (#) and empty lines ignored. Module at chess-runner/src/opening_book.rs, sample file at chess-runner/openings.txt."
+    },
+    {
+      "id": "US-002",
+      "title": "Add explicit opening-book flag to chess-runner match",
+      "description": "As a developer, I want opening-book support to be enabled only through an explicit match flag so that existing match behavior remains unchanged unless I opt in.",
+      "acceptanceCriteria": [
+        "`chess-runner match` exposes an explicit flag to provide an opening-book source",
+        "`chess-runner match` exposes `--opening-book-seed <u64>` for reproducible opening-line selection",
+        "`chess-runner match` exposes `--opening-book-max-ply <n>` to limit how many opening-book plies may be applied",
+        "Without the opening-book flag, match behavior remains unchanged",
+        "`chess-runner match --help` documents how to enable the opening book and the related seed and max-ply options",
+        "`cargo build --workspace` passes",
+        "`cargo test --workspace -- --skip gen_files::magics::name` passes",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Added --opening-book, --opening-book-seed, and --opening-book-max-ply flags to MatchArgs in chess-runner/src/main.rs. Also updated PgnMatchArgs delegate to populate the new fields with defaults."
+    },
+    {
+      "id": "US-003",
+      "title": "Load and validate opening-book lines",
+      "description": "As a developer, I want chess-runner to load opening-book lines and reject malformed input early so that matches fail fast on invalid book data.",
+      "acceptanceCriteria": [
+        "`chess-runner` loads the opening-book source before match execution starts",
+        "Each loaded line is validated as a legal move sequence from the initial position",
+        "Invalid lines produce a descriptive error and non-zero exit status",
+        "If the validated book is empty, execution fails with a clear message",
+        "`cargo build --workspace` passes",
+        "`cargo test --workspace -- --skip gen_files::magics::name` passes",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Select opening-book lines uniformly with seed support",
+      "description": "As a developer, I want chess-runner to choose uniformly among valid opening lines so that matches do not always repeat the same theory branch and selection remains reproducible.",
+      "acceptanceCriteria": [
+        "When multiple valid lines exist, selection is uniformly random",
+        "Selection uses the `--opening-book-seed` value when provided",
+        "The same seed and same input choose the same line",
+        "Without an explicit seed, selection still succeeds using a non-deterministic seed source",
+        "`cargo build --workspace` passes",
+        "`cargo test --workspace -- --skip gen_files::magics::name` passes",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Apply opening-book moves before engine search",
+      "description": "As a developer, I want chess-runner to apply the same opening line before search begins so that both engines start from an identical neutral position.",
+      "acceptanceCriteria": [
+        "Before the first computed engine move, `chess-runner` applies the selected opening line to the game state",
+        "Both engines receive the same resulting position after the opening line is applied",
+        "Opening-book moves do not consume engine clock time",
+        "The effective starting game state matches the applied move sequence",
+        "`cargo build --workspace` passes",
+        "`cargo test --workspace -- --skip gen_files::magics::name` passes",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add configurable ply limit for opening-book application",
+      "description": "As a developer, I want the opening book to stop after a configurable early-game ply limit so that engines still perform their own middle-game search.",
+      "acceptanceCriteria": [
+        "`chess-runner match` uses the `--opening-book-max-ply` value to limit how many opening-book plies may be applied",
+        "`chess-runner` never applies opening-book moves beyond that ply limit",
+        "After the limit is reached, the game continues normally with engine search",
+        "Without opening-book configuration, existing behavior remains unchanged",
+        "`cargo build --workspace` passes",
+        "`cargo test --workspace -- --skip gen_files::magics::name` passes",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Log chosen opening-book line in debug output",
+      "description": "As a developer, I want the selected opening-book line to appear in debug output so that I can audit which neutral opening was applied without changing result schemas.",
+      "acceptanceCriteria": [
+        "When the opening book is enabled, `chess-runner` logs which opening line was chosen in debug output",
+        "The debug log contains enough information to identify the applied sequence or its identifier",
+        "Without the opening-book flag, this debug log does not appear",
+        "`cargo build --workspace` passes",
+        "`cargo test --workspace -- --skip gen_files::magics::name` passes",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Pass opening-book configuration through benchmark script",
+      "description": "As a developer, I want benchmark tooling to optionally pass opening-book configuration into chess-runner so that neutral openings can be reused consistently in automated evaluations.",
+      "acceptanceCriteria": [
+        "`scripts/benchmark-version.sh` or equivalent benchmark flow can pass opening-book configuration to `chess-runner`",
+        "When opening-book configuration is omitted, benchmark behavior remains unchanged",
+        "When enabled, the benchmark applies the same opening-book mechanism neutrally to both engines",
+        "`bash -n scripts/benchmark-version.sh` passes",
+        "`cargo build --workspace` passes",
+        "`cargo test --workspace -- --skip gen_files::magics::name` passes",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

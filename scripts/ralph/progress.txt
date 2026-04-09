@@ -1,0 +1,33 @@
+## Codebase Patterns
+- Opening book format: plain-text, one UCI move sequence per line, space-separated; `#` comments and empty lines skipped
+- `data/` directory is gitignored — use `chess-runner/` or other tracked dirs for repository data files
+- git identity must be configured before committing: `git config user.email` and `git config user.name`
+- ChessMove::from_uci(s, board) validates a move string against legal moves on a given Board
+- Match execution is in `run_match()` / `play_games()` in chess-runner/src/main.rs
+
+# Ralph Progress Log
+Started: Thu Apr  9 09:09:27 PDT 2026
+---
+
+## 2026-04-09 - US-001
+- Defined plain-text opening book format: one UCI move sequence per line, space-separated from initial position; comment lines (starting with `#`) and empty lines are ignored
+- Created `chess-runner/src/opening_book.rs` with `OpeningLine` type, `load_opening_book(path)` for file I/O, and `parse_opening_book(content)` for pure parsing; format documented in module-level doc comment
+- Created `chess-runner/openings.txt` with 20 named opening lines (Ruy López, Sicilian, French, Caro-Kann, QGD, KID, Nimzo-Indian, etc.)
+- Added `mod opening_book;` to chess-runner/src/main.rs
+- Files changed: `chess-runner/src/main.rs`, `chess-runner/src/opening_book.rs`, `chess-runner/openings.txt`
+- **Learnings for future iterations:**
+  - `data/` is gitignored; put repo-committed data files inside `chess-runner/` or another tracked directory
+  - `ChessMove::from_uci(s, board)` in chesslib validates a UCI move string against legal moves — use this for book validation in US-003
+  - `rand::rngs::SmallRng::seed_from_u64` + `SliceRandom::shuffle` already used for positions selection — use same pattern for opening-line selection in US-004
+  - `play_games()` takes `start_fen: Option<&str>` — opening-book pre-application happens before calling this (apply moves to get the FEN, then pass it in) — see US-005
+---
+
+## 2026-04-09 - US-002
+- Added `--opening-book <path>`, `--opening-book-seed <u64>`, and `--opening-book-max-ply <n>` flags to `MatchArgs` in chess-runner/src/main.rs
+- Updated the `PgnMatchArgs` delegate construction of `MatchArgs` (line ~1300) to include the three new fields with `None`/default values
+- Clap auto-generates `--help` documentation from the doc comments, so all flags are documented automatically
+- Files changed: `chess-runner/src/main.rs`, `scripts/ralph/prd.json`
+- **Learnings for future iterations:**
+  - There is a `MatchArgs` struct literal near line 1300 inside `run_pgn_match()` — when new fields are added to `MatchArgs`, this literal must also be updated or it won't compile
+  - `--opening-book-max-ply` defaults to 20; future stories should respect this field from `MatchArgs` when applying opening moves
+---
