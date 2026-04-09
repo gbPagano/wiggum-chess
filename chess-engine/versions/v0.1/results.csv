@@ -3,7 +3,3 @@ timestamp,engine1_name,engine2_name,games_played,engine1_wins,engine2_wins,draws
 2026-04-07T00:02:03.555259516+00:00,Wiggum Engine v0.1,Stockfish 17 (2000),2,0,2,0,0.0000
 2026-04-07T00:02:54.727094858+00:00,Wiggum Engine v0.1,Stockfish 17 (2500),2,0,2,0,0.0000
 2026-04-07T00:03:23.995398548+00:00,Wiggum Engine v0.1,Stockfish 17 (max),2,0,2,0,0.0000
-2026-04-09T09:50:49.093529168+00:00,Wiggum Engine v0.3,Stockfish 17 (1500),1,1,0,0,1.0000
-2026-04-09T09:51:25.857333228+00:00,Wiggum Engine v0.3,Stockfish 17 (2000),1,0,1,0,0.0000
-2026-04-09T09:51:48.110689006+00:00,Wiggum Engine v0.3,Stockfish 17 (2500),1,0,1,0,0.0000
-2026-04-09T09:52:04.610956187+00:00,Wiggum Engine v0.3,Stockfish 17 (max),1,0,1,0,0.0000
