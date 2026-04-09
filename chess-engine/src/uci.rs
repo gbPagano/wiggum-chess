@@ -42,6 +42,35 @@ impl GoParams {
             || self.wtime.is_some()
             || self.btime.is_some()
     }
+
+    /// Compute the search budget in milliseconds for `color`.
+    ///
+    /// # Budgeting heuristic
+    ///
+    /// - `go movetime <ms>`: use the fixed value directly.
+    /// - Clock-based (`wtime`/`btime`): allocate `remaining / 20 + increment / 2`
+    ///   so the engine nominally has 20 moves left while also spending half the
+    ///   increment per move.  The result is then capped at
+    ///   `remaining - SAFETY_MARGIN_MS` to avoid flagging on slow systems.
+    /// - Returns `None` when no timed parameter is present (fall back to
+    ///   depth-based search).
+    pub fn compute_budget_ms(&self, color: Color) -> Option<u64> {
+        /// Minimum cushion kept in reserve to avoid overshooting the clock.
+        const SAFETY_MARGIN_MS: u64 = 50;
+
+        if let Some(movetime) = self.movetime {
+            return Some(movetime);
+        }
+
+        let remaining = self.remaining_time(color)?;
+        let increment = self.increment(color);
+
+        let budget = remaining / 20 + increment / 2;
+
+        // Cap the budget so we never spend more than remaining - safety_margin.
+        let cap = remaining.saturating_sub(SAFETY_MARGIN_MS);
+        Some(budget.min(cap))
+    }
 }
 
 /// Parse a UCI `go` command line into a [`GoParams`].
@@ -137,5 +166,52 @@ mod tests {
         let p = parse_go("go wtime 5000 btime 5000");
         assert_eq!(p.increment(Color::White), 0);
         assert_eq!(p.increment(Color::Black), 0);
+    }
+
+    // --- compute_budget_ms tests ---
+
+    #[test]
+    fn budget_movetime_returned_directly() {
+        let p = parse_go("go movetime 500");
+        assert_eq!(p.compute_budget_ms(Color::White), Some(500));
+        assert_eq!(p.compute_budget_ms(Color::Black), Some(500));
+    }
+
+    #[test]
+    fn budget_clock_based_uses_remaining_over_20_plus_half_increment() {
+        // remaining=60000, increment=1000 → 60000/20 + 1000/2 = 3000+500 = 3500
+        let p = parse_go("go wtime 60000 btime 60000 winc 1000 binc 1000");
+        assert_eq!(p.compute_budget_ms(Color::White), Some(3500));
+        assert_eq!(p.compute_budget_ms(Color::Black), Some(3500));
+    }
+
+    #[test]
+    fn budget_selects_active_side_clock() {
+        // White: 20000ms remaining, 0 inc → 20000/20 = 1000
+        // Black: 40000ms remaining, 2000 inc → 40000/20 + 1000 = 3000
+        let p = parse_go("go wtime 20000 btime 40000 binc 2000");
+        assert_eq!(p.compute_budget_ms(Color::White), Some(1000));
+        assert_eq!(p.compute_budget_ms(Color::Black), Some(3000));
+    }
+
+    #[test]
+    fn budget_capped_below_remaining_minus_safety_margin() {
+        // remaining=100, increment=0 → budget=100/20=5; cap=100-50=50 → min(5,50)=5
+        // Ensures cap only bites when budget exceeds remaining-50.
+        // Now use tiny remaining where budget > cap:
+        // remaining=60, increment=0 → budget=60/20=3; cap=60-50=10 → min(3,10)=3
+        let p = GoParams { wtime: Some(60), ..Default::default() };
+        assert_eq!(p.compute_budget_ms(Color::White), Some(3));
+
+        // remaining=40, increment=0 → budget=40/20=2; cap=40-50=0 (saturating) → min(2,0)=0
+        let p2 = GoParams { wtime: Some(40), ..Default::default() };
+        assert_eq!(p2.compute_budget_ms(Color::White), Some(0));
+    }
+
+    #[test]
+    fn budget_returns_none_when_no_time_control() {
+        let p = parse_go("go depth 5");
+        assert_eq!(p.compute_budget_ms(Color::White), None);
+        assert_eq!(p.compute_budget_ms(Color::Black), None);
     }
 }
