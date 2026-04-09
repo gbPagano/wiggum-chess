@@ -15,9 +15,13 @@ cargo build --workspace                      # debug build (still opt-level=3)
 cargo build --release --workspace            # release build (LTO, single codegen unit)
 cargo test --workspace                       # run all tests
 cargo test -p chesslib movegen_perft_5       # run a single test by name
-cargo run -p chess-runner -- 6              # run perft to depth 6
+cargo run -p chess-runner -- perft 6         # run perft to depth 6
+cargo run -p chess-runner -- match --engine1 <bin1> --engine2 <bin2> --games 20  # run a match
+cargo run -p chess-runner -- sprt --engine1 <bin1> --engine2 <bin2>              # SPRT match
 cargo bench --bench perft -p chesslib        # criterion perft benchmarks (depths 1-7)
 cargo bench --bench alloc -p chesslib        # allocation benchmarks (divan)
+./target/debug/evolution-loop --help         # see evolution loop options
+./target/debug/evolution-loop --verbose      # run with live Claude output streamed
 ```
 
 Note: `gen_files::magics::name` is an intentional developer scratchpad test with `assert!(false)` — always fails. For full-workspace runs, skip it with `cargo test --workspace -- --skip gen_files::magics::name`.
@@ -26,8 +30,10 @@ Note: `gen_files::magics::name` is an intentional developer scratchpad test with
 
 ### Workspace Structure
 
-- `chesslib/` — Library crate (move generation, board state, etc.)
-- `chess-runner/` — Binary crate depending on chesslib
+- `chesslib/` — Library crate (move generation, board state, UCI engine runner, match runner)
+- `chess-engine/` — Binary crate: UCI-protocol engine (negamax search + material eval). Also exposes `WiggumEngine` as a library for in-process use by chess-runner.
+- `chess-runner/` — Binary crate: CLI for perft, `match`, `sprt`, `report`, and `version-report` subcommands
+- `evolution-loop/` — Binary crate: orchestrates multi-iteration engine evolution (propose → implement → correctness gate → benchmark → decide → promote)
 - `Cargo.toml` — Workspace root (profiles defined here)
 
 ### Benchmarking Reports
@@ -70,6 +76,13 @@ Legal move generation uses a trait-based design:
 ### Magic Bitboards (`chesslib/src/magic.rs`)
 
 Sliding piece attacks (rook/bishop) use magic bitboard lookup. `get_rook_moves()`/`get_bishop_moves()` use unsafe unchecked indexing for performance. All other piece move lookups are also unsafe table reads.
+
+### Engine Search & Evaluation (`chess-engine/src/`)
+
+- **`eval.rs`** — Material-only evaluation: centipawn values (P=100, N=320, B=330, R=500, Q=900). Returns score from side-to-move's perspective. Returns −30000 for checkmate, 0 for stalemate.
+- **`search.rs`** — Recursive negamax (no alpha-beta yet). Default depth 4. `CHECKMATE_SCORE = 30000`. Entry point: `search(board, depth) -> (Option<ChessMove>, i32)`.
+- **`engine.rs`** — `WiggumEngine` struct implementing `chesslib::engine::Engine` trait (async). Used by chess-runner for in-process matches without spawning a subprocess.
+- **`main.rs`** — UCI loop: reads stdin, handles `uci`/`isready`/`position`/`go`/`quit`. The `chess-engine` binary is what `chess-runner match` and `evolution-loop` benchmark against.
 
 ## Testing
 
