@@ -96,11 +96,19 @@ pub struct Move {
 
 impl Move {
     pub fn new(from: Square, to: Square) -> Self {
-        Self { from, to, promotion: None }
+        Self {
+            from,
+            to,
+            promotion: None,
+        }
     }
 
     pub fn with_promotion(from: Square, to: Square, kind: PieceKind) -> Self {
-        Self { from, to, promotion: Some(kind) }
+        Self {
+            from,
+            to,
+            promotion: Some(kind),
+        }
     }
 }
 
@@ -178,7 +186,11 @@ impl Board {
                     file += ch as i8 - '0' as i8;
                 }
                 _ => {
-                    let color = if ch.is_uppercase() { Color::White } else { Color::Black };
+                    let color = if ch.is_uppercase() {
+                        Color::White
+                    } else {
+                        Color::Black
+                    };
                     let kind = match ch.to_ascii_lowercase() {
                         'p' => PieceKind::Pawn,
                         'n' => PieceKind::Knight,
@@ -267,8 +279,8 @@ impl Board {
             && next.squares[mv.to.rank as usize][mv.to.file as usize].is_none();
 
         // Detect castling: king moves exactly 2 files
-        let is_castling = piece.kind == PieceKind::King
-            && (mv.from.file as i8 - mv.to.file as i8).abs() == 2;
+        let is_castling =
+            piece.kind == PieceKind::King && (mv.from.file as i8 - mv.to.file as i8).abs() == 2;
 
         // Place piece on destination (captures whatever was there)
         let captured = next.squares[mv.to.rank as usize][mv.to.file as usize].replace(piece);
@@ -385,7 +397,16 @@ impl Board {
         }
 
         // Knight attacks
-        for (dr, df) in [(-2i8,-1i8),(-2,1),(-1,-2),(-1,2),(1,-2),(1,2),(2,-1),(2,1)] {
+        for (dr, df) in [
+            (-2i8, -1i8),
+            (-2, 1),
+            (-1, -2),
+            (-1, 2),
+            (1, -2),
+            (1, 2),
+            (2, -1),
+            (2, 1),
+        ] {
             let r = sq.rank as i8 + dr;
             let f = sq.file as i8 + df;
             if (0..8).contains(&r) && (0..8).contains(&f) {
@@ -398,7 +419,16 @@ impl Board {
         }
 
         // King attacks
-        for (dr, df) in [(-1i8,-1i8),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)] {
+        for (dr, df) in [
+            (-1i8, -1i8),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
+        ] {
             let r = sq.rank as i8 + dr;
             let f = sq.file as i8 + df;
             if (0..8).contains(&r) && (0..8).contains(&f) {
@@ -411,13 +441,14 @@ impl Board {
         }
 
         // Bishop / Queen diagonal attacks
-        for (dr, df) in [(-1i8,-1i8),(-1,1),(1,-1),(1,1)] {
+        for (dr, df) in [(-1i8, -1i8), (-1, 1), (1, -1), (1, 1)] {
             let mut r = sq.rank as i8 + dr;
             let mut f = sq.file as i8 + df;
             while (0..8).contains(&r) && (0..8).contains(&f) {
                 match self.get(Square::new(r as u8, f as u8)) {
-                    Some(p) if p.color == by_color
-                        && (p.kind == PieceKind::Bishop || p.kind == PieceKind::Queen) =>
+                    Some(p)
+                        if p.color == by_color
+                            && (p.kind == PieceKind::Bishop || p.kind == PieceKind::Queen) =>
                     {
                         return true;
                     }
@@ -430,13 +461,14 @@ impl Board {
         }
 
         // Rook / Queen rank and file attacks
-        for (dr, df) in [(-1i8,0i8),(1,0),(0,-1),(0,1)] {
+        for (dr, df) in [(-1i8, 0i8), (1, 0), (0, -1), (0, 1)] {
             let mut r = sq.rank as i8 + dr;
             let mut f = sq.file as i8 + df;
             while (0..8).contains(&r) && (0..8).contains(&f) {
                 match self.get(Square::new(r as u8, f as u8)) {
-                    Some(p) if p.color == by_color
-                        && (p.kind == PieceKind::Rook || p.kind == PieceKind::Queen) =>
+                    Some(p)
+                        if p.color == by_color
+                            && (p.kind == PieceKind::Rook || p.kind == PieceKind::Queen) =>
                     {
                         return true;
                     }
@@ -613,10 +645,14 @@ impl Board {
     pub fn pseudo_legal_knight_moves(&self) -> Vec<Move> {
         let color = self.side_to_move;
         let offsets: [(i8, i8); 8] = [
-            (-2, -1), (-2, 1),
-            (-1, -2), (-1, 2),
-            ( 1, -2), ( 1, 2),
-            ( 2, -1), ( 2, 1),
+            (-2, -1),
+            (-2, 1),
+            (-1, -2),
+            (-1, 2),
+            (1, -2),
+            (1, 2),
+            (2, -1),
+            (2, 1),
         ];
         self.short_range_moves(color, PieceKind::Knight, &offsets)
     }
@@ -625,9 +661,14 @@ impl Board {
     pub fn pseudo_legal_king_moves(&self) -> Vec<Move> {
         let color = self.side_to_move;
         let offsets: [(i8, i8); 8] = [
-            (-1, -1), (-1, 0), (-1, 1),
-            ( 0, -1),           ( 0, 1),
-            ( 1, -1), ( 1, 0), ( 1, 1),
+            (-1, -1),
+            (-1, 0),
+            (-1, 1),
+            (0, -1),
+            (0, 1),
+            (1, -1),
+            (1, 0),
+            (1, 1),
         ];
         self.short_range_moves(color, PieceKind::King, &offsets)
     }
@@ -647,8 +688,14 @@ impl Board {
     /// Generate pseudo-legal queen moves for the side to move.
     pub fn pseudo_legal_queen_moves(&self) -> Vec<Move> {
         let directions = [
-            (-1i8, -1i8), (-1, 1), (1, -1), (1, 1),
-            (-1, 0), (1, 0), (0, -1), (0, 1),
+            (-1i8, -1i8),
+            (-1, 1),
+            (1, -1),
+            (1, 1),
+            (-1, 0),
+            (1, 0),
+            (0, -1),
+            (0, 1),
         ];
         self.sliding_moves(PieceKind::Queen, &directions)
     }
@@ -737,7 +784,10 @@ impl Board {
         if depth == 1 {
             return moves.len() as u64;
         }
-        moves.iter().map(|&mv| self.apply_move(mv).perft(depth - 1)).sum()
+        moves
+            .iter()
+            .map(|&mv| self.apply_move(mv).perft(depth - 1))
+            .sum()
     }
 
     // -----------------------------------------------------------------------
@@ -958,8 +1008,14 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::Black;
         board.fullmove_number = 3;
-        board.set(Square::new(6, 0), Some(Piece::new(PieceKind::Rook, Color::Black)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(6, 0),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let after = board.apply_move(Move::new(Square::new(6, 0), Square::new(5, 0)));
         assert_eq!(after.fullmove_number, 4);
@@ -970,8 +1026,14 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.halfmove_clock = 10;
-        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(4, 0), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        board.set(
+            Square::new(0, 0),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(4, 0),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
 
         let after = board.apply_move(Move::new(Square::new(0, 0), Square::new(4, 0)));
         assert_eq!(after.halfmove_clock, 0);
@@ -982,8 +1044,14 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.halfmove_clock = 5;
-        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
+        board.set(
+            Square::new(0, 0),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
 
         let after = board.apply_move(Move::new(Square::new(0, 0), Square::new(4, 0)));
         assert_eq!(after.halfmove_clock, 6);
@@ -1010,11 +1078,23 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.en_passant_file = Some(3); // d-file
-        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(4, 3), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        board.set(
+            Square::new(4, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(4, 3),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
         // Need kings to avoid issues in legal_moves checks
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let after = board.apply_move(Move::new(Square::new(4, 4), Square::new(5, 3)));
 
@@ -1034,9 +1114,18 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.castling.white_kingside = true;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(0, 7), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(0, 7),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         // Castle kingside: king e1→g1
         let after = board.apply_move(Move::new(Square::new(0, 4), Square::new(0, 6)));
@@ -1060,9 +1149,18 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.castling.white_queenside = true;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(0, 0),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         // Castle queenside: king e1→c1
         let after = board.apply_move(Move::new(Square::new(0, 4), Square::new(0, 2)));
@@ -1084,9 +1182,18 @@ mod tests {
         // White pawn on e7 promotes to queen
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(6, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(7, 0), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(6, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(7, 0),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let after = board.apply_move(Move::with_promotion(
             Square::new(6, 4),
@@ -1106,8 +1213,14 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.castling = CastlingRights::all();
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let after = board.apply_move(Move::new(Square::new(0, 4), Square::new(0, 3)));
         assert!(!after.castling.white_kingside);
@@ -1122,9 +1235,18 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.castling = CastlingRights::all();
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(0, 7), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(0, 7),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let after = board.apply_move(Move::new(Square::new(0, 7), Square::new(0, 6)));
         assert!(!after.castling.white_kingside);
@@ -1137,7 +1259,10 @@ mod tests {
     fn white_pawn_single_push() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(moves.contains(&Move::new(Square::new(3, 4), Square::new(4, 4))));
         assert!(!moves.contains(&Move::new(Square::new(3, 4), Square::new(5, 4))));
@@ -1147,7 +1272,10 @@ mod tests {
     fn white_pawn_double_push_from_start_rank() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(1, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        board.set(
+            Square::new(1, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(moves.contains(&Move::new(Square::new(1, 4), Square::new(2, 4))));
         assert!(moves.contains(&Move::new(Square::new(1, 4), Square::new(3, 4))));
@@ -1157,8 +1285,14 @@ mod tests {
     fn white_pawn_double_push_blocked_by_piece() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(1, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(2, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
+        board.set(
+            Square::new(1, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(2, 4),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(!moves.contains(&Move::new(Square::new(1, 4), Square::new(2, 4))));
         assert!(!moves.contains(&Move::new(Square::new(1, 4), Square::new(3, 4))));
@@ -1168,8 +1302,14 @@ mod tests {
     fn white_pawn_double_push_blocked_by_second_piece() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(1, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
+        board.set(
+            Square::new(1, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(moves.contains(&Move::new(Square::new(1, 4), Square::new(2, 4))));
         assert!(!moves.contains(&Move::new(Square::new(1, 4), Square::new(3, 4))));
@@ -1179,9 +1319,18 @@ mod tests {
     fn white_pawn_captures_diagonally() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(4, 2), Some(Piece::new(PieceKind::Pawn, Color::Black)));
-        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Knight, Color::Black)));
+        board.set(
+            Square::new(3, 3),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(4, 2),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
+        board.set(
+            Square::new(4, 4),
+            Some(Piece::new(PieceKind::Knight, Color::Black)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 2))));
         assert!(moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 4))));
@@ -1191,9 +1340,18 @@ mod tests {
     fn white_pawn_cannot_capture_friendly() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(4, 2), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Rook, Color::White)));
+        board.set(
+            Square::new(3, 3),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(4, 2),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(4, 4),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(!moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 2))));
         assert!(!moves.contains(&Move::new(Square::new(3, 3), Square::new(4, 4))));
@@ -1203,7 +1361,10 @@ mod tests {
     fn black_pawn_single_push() {
         let mut board = Board::empty();
         board.side_to_move = Color::Black;
-        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        board.set(
+            Square::new(4, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(moves.contains(&Move::new(Square::new(4, 4), Square::new(3, 4))));
     }
@@ -1212,7 +1373,10 @@ mod tests {
     fn black_pawn_double_push_from_start_rank() {
         let mut board = Board::empty();
         board.side_to_move = Color::Black;
-        board.set(Square::new(6, 4), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        board.set(
+            Square::new(6, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(moves.contains(&Move::new(Square::new(6, 4), Square::new(5, 4))));
         assert!(moves.contains(&Move::new(Square::new(6, 4), Square::new(4, 4))));
@@ -1222,9 +1386,18 @@ mod tests {
     fn black_pawn_captures_diagonally() {
         let mut board = Board::empty();
         board.side_to_move = Color::Black;
-        board.set(Square::new(4, 3), Some(Piece::new(PieceKind::Pawn, Color::Black)));
-        board.set(Square::new(3, 2), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Knight, Color::White)));
+        board.set(
+            Square::new(4, 3),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
+        board.set(
+            Square::new(3, 2),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::Knight, Color::White)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
         assert!(moves.contains(&Move::new(Square::new(4, 3), Square::new(3, 2))));
         assert!(moves.contains(&Move::new(Square::new(4, 3), Square::new(3, 4))));
@@ -1235,18 +1408,38 @@ mod tests {
         // White pawn on e7 ready to promote
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(6, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        board.set(
+            Square::new(6, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
         let moves = board.pseudo_legal_pawn_moves();
 
         // Should generate 4 promotions (Q, R, B, N)
-        let promo_moves: Vec<_> = moves.iter()
+        let promo_moves: Vec<_> = moves
+            .iter()
             .filter(|m| m.from == Square::new(6, 4) && m.to == Square::new(7, 4))
             .collect();
         assert_eq!(promo_moves.len(), 4);
-        assert!(promo_moves.iter().any(|m| m.promotion == Some(PieceKind::Queen)));
-        assert!(promo_moves.iter().any(|m| m.promotion == Some(PieceKind::Rook)));
-        assert!(promo_moves.iter().any(|m| m.promotion == Some(PieceKind::Bishop)));
-        assert!(promo_moves.iter().any(|m| m.promotion == Some(PieceKind::Knight)));
+        assert!(
+            promo_moves
+                .iter()
+                .any(|m| m.promotion == Some(PieceKind::Queen))
+        );
+        assert!(
+            promo_moves
+                .iter()
+                .any(|m| m.promotion == Some(PieceKind::Rook))
+        );
+        assert!(
+            promo_moves
+                .iter()
+                .any(|m| m.promotion == Some(PieceKind::Bishop))
+        );
+        assert!(
+            promo_moves
+                .iter()
+                .any(|m| m.promotion == Some(PieceKind::Knight))
+        );
     }
 
     #[test]
@@ -1255,8 +1448,14 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.en_passant_file = Some(3); // d-file
-        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(4, 3), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        board.set(
+            Square::new(4, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(4, 3),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
 
         let moves = board.pseudo_legal_pawn_moves();
         // En passant capture: e5→d6 (rank 5, file 3)
@@ -1269,7 +1468,10 @@ mod tests {
     fn knight_in_center_has_eight_moves() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Knight, Color::White)));
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::Knight, Color::White)),
+        );
         let moves = board.pseudo_legal_knight_moves();
         assert_eq!(moves.len(), 8);
     }
@@ -1278,7 +1480,10 @@ mod tests {
     fn knight_in_corner_has_two_moves() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Knight, Color::White)));
+        board.set(
+            Square::new(0, 0),
+            Some(Piece::new(PieceKind::Knight, Color::White)),
+        );
         let moves = board.pseudo_legal_knight_moves();
         assert_eq!(moves.len(), 2);
     }
@@ -1287,8 +1492,14 @@ mod tests {
     fn knight_cannot_capture_friendly() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Knight, Color::White)));
-        board.set(Square::new(5, 5), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::Knight, Color::White)),
+        );
+        board.set(
+            Square::new(5, 5),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
         let moves = board.pseudo_legal_knight_moves();
         assert!(!moves.contains(&Move::new(Square::new(3, 4), Square::new(5, 5))));
         assert_eq!(moves.len(), 7);
@@ -1298,7 +1509,10 @@ mod tests {
     fn king_in_center_has_eight_moves() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::King, Color::White)));
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
         let moves = board.pseudo_legal_king_moves();
         assert_eq!(moves.len(), 8);
     }
@@ -1307,7 +1521,10 @@ mod tests {
     fn king_in_corner_has_three_moves() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::King, Color::White)));
+        board.set(
+            Square::new(0, 0),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
         let moves = board.pseudo_legal_king_moves();
         assert_eq!(moves.len(), 3);
     }
@@ -1318,7 +1535,10 @@ mod tests {
     fn bishop_in_center_open_board_has_13_moves() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Bishop, Color::White)));
+        board.set(
+            Square::new(3, 3),
+            Some(Piece::new(PieceKind::Bishop, Color::White)),
+        );
         let moves = board.pseudo_legal_bishop_moves();
         assert_eq!(moves.len(), 13);
     }
@@ -1327,7 +1547,10 @@ mod tests {
     fn rook_in_center_open_board_has_14_moves() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(3, 3), Some(Piece::new(PieceKind::Rook, Color::White)));
+        board.set(
+            Square::new(3, 3),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
         let moves = board.pseudo_legal_rook_moves();
         assert_eq!(moves.len(), 14);
     }
@@ -1338,8 +1561,14 @@ mod tests {
     fn king_in_check_by_rook() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
 
         assert!(board.is_in_check(Color::White));
         assert!(!board.is_in_check(Color::Black));
@@ -1348,8 +1577,14 @@ mod tests {
     #[test]
     fn king_in_check_by_bishop() {
         let mut board = Board::empty();
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(4, 0), Some(Piece::new(PieceKind::Bishop, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(4, 0),
+            Some(Piece::new(PieceKind::Bishop, Color::Black)),
+        );
 
         assert!(board.is_in_check(Color::White));
     }
@@ -1357,12 +1592,18 @@ mod tests {
     #[test]
     fn king_in_check_by_knight() {
         let mut board = Board::empty();
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
         // Knight on b3 (rank 2, file 1) — attacks d1 but not e1
         // Knight on d2 (rank 1, file 3) — attacks e4, c4, b1, f1, b3, f3... not e1
         // Knight on f2 (rank 1, file 5) — attacks e4, g4, d1, h1, d3, h3... not e1
         // Knight on c2 (rank 1, file 2) — attacks a1, a3, b4, d4, e1, e3 — YES attacks e1!
-        board.set(Square::new(1, 2), Some(Piece::new(PieceKind::Knight, Color::Black)));
+        board.set(
+            Square::new(1, 2),
+            Some(Piece::new(PieceKind::Knight, Color::Black)),
+        );
 
         assert!(board.is_in_check(Color::White));
     }
@@ -1373,8 +1614,14 @@ mod tests {
         // White king on e4 (rank 3, file 4), black pawn on d5 (rank 4, file 3)
         // Black pawn attacks e4 diagonally? No — black pawn advances downward (decreasing rank),
         // so a black pawn on d5 attacks c4 and e4. Yes!
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(4, 3), Some(Piece::new(PieceKind::Pawn, Color::Black)));
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(4, 3),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
 
         assert!(board.is_in_check(Color::White));
     }
@@ -1382,10 +1629,19 @@ mod tests {
     #[test]
     fn king_not_in_check_when_blocked() {
         let mut board = Board::empty();
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
         // Friendly piece blocks the rook's line
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
 
         assert!(!board.is_in_check(Color::White));
     }
@@ -1398,10 +1654,22 @@ mod tests {
         // The white rook is pinned along the e-file.
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(3, 4), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
-        board.set(Square::new(7, 0), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(3, 4),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
+        board.set(
+            Square::new(7, 0),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let legal = board.legal_moves();
 
@@ -1419,9 +1687,18 @@ mod tests {
         // White king on e1, black queen on e8 covering the entire e-file and also d8, f8...
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::Queen, Color::Black)));
-        board.set(Square::new(7, 0), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::Queen, Color::Black)),
+        );
+        board.set(
+            Square::new(7, 0),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let legal = board.legal_moves();
 
@@ -1431,7 +1708,8 @@ mod tests {
                 let after = board.apply_move(*mv);
                 assert!(
                     !after.is_in_check(Color::White),
-                    "king moved into check: {:?}", mv
+                    "king moved into check: {:?}",
+                    mv
                 );
             }
         }
@@ -1446,19 +1724,36 @@ mod tests {
         // Bishop on h4 (3,7) vs king e1 (0,4): dr=-3, df=-3 — yes, diagonal.
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(0, 0), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
-        board.set(Square::new(3, 7), Some(Piece::new(PieceKind::Bishop, Color::Black)));
-        board.set(Square::new(7, 0), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(0, 0),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
+        board.set(
+            Square::new(3, 7),
+            Some(Piece::new(PieceKind::Bishop, Color::Black)),
+        );
+        board.set(
+            Square::new(7, 0),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let legal = board.legal_moves();
 
         // All legal moves must be king moves
         for mv in &legal {
             assert_eq!(
-                mv.from, Square::new(0, 4),
-                "non-king move generated under double check: {:?}", mv
+                mv.from,
+                Square::new(0, 4),
+                "non-king move generated under double check: {:?}",
+                mv
             );
         }
     }
@@ -1468,9 +1763,18 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.castling.white_kingside = true;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(0, 7), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(7, 0), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(0, 7),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(7, 0),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let legal = board.legal_moves();
         assert!(
@@ -1484,10 +1788,22 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.castling.white_kingside = true;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(0, 7), Some(Piece::new(PieceKind::Rook, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::Rook, Color::Black)));
-        board.set(Square::new(7, 0), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(0, 7),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
+        board.set(
+            Square::new(7, 0),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let legal = board.legal_moves();
         assert!(
@@ -1501,11 +1817,23 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.castling.white_kingside = true;
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(0, 7), Some(Piece::new(PieceKind::Rook, Color::White)));
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(0, 7),
+            Some(Piece::new(PieceKind::Rook, Color::White)),
+        );
         // Black rook controls f1 (rank 0, file 5)
-        board.set(Square::new(7, 5), Some(Piece::new(PieceKind::Rook, Color::Black)));
-        board.set(Square::new(7, 0), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(7, 5),
+            Some(Piece::new(PieceKind::Rook, Color::Black)),
+        );
+        board.set(
+            Square::new(7, 0),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let legal = board.legal_moves();
         assert!(
@@ -1519,10 +1847,22 @@ mod tests {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
         board.en_passant_file = Some(3);
-        board.set(Square::new(4, 4), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(4, 3), Some(Piece::new(PieceKind::Pawn, Color::Black)));
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(4, 4),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(4, 3),
+            Some(Piece::new(PieceKind::Pawn, Color::Black)),
+        );
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let legal = board.legal_moves();
         assert!(
@@ -1535,15 +1875,30 @@ mod tests {
     fn promotion_in_legal_moves() {
         let mut board = Board::empty();
         board.side_to_move = Color::White;
-        board.set(Square::new(6, 0), Some(Piece::new(PieceKind::Pawn, Color::White)));
-        board.set(Square::new(0, 4), Some(Piece::new(PieceKind::King, Color::White)));
-        board.set(Square::new(7, 4), Some(Piece::new(PieceKind::King, Color::Black)));
+        board.set(
+            Square::new(6, 0),
+            Some(Piece::new(PieceKind::Pawn, Color::White)),
+        );
+        board.set(
+            Square::new(0, 4),
+            Some(Piece::new(PieceKind::King, Color::White)),
+        );
+        board.set(
+            Square::new(7, 4),
+            Some(Piece::new(PieceKind::King, Color::Black)),
+        );
 
         let legal = board.legal_moves();
-        let promos: Vec<_> = legal.iter()
+        let promos: Vec<_> = legal
+            .iter()
             .filter(|m| m.from == Square::new(6, 0) && m.to == Square::new(7, 0))
             .collect();
-        assert_eq!(promos.len(), 4, "expected 4 promotion moves, got {}", promos.len());
+        assert_eq!(
+            promos.len(),
+            4,
+            "expected 4 promotion moves, got {}",
+            promos.len()
+        );
     }
 
     // --- Perft tests ---
