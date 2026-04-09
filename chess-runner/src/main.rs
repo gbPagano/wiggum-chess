@@ -150,6 +150,10 @@ struct SprtArgs {
     /// RNG seed for position selection (default: random); printed to stderr for reproducibility
     #[arg(long)]
     seed: Option<u64>,
+
+    /// Maximum number of games to play before stopping as inconclusive (default: unlimited)
+    #[arg(long)]
+    max_games: Option<usize>,
 }
 
 #[derive(Parser)]
@@ -947,23 +951,19 @@ async fn run_match(args: MatchArgs) -> Result<()> {
         fens.shuffle(&mut rng);
         fens.truncate(args.num_positions);
 
-        let total_games = fens.len() * args.games;
         println!(
-            "Positions mode: {} position(s) × {} game(s) = {} total game(s)",
-            fens.len(),
+            "Positions mode: {} game(s) cycling through {} position(s)",
             args.games,
-            total_games
+            fens.len(),
         );
         println!();
 
         let mut total_e1_wins = 0usize;
         let mut total_e2_wins = 0usize;
         let mut total_draws = 0usize;
-        let mut game_offset = 0usize;
 
-        for (pos_idx, fen) in fens.iter().enumerate() {
-            println!("--- Position {}/{}: {} ---", pos_idx + 1, fens.len(), fen);
-
+        for game_idx in 0..args.games {
+            let fen = fens[game_idx % fens.len()].as_str();
             let (e1w, e2w, d) = play_games(
                 &args.engine1,
                 &args.engine2,
@@ -971,46 +971,14 @@ async fn run_match(args: MatchArgs) -> Result<()> {
                 args.inc,
                 args.timeout,
                 args.verbose,
-                args.games,
-                Some(fen.as_str()),
-                game_offset,
+                1,
+                Some(fen),
+                game_idx,
             )
             .await?;
-
             total_e1_wins += e1w;
             total_e2_wins += e2w;
             total_draws += d;
-            game_offset += args.games;
-
-            // Write one CSV row per FEN position
-            if let Some(ref output_path) = args.output {
-                let tc_label = match (args.time, args.inc) {
-                    (60000, 1000) => "LTC",
-                    (10000, 100) => "STC",
-                    _ => "custom",
-                };
-                write_csv(
-                    output_path,
-                    &engine1_name,
-                    &engine2_name,
-                    args.games,
-                    e1w,
-                    e2w,
-                    d,
-                    fen,
-                    tc_label,
-                )?;
-            }
-
-            println!(
-                "Position {}/{} result: {}-{}-{}",
-                pos_idx + 1,
-                fens.len(),
-                e1w,
-                e2w,
-                d
-            );
-            println!();
         }
 
         println!("=== Match Complete ===");
@@ -1018,11 +986,24 @@ async fn run_match(args: MatchArgs) -> Result<()> {
         println!("{}: {} win(s)", args.engine2, total_e2_wins);
         println!("Draws: {}", total_draws);
 
-        if args.output.is_some() {
-            println!(
-                "Match results appended to: {}",
-                args.output.as_ref().unwrap()
-            );
+        if let Some(ref output_path) = args.output {
+            let tc_label = match (args.time, args.inc) {
+                (60000, 1000) => "LTC",
+                (10000, 100) => "STC",
+                _ => "custom",
+            };
+            write_csv(
+                output_path,
+                &engine1_name,
+                &engine2_name,
+                args.games,
+                total_e1_wins,
+                total_e2_wins,
+                total_draws,
+                "balanced-positions",
+                tc_label,
+            )?;
+            println!("Match result appended to: {}", output_path);
         }
     } else {
         // --- Standard mode (single starting position or initial position) ---
@@ -1135,6 +1116,13 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
     let mut sprt_result = "inconclusive";
 
     loop {
+        if let Some(max) = args.max_games {
+            if game_number >= max {
+                println!("Max games ({}) reached — stopping as inconclusive.", max);
+                break;
+            }
+        }
+
         game_number += 1;
         let game_idx = game_number - 1;
         let engine1_is_white = game_idx % 2 == 0;
@@ -1221,10 +1209,10 @@ async fn run_sprt(args: SprtArgs) -> Result<()> {
     }
 
     println!();
-    if sprt_result == "H1 accepted" {
-        println!("SPRT Result: H1 accepted (improvement confirmed)");
-    } else {
-        println!("SPRT Result: H0 accepted (no improvement detected)");
+    match sprt_result {
+        "H1 accepted" => println!("SPRT Result: H1 accepted (improvement confirmed)"),
+        "H0 accepted" => println!("SPRT Result: H0 accepted (no improvement detected)"),
+        _ => println!("SPRT Result: inconclusive (max games reached)"),
     }
 
     if let Some(ref output_path) = args.output {

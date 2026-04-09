@@ -147,10 +147,21 @@ impl Engine for UciEngine {
 
     async fn set_position(&mut self, game: &Game) {
         let moves: Vec<String> = game.moves().iter().map(|m| m.to_uci()).collect();
-        let cmd = if moves.is_empty() {
-            "position startpos".to_string()
-        } else {
-            format!("position startpos moves {}", moves.join(" "))
+        let cmd = match game.start_fen() {
+            None => {
+                if moves.is_empty() {
+                    "position startpos".to_string()
+                } else {
+                    format!("position startpos moves {}", moves.join(" "))
+                }
+            }
+            Some(fen) => {
+                if moves.is_empty() {
+                    format!("position fen {}", fen)
+                } else {
+                    format!("position fen {} moves {}", fen, moves.join(" "))
+                }
+            }
         };
         let _ = self.send_line(&cmd).await;
         self.current_board = Some(game.board().clone());

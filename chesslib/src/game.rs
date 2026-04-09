@@ -34,6 +34,9 @@ pub struct Game {
     hash_history: Vec<u64>,
     result: GameResult,
     clock: Option<Clock>,
+    /// The FEN string of the starting position, or `None` if the game started
+    /// from the standard chess starting position.
+    start_fen: Option<String>,
 }
 
 impl Game {
@@ -47,6 +50,7 @@ impl Game {
             hash_history: vec![hash],
             result: GameResult::Ongoing,
             clock: None,
+            start_fen: None,
         };
         game.result = game.detect_result();
         game
@@ -62,6 +66,7 @@ impl Game {
             hash_history: vec![hash],
             result: GameResult::Ongoing,
             clock: Some(clock),
+            start_fen: None,
         };
         game.result = game.detect_result();
         game
@@ -77,6 +82,7 @@ impl Game {
             hash_history: vec![hash],
             result: GameResult::Ongoing,
             clock: None,
+            start_fen: Some(fen.to_string()),
         };
         game.result = game.detect_result();
         Ok(game)
@@ -92,6 +98,7 @@ impl Game {
             hash_history: vec![hash],
             result: GameResult::Ongoing,
             clock: Some(clock),
+            start_fen: Some(fen.to_string()),
         };
         game.result = game.detect_result();
         Ok(game)
@@ -115,6 +122,11 @@ impl Game {
     /// Returns the clock, if one was provided.
     pub fn clock(&self) -> Option<&Clock> {
         self.clock.as_ref()
+    }
+
+    /// Returns the starting FEN, or `None` if the game started from the standard position.
+    pub fn start_fen(&self) -> Option<&str> {
+        self.start_fen.as_deref()
     }
 
     /// Returns whether the threefold repetition condition is met (can be claimed as draw).
