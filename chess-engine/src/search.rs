@@ -66,21 +66,36 @@ pub fn search(board: &Board, depth: u8) -> (Option<ChessMove>, i32) {
 
 /// Entry point for timed iterative deepening search using the provided context.
 ///
-/// Use this function when a clock or movetime budget is active.  The context
-/// carries the deadline and the 64-ply depth guard; the iterative deepening
-/// loop (added in US-004) will respect both.  Timeout checks inside recursive
-/// nodes (US-006) will also use `ctx`.
+/// Searches from depth 1 up to `ctx.max_depth`, completing one full alpha-beta
+/// pass per depth level. After each completed depth the best move and score are
+/// stored. The loop stops when `ctx.is_expired()` returns `true` before the next
+/// iteration begins, or when `ctx.max_depth` (64 plies) is reached.
+///
+/// # Timeout policy (US-007)
+/// The best move from the **last fully completed depth** is returned. Timeout
+/// checks inside recursive nodes (US-006) will further refine what "completed"
+/// means; for now only the between-iteration check is performed.
 ///
 /// The existing `search` function is NOT called from this path so non-timed
 /// behavior is unaffected by any future changes to timed search logic.
 pub fn search_timed(board: &Board, ctx: &SearchContext) -> (Option<ChessMove>, i32) {
-    // Iterative deepening loop is introduced in US-004.
-    // For now, run a single pass at depth 1 so the function is callable and
-    // the wiring through main.rs can be validated.
-    // `ctx` is not yet consumed here; it will be threaded into the loop and
-    // recursive nodes in later stories.
-    let _ = ctx;
-    alpha_beta(board, 1, -INF, INF)
+    let mut best_move: Option<ChessMove> = None;
+    let mut best_score: i32 = -INF;
+
+    for depth in 1..=ctx.max_depth {
+        // Check deadline before starting the next depth iteration.
+        if ctx.is_expired() {
+            break;
+        }
+
+        let (mv, score) = alpha_beta(board, depth, -INF, INF);
+
+        // Store result from the completed depth.
+        best_move = mv;
+        best_score = score;
+    }
+
+    (best_move, best_score)
 }
 
 /// Searches a position with negamax alpha-beta pruning inside the window

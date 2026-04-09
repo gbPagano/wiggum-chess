@@ -48,9 +48,9 @@ fn main() {
                     go_params.compute_budget_ms(board.side_to_move())
                 {
                     // Timed search: build a context from the computed budget and
-                    // dispatch through the timed entry point.  The iterative
-                    // deepening loop (US-004) and timeout checks (US-006) will
-                    // fill in this path; for now a single-depth call is made.
+                    // dispatch through the iterative deepening entry point.
+                    // Timeout checks inside recursive nodes (US-006) will further
+                    // refine early termination within a depth iteration.
                     let ctx = SearchContext::from_budget_ms(budget_ms);
                     search_timed(board, &ctx).0
                 } else {
