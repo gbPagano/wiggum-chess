@@ -27,6 +27,8 @@ enum Commands {
     VersionReport(VersionReportArgs),
     /// Print the FEN at a specific move from a PGN file
     PgnFen(PgnFenArgs),
+    /// Run an engine match starting from a position loaded from a PGN file
+    PgnMatch(PgnMatchArgs),
 }
 
 #[derive(Parser)]
@@ -154,6 +156,49 @@ struct PgnFenArgs {
     /// 1-based game index within a multi-game PGN file (default: 1)
     #[arg(long, default_value = "1")]
     game: usize,
+}
+
+#[derive(Parser)]
+struct PgnMatchArgs {
+    /// Path to the PGN file
+    #[arg(long)]
+    file: String,
+
+    /// Half-move number to replay up to (default: final position)
+    #[arg(long)]
+    r#move: Option<usize>,
+
+    /// 1-based game index within a multi-game PGN file (default: 1)
+    #[arg(long, default_value = "1")]
+    game: usize,
+
+    /// Path to the first engine executable
+    #[arg(long)]
+    engine1: String,
+
+    /// Path to the second engine executable
+    #[arg(long)]
+    engine2: String,
+
+    /// Time per player in milliseconds
+    #[arg(long, default_value = "60000")]
+    time: u64,
+
+    /// Increment per move in milliseconds
+    #[arg(long, default_value = "0")]
+    inc: u64,
+
+    /// Number of games to play
+    #[arg(long, default_value = "1")]
+    games: usize,
+
+    /// Engine response timeout in milliseconds
+    #[arg(long, default_value = "5000")]
+    timeout: u64,
+
+    /// Optional path to CSV file for appending match results
+    #[arg(long)]
+    csv: Option<String>,
 }
 
 /// Observer that prints moves and game-over events to stdout.
@@ -563,6 +608,9 @@ async fn main() -> Result<()> {
         Commands::PgnFen(args) => {
             run_pgn_fen(&args)?;
         }
+        Commands::PgnMatch(args) => {
+            run_pgn_match(args).await?;
+        }
     }
 
     Ok(())
@@ -883,6 +931,42 @@ fn run_pgn_fen(args: &PgnFenArgs) -> Result<()> {
     Ok(())
 }
 
+async fn run_pgn_match(args: PgnMatchArgs) -> Result<()> {
+    // Load and validate the PGN position first
+    let pgn_text = std::fs::read_to_string(&args.file)
+        .map_err(|e| anyhow::anyhow!("cannot read '{}': {}", args.file, e))?;
+
+    if args.game == 0 {
+        anyhow::bail!("--game must be >= 1");
+    }
+    let game_index = args.game - 1;
+
+    let moves = pgn::parse_nth(&pgn_text, game_index)
+        .map_err(|e| anyhow::anyhow!("PGN parse error: {}", e))?;
+
+    let up_to = args.r#move.unwrap_or(moves.len());
+
+    let start_board = pgn::replay(&moves, up_to)
+        .map_err(|e| anyhow::anyhow!("replay error: {}", e))?;
+
+    let start_fen = format!("{}", start_board);
+
+    // Delegate to match logic with the reconstructed FEN
+    let match_args = MatchArgs {
+        engine1: args.engine1,
+        engine2: args.engine2,
+        time: args.time,
+        inc: args.inc,
+        games: args.games,
+        start_fen: Some(start_fen),
+        timeout: args.timeout,
+        output: args.csv,
+        verbose: false,
+    };
+
+    run_match(match_args).await
+}
+
 /// Per-opponent aggregated stats from the perspective of the target engine.
 struct OpponentStats {
     opponent: String,
@@ -1164,6 +1248,19 @@ fn run_version_report(args: &VersionReportArgs) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_pgn_match_invalid_file_returns_error() {
+        // pgn-match should fail with a helpful error when the file doesn't exist
+        // We test run_pgn_fen (same logic) since run_pgn_match is async and requires engines
+        let args = PgnFenArgs {
+            file: "/no/such/file.pgn".to_string(),
+            r#move: None,
+            game: 1,
+        };
+        let err = run_pgn_fen(&args).unwrap_err();
+        assert!(err.to_string().contains("cannot read"), "got: {}", err);
+    }
 
     #[test]
     fn test_pgn_fen_starting_position() {

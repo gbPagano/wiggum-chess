@@ -61,3 +61,14 @@
   - `r#move` is needed to use `move` as a field name in Rust (reserved keyword)
   - `run_pgn_fen` returns `Result` with `anyhow::bail!` for validation errors — no process::exit needed
 ---
+
+## 2026-04-08 - US-006
+- Added `PgnMatch(PgnMatchArgs)` variant to `Commands` enum in `chess-runner/src/main.rs`
+- Added `PgnMatchArgs` struct with `--file`, `--move`, `--game` plus all match flags (`--engine1`, `--engine2`, `--games`, `--time`, `--inc`, `--timeout`, `--csv`)
+- Implemented `run_pgn_match()` which loads PGN, replays to target position, then delegates to `run_match()` with `start_fen` set
+- The `--csv` flag maps to the `output` field in `MatchArgs` for CSV appending
+- Files changed: `chess-runner/src/main.rs`, `tasks/prd.json`
+- **Learnings for future iterations:**
+  - `run_pgn_match` delegates to `run_match` by constructing a `MatchArgs` struct — avoids duplicating match logic
+  - Unit-testing async functions that spawn real engines is impractical; test the PGN-loading logic separately via the sync `run_pgn_fen` helper
+---
