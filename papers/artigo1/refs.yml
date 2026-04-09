@@ -1,0 +1,49 @@
+silver2017:
+  type: Article
+  author:
+    - Silver, David
+    - Schrittwieser, Julian
+    - Simonyan, Karen
+    - Antonoglou, Ioannis
+    - Huang, Aja
+    - Guez, Arthur
+    - Hubert, Thomas
+    - Baker, Lucas
+    - Lai, Matthew
+    - Bolton, Adrian
+    - others
+  title: "Mastering the game of go without human knowledge"
+  journal: Nature
+  volume: 550
+  issue: 7676
+  page-range: 354-359
+  date: 2017
+  publisher: Nature Publishing Group
+
+stockfish:
+  type: Web
+  author: "The Stockfish Team"
+  title: "Stockfish Chess Engine"
+  url:
+    value: https://stockfishchess.org
+    date: 2025-06-23
+  date: 2025
+
+lc0:
+  type: Web
+  author: "The Leela Chess Zero Team"
+  title: "Leela Chess Zero"
+  url:
+    value: https://lczero.org
+    date: 2025-06-23
+  date: 2025
+
+bray2024chess:
+  type: Web
+  author: "Bray, Jordan"
+  title: "chess: A pure Rust chess library"
+  url:
+    value: https://github.com/jordanbray/chess
+    date: 2025-06-23
+  date: 2024
+  note: "Acessado em 23 de junho de 2025"

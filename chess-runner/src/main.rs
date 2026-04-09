@@ -1,3 +1,5 @@
+mod opening_book;
+
 use anyhow::Result;
 use chesslib::analysis::{StockfishProcess, analyze_fen};
 use chesslib::chess_move::ChessMove;
@@ -88,6 +90,19 @@ struct MatchArgs {
     /// RNG seed for position selection (default: random); printed to stderr for reproducibility
     #[arg(long)]
     seed: Option<u64>,
+
+    /// Path to an opening-book file (one UCI move sequence per line); when provided, a line is
+    /// selected and applied to both engines before engine search begins
+    #[arg(long)]
+    opening_book: Option<String>,
+
+    /// RNG seed for opening-book line selection; same seed + same book always choose the same line
+    #[arg(long)]
+    opening_book_seed: Option<u64>,
+
+    /// Maximum number of opening-book plies to apply before handing off to engine search
+    #[arg(long, default_value = "20")]
+    opening_book_max_ply: usize,
 }
 
 #[derive(Parser)]
@@ -906,6 +921,36 @@ async fn run_match(args: MatchArgs) -> Result<()> {
     }
     println!();
 
+    // Load, validate, and select an opening line early so the match fails fast on bad data.
+    let selected_opening: Option<opening_book::OpeningLine> =
+        if let Some(ref book_path) = args.opening_book {
+            let raw = opening_book::load_opening_book(std::path::Path::new(book_path))?;
+            let validated = opening_book::validate_opening_book(raw)?;
+            let chosen = opening_book::select_opening_line(&validated, args.opening_book_seed);
+            Some(chosen.clone())
+        } else {
+            None
+        };
+
+    // Compute the effective starting FEN from the opening book (no engine clock time is used).
+    // When an opening line is selected it overrides args.start_fen so both engines start from
+    // the same post-opening position.
+    let opening_start_fen: Option<String> = selected_opening
+        .as_ref()
+        .map(|line| opening_book::opening_line_to_fen(line, args.opening_book_max_ply));
+
+    // Debug-log the chosen opening line so operators can audit which neutral opening was applied.
+    if let Some(ref line) = selected_opening {
+        let applied_ply = line.moves.len().min(args.opening_book_max_ply);
+        let applied_moves = line.moves[..applied_ply].join(" ");
+        eprintln!(
+            "[opening-book] selected line: {} ({} plies applied, max_ply={})",
+            applied_moves,
+            applied_ply,
+            args.opening_book_max_ply
+        );
+    }
+
     // Query engine names via UCI handshake before the match loop.
     let engine1_name = {
         let mut e = UciEngine::new(&args.engine1, args.timeout)
@@ -1015,7 +1060,7 @@ async fn run_match(args: MatchArgs) -> Result<()> {
             args.timeout,
             args.verbose,
             args.games,
-            args.start_fen.as_deref(),
+            opening_start_fen.as_deref().or(args.start_fen.as_deref()),
             0,
         )
         .await?;
@@ -1026,7 +1071,10 @@ async fn run_match(args: MatchArgs) -> Result<()> {
         println!("Draws: {}", draws);
 
         if let Some(ref output_path) = args.output {
-            let start_fen = args.start_fen.as_deref().unwrap_or("startpos");
+            let start_fen = opening_start_fen
+                .as_deref()
+                .or(args.start_fen.as_deref())
+                .unwrap_or("startpos");
             let tc_label = match (args.time, args.inc) {
                 (60000, 1000) => "LTC",
                 (10000, 100) => "STC",
@@ -1295,6 +1343,9 @@ async fn run_pgn_match(args: PgnMatchArgs) -> Result<()> {
         positions_file: None,
         num_positions: 10,
         seed: None,
+        opening_book: None,
+        opening_book_seed: None,
+        opening_book_max_ply: 20,
     };
 
     run_match(match_args).await

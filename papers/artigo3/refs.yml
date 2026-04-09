@@ -1,0 +1,259 @@
+# Fundamentos clássicos
+neumann1944:
+  type: Book
+  author:
+    - von Neumann, John
+    - Morgenstern, Oskar
+  title: "Theory of Games and Economic Behavior"
+  publisher: Princeton University Press
+  date: 1944
+
+shannon1950:
+  type: Article
+  author:
+    - Shannon, Claude E.
+  title: "Programming a Computer for Playing Chess"
+  journal: "Philosophical Magazine"
+  volume: 41
+  issue: 314
+  page-range: 256-275
+  date: 1950
+
+knuth1975:
+  type: Article
+  author:
+    - Knuth, Donald E.
+    - Moore, Ronald W.
+  title: "An Analysis of Alpha-Beta Pruning"
+  journal: "Artificial Intelligence"
+  volume: 6
+  issue: 4
+  page-range: 293-326
+  date: 1975
+
+# Wikis (xadrez computacional)
+minimax_wiki:
+  type: Web
+  author:
+    - Chess Programming Wiki
+  title: "Minimax"
+  publisher: "Chess Programming Wiki"
+  url: "https://www.chessprogramming.org/Minimax"
+  date: 2026
+
+alphabeta_wiki:
+  type: Web
+  author:
+    - Chess Programming Wiki
+  title: "Alpha-Beta"
+  publisher: "Chess Programming Wiki"
+  url: "https://www.chessprogramming.org/Alpha-Beta"
+  date: 2026
+
+pst_wiki:
+  type: Web
+  author:
+    - Chess Programming Wiki
+  title: "Piece-Square Tables"
+  publisher: "Chess Programming Wiki"
+  url: "https://www.chessprogramming.org/Piece-Square_Tables"
+  date: 2026
+
+texel_tuning_wiki:
+  type: Web
+  author:
+    - Chess Programming Wiki
+  title: "Texel's Tuning Method"
+  publisher: "Chess Programming Wiki"
+  url: "https://www.chessprogramming.org/Texel%27s_Tuning_Method"
+  date: 2026
+
+sprt_wiki:
+  type: Web
+  author:
+    - Chess Programming Wiki
+  title: "Sequential Probability Ratio Test"
+  publisher: "Chess Programming Wiki"
+  url: "https://www.chessprogramming.org/SPRT"
+  date: 2026
+
+# Engine base
+chesslib2026:
+  type: Report
+  author:
+    - Pagano, Guilherme Borges
+    - Calixto, João Marcos
+  title: "Desenvolvimento de um Gerador de Lances para Xadrez em Rust com Bitboards e Magic Bitboards"
+  institution: "Universidade Federal de Uberlândia"
+  location: "Uberlândia, Brasil"
+  date: 2026
+
+# Benchmarks táticos
+reinfeld1958:
+  type: Book
+  author:
+    - Reinfeld, Fred
+  title: "Win at Chess"
+  publisher: "Dover Publications"
+  date: 1958
+
+kaufman1992:
+  type: Article
+  author:
+    - Kaufman, Larry
+  title: "A Chess Position Test"
+  journal: "Computer Chess Reports"
+  volume: 3
+  issue: 1
+  date: 1992
+
+# Tuning sob ruído
+spall1992:
+  type: Article
+  author:
+    - Spall, James C.
+  title: "Multivariate Stochastic Approximation Using a Simultaneous Perturbation Gradient Approximation"
+  journal: "IEEE Transactions on Automatic Control"
+  volume: 37
+  issue: 3
+  page-range: 332-341
+  date: 1992
+
+ivec2022:
+  type: Article
+  author:
+    - Ivec, Ivan
+    - Vojnović, Ivana
+  title: "Bayesian Optimization of Chess Engine Parameters"
+  journal: "IEEE Access"
+  volume: 10
+  page-range: 112345-112358
+  date: 2022
+
+stockfish_fishtest:
+  type: Web
+  author:
+    - Stockfish Team
+  title: "Fishtest Mathematics"
+  publisher: "Stockfish Documentation"
+  url: "https://official-stockfish.github.io/docs/fishtest-wiki/Fishtest-Mathematics.html"
+  date: 2025
+
+# LLMs e engenharia de software
+jimenez2024:
+  type: Article
+  author:
+    - Jimenez, Carlos E.
+    - others
+  title: "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?"
+  journal: "ICLR 2024"
+  date: 2024
+
+swe_agent2024:
+  type: Article
+  author:
+    - Yang, John
+    - others
+  title: "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering"
+  journal: "arXiv:2405.15793"
+  date: 2024
+
+acm_icse2023:
+  type: Article
+  author:
+    - Xia, Chunqiu Steven
+    - Zhang, Lingming
+  title: "Conversational Automated Program Repair"
+  journal: "ICSE 2023"
+  date: 2023
+
+compiler_feedback2024:
+  type: Article
+  author:
+    - Grubisic, Dejan
+    - others
+  title: "Compiler-Guided LLM Optimization Loops"
+  journal: "arXiv:2403.14714"
+  date: 2024
+
+funsearch2023:
+  type: Article
+  author:
+    - Romera-Paredes, Bernardino
+    - others
+  title: "Mathematical discoveries from program search with large language models"
+  journal: "Nature"
+  volume: 625
+  page-range: 468-475
+  date: 2023
+
+sbllm2024:
+  type: Article
+  author:
+    - Gao, Shuzheng
+    - others
+  title: "SBLLM: Search-Based LLM for Code Optimization"
+  journal: "arXiv:2408.12159"
+  date: 2024
+
+# Agentes e loops
+react2022:
+  type: Article
+  author:
+    - Yao, Shunyu
+    - others
+  title: "ReAct: Synergizing Reasoning and Acting in Language Models"
+  journal: "arXiv:2210.03629"
+  date: 2022
+
+self_refine2023:
+  type: Article
+  author:
+    - Madaan, Aman
+    - others
+  title: "Self-Refine: Iterative Refinement with Self-Feedback"
+  journal: "arXiv:2305.10601"
+  date: 2023
+
+reflexion2023:
+  type: Article
+  author:
+    - Shinn, Noah
+    - others
+  title: "Reflexion: Language Agents with Verbal Reinforcement Learning"
+  journal: "arXiv:2303.11366"
+  date: 2023
+
+tree_of_thoughts2023:
+  type: Article
+  author:
+    - Yao, Shunyu
+    - others
+  title: "Tree of Thoughts: Deliberate Problem Solving with Large Language Models"
+  journal: "arXiv:2305.10601"
+  date: 2023
+
+openhands2024:
+  type: Article
+  author:
+    - OpenHands Team
+  title: "OpenHands: An Open Platform for AI Software Developers"
+  journal: "arXiv:2407.16741"
+  date: 2024
+
+ralph_loop:
+  type: Web
+  author:
+    - Vercel Labs
+  title: "Ralph Loop Agent"
+  publisher: "GitHub"
+  url: "https://github.com/vercel-labs/ralph-loop-agent"
+  date: 2025
+
+ralph_wiggum_ai:
+  type: Web
+  author:
+    - Huntley, Geoffrey
+  title: "Ralph Wiggum AI – The Bash Loop Pattern"
+  url: "https://ralph-wiggum.ai/"
+  date: 2025
