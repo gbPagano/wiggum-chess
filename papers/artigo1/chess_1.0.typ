@@ -7,7 +7,7 @@
 #show: ieee.with(
     title: titulo,
     abstract: [
-        A aplicação de inteligência artificial ao xadrez exige estruturas de dados e algoritmos de alta eficiência, uma vez que a geração de lances e a exploração de árvores de busca impactam diretamente o desempenho do sistema. Este artigo apresenta o desenvolvimento da ChessLib, uma biblioteca para xadrez implementada em Rust, voltada à representação eficiente do tabuleiro e à geração de lances com base em bitboards. A solução emprega operações bitwise e magic bitboards para otimizar a manipulação do estado do jogo e o cálculo de movimentos, com foco em desempenho, segurança de memória e modularidade. Além disso, o trabalho propõe uma base sólida para futuras aplicações de inteligência artificial em xadrez, oferecendo uma arquitetura preparada para expansão e integração com algoritmos de busca.
+        A aplicação de inteligência artificial ao xadrez depende de estruturas de dados e algoritmos capazes de representar o tabuleiro e gerar lances com baixo custo computacional. Este artigo apresenta a ChessLib, uma biblioteca de xadrez implementada em Rust, voltada à representação eficiente do estado do jogo e à geração de lances baseada em bitboards e _magic bitboards_. A solução explora operações bitwise, tabelas de ataque pré-computadas e uma organização modular orientada à extensibilidade, com ênfase em desempenho e segurança de memória. Além de descrever a arquitetura adotada, o trabalho estabelece um protocolo de avaliação experimental baseado em testes _Perft_ e em comparação com bibliotecas de referência do domínio.
     ],
     authors: (
         (
@@ -38,208 +38,178 @@
 
 = Introdução
 
-A interseção entre xadrez e inteligência artificial tem sido um campo de estudo relevante por décadas, servindo como referência para avanços em busca computacional, heurísticas de avaliação e aprendizado de máquina.
+O xadrez ocupa, há décadas, um papel de destaque na pesquisa em inteligência artificial, servindo como ambiente de teste para técnicas de busca, avaliação heurística e, mais recentemente, aprendizado por reforço. A relevância desse domínio decorre do fato de que o desempenho de um sistema enxadrístico depende tanto da qualidade de sua estratégia de decisão quanto da eficiência com que o estado do jogo é representado e manipulado @campbell2002deepblue.
 
-#quote(attribution: <silver2017>, block: true)[Desde as vitórias do Deep Blue da IBM sobre Garry Kasparov até a ascensão de engines baseados em redes neurais como o AlphaZero e o Leela Chess Zero, a capacidade de uma máquina de superar os melhores jogadores humanos tornou-se uma realidade.] 
+O xadrez ocupa, há décadas, um papel central na pesquisa em inteligência artificial, servindo como ambiente de teste para técnicas de busca, avaliação heurística e, mais recentemente, aprendizado por reforço @campbell2002deepblue. Nesse domínio, o desempenho do sistema depende não apenas da qualidade da estratégia de decisão, mas também da eficiência com que o estado do jogo é representado e manipulado.
 
-No núcleo de qualquer engine de xadrez está um componente fundamental: a camada responsável por representar o tabuleiro, validar regras e gerar lances de maneira correta e eficiente. A eficiência dessa camada é especialmente importante porque afeta diretamente o custo computacional da busca em profundidade.
+Marcos históricos como o Deep Blue evidenciaram a força de abordagens baseadas em busca altamente otimizada e conhecimento especializado de domínio @campbell2002deepblue. Em seguida, sistemas como o AlphaZero e projetos abertos como o Leela Chess Zero reforçaram a relevância de arquiteturas apoiadas em autojogo e redes neurais profundas @silver2017alphazero @lc0overview. Apesar dessas diferenças na camada de decisão, todos esses sistemas dependem de uma infraestrutura de geração de lances correta e eficiente.
 
-Este trabalho apresenta o desenvolvimento da ChessLib, uma biblioteca de xadrez implementada em Rust, com foco em desempenho, segurança de memória e modularidade. A proposta utiliza bitboards como representação do tabuleiro e magic bitboards para otimizar a geração de lances de peças deslizantes. Assim, busca-se oferecer uma base confiável para aplicações futuras de inteligência artificial em xadrez, reduzindo gargalos na camada de geração de movimentos.
+Nesse contexto, este trabalho apresenta o desenvolvimento da ChessLib, uma biblioteca de xadrez implementada em Rust, com foco em eficiência, segurança de memória e organização modular. A biblioteca adota bitboards como estrutura principal de representação do tabuleiro e emprega magic bitboards para otimizar a geração de lances de peças deslizantes, explorando operações bitwise e acesso pré-computado a tabelas de ataque @rustbook @bitboards @kannan2007magic @fiekas2018magic.
 
-A principal contribuição deste artigo é a descrição da arquitetura da biblioteca, da estratégia de implementação e da metodologia de avaliação adotada para verificar sua corretude e eficiência.
+A proposta insere-se no contexto de bibliotecas de base para _engines_ de xadrez e ferramentas correlatas, priorizando uma infraestrutura reutilizável para futuras extensões, como mecanismos de busca, funções de avaliação e integração com agentes de inteligência artificial. Assim, a contribuição principal deste artigo está na descrição da arquitetura da ChessLib, das decisões de implementação adotadas e da metodologia experimental proposta para avaliar sua corretude funcional e seu desempenho computacional.
 
 = Trabalhos Relacionados
 
-O desenvolvimento de softwares de xadrez pode ser dividido em duas frentes principais: engines completas, projetadas para jogar autonomamente, e bibliotecas de lógica do jogo, responsáveis por abstrair regras, estado do tabuleiro e geração de lances.
+O desenvolvimento de software para xadrez pode ser analisado, de forma geral, em duas frentes complementares. A primeira corresponde aos _engines_ completos, concebidos para selecionar lances e disputar partidas de forma autônoma. A segunda reúne bibliotecas de lógica de xadrez, voltadas à representação do estado do jogo, à aplicação de regras e à geração de lances. 
 
 == Engines de Xadrez de Alta Performance
 
-O engine de xadrez de código aberto mais forte da atualidade é o Stockfish, desenvolvido em C++. Sua força deriva de uma busca alfa-beta altamente otimizada @stockfish. O Leela Chess Zero (Lc0), por sua vez, representa a abordagem baseada em aprendizado de máquina, utilizando uma rede neural para guiar uma busca Monte Carlo Tree Search (MCTS) @lc0.
+Entre as _engines_ open-source contemporâneas, o Stockfish destaca-se como uma das principais referências de desempenho, combinando busca baseada em poda alfa-beta com heurísticas avançadas e avaliação por redes neurais eficientes no formato NNUE @stockfishdocs @stockfishsite. Em paralelo, o Leela Chess Zero (Lc0) representa a abordagem baseada em redes neurais profundas e autojogo, inspirada pela linha introduzida pelo AlphaZero @silver2017alphazero @lc0overview. Esses dois projetos ilustram paradigmas centrais da computação enxadrística atual e reforçam a importância da geração eficiente de lances como componente estrutural de sistemas competitivos.
 
 == Bibliotecas de Lógica de Xadrez
 
-Além de engines completas, existem bibliotecas voltadas à representação e manipulação do jogo. Essas soluções são úteis tanto para prototipagem quanto para integração em sistemas maiores. Em Python, por exemplo, a biblioteca python-chess é amplamente utilizada pela simplicidade e pela cobertura funcional. Contudo, em aplicações que exigem grande volume de geração de lances, linguagens interpretadas tendem a apresentar limitações de desempenho.
+Além dos _engines_ completos, há bibliotecas especializadas na modelagem do jogo e na manipulação programática do tabuleiro. Essas bibliotecas são particularmente úteis em cenários de prototipagem, ensino, experimentação algorítmica e integração com aplicações maiores, como analisadores, interfaces gráficas, ferramentas de teste e sistemas de inteligência artificial.
 
-Nesse contexto, Rust surge como uma alternativa interessante por combinar alto desempenho com segurança de memória e ausência de coletor de lixo. Essas características tornam a linguagem adequada para componentes centrais de engines de xadrez, especialmente aqueles que exigem controle fino sobre alocação, acesso à memória e operações em nível de bits.
+No ecossistema Python, a biblioteca "python-chess" tornou-se uma referência amplamente adotada por oferecer representação de posições, geração de lances, validação de legalidade e manipulação de formatos usuais do domínio enxadrístico @pythonchess. No entanto, por estar inserida em um ambiente interpretado, sua utilização em cenários de alta intensidade computacional tende a apresentar limitações de desempenho quando comparada a implementações em linguagens compiladas.
 
-A ChessLib insere-se nesse cenário como uma implementação voltada especificamente à eficiência da geração de lances, buscando unir desempenho e robustez em uma base modular para futuros motores de xadrez.
+No ecossistema Rust, a biblioteca "chess" oferece uma referência importante de implementação eficiente para representação do tabuleiro e geração de lances, demonstrando a viabilidade de soluções de alto desempenho nesse ambiente @bray2024chess.
+
+Nesse contexto, Rust oferece características particularmente relevantes para bibliotecas centrais de xadrez, como desempenho próximo ao de linguagens de sistema, controle explícito de memória e ausência de coletor de lixo, com garantias estáticas de segurança @rustbook.
+
+A ChessLib insere-se nesse cenário como uma biblioteca de xadrez em Rust voltada à construção de uma base modular e eficiente para representação do jogo e geração de lances. Sua proposta não é competir diretamente com _engines_ completos, mas oferecer uma infraestrutura reutilizável, com ênfase em corretude funcional, desempenho e extensibilidade.
 
 = Arquitetura
 
-A arquitetura da ChessLib, projetada para modularidade e performance, inspira-se em implementações de alto desempenho, como a da biblioteca "chess" @bray2024chess. Sua estrutura é fundamentada na representação do tabuleiro por meio de Bitboards, na utilização de operações Bitwise e na geração de lances, com destaque para o uso da técnica de Magic Bitboards na geração de lances avançados.
+A ChessLib foi projetada como uma biblioteca modular para representação de posições e geração eficiente de lances em Rust. Sua implementação inspira-se em bibliotecas enxadrísticas de alto desempenho, com ênfase em estrutura compacta de dados, baixo custo de acesso à memória e separação clara entre representação do estado, pré-cálculo de ataques e geração de movimentos @bray2024chess @rustbook.
 
-== Bitboards
+== Representação do Tabuleiro
 
-A eficiência de um engine de xadrez depende diretamente da forma como o estado do jogo é representado. Em vez de estruturas bidimensionais tradicionais, a abordagem por bitboards representa o tabuleiro como um conjunto de inteiros de 64 bits, nos quais cada bit corresponde a uma casa do tabuleiro.
+A biblioteca adota bitboards como estrutura principal de representação. Nessa abordagem, o tabuleiro é modelado por inteiros de 64 bits, nos quais cada bit corresponde a uma casa. Em vez de estruturas bidimensionais tradicionais, essa modelagem permite representar conjuntos de casas de forma compacta e manipulá-los por meio de operações bitwise executadas diretamente pela CPU @bitboards.
 
-Essa representação permite mapear diretamente as 64 casas do tabuleiro para posições de bits em uma palavra de máquina, aproveitando operações nativas da CPU para manipulação simultânea de múltiplas casas. Assim, o estado do jogo pode ser armazenado de forma compacta e processado com grande eficiência.
-
-#figure(
-  image("./assets/chessboard.png", width: 80%),
-  caption: [Tabuleiro de Xadrez]
-)<Fig1>
+Na convenção utilizada, baseada em _Little-Endian File Mapping_, a casa "a1" corresponde ao bit menos significativo e "h8" ao mais significativo. A partir dessa organização, a posição pode ser descrita por múltiplos bitboards, tipicamente separados por tipo de peça e cor, além de estruturas agregadas para ocupação total, peças brancas e peças pretas. Essa organização, evidenciada na @Fig1, simplifica consultas de ocupação, detecção de ataques e aplicação de máscaras sobre regiões específicas do tabuleiro @bitboards.
 
 #figure(
   image("./assets/grid.png", width: 65%),
   caption: [Little-Endian File Mapping],
-)<Fig2>
+)<Fig1>
 
-Na convenção mais comum, chamada Little-Endian File Mapping (@Fig2), a casa "a1" é associada ao bit menos significativo, enquanto h8 corresponde ao bit mais significativo. Com isso, o índice de cada casa varia de 0 a 63, facilitando deslocamentos e operações aritméticas sobre o tabuleiro.
+== Geração de Lances
 
-Um estado completo do jogo pode ser representado por múltiplos bitboards, normalmente um para cada tipo de peça em cada cor. A partir desses bitboards primários, também podem ser derivados conjuntos auxiliares, como todas as casas ocupadas por peças brancas, por peças pretas ou pelo tabuleiro inteiro. Esses bitboards agregados simplificam verificações de ocupação e ataques.
+A geração de lances na ChessLib é dividida entre peças de passo e peças deslizantes. Em ambos os casos, a lógica procura deslocar o máximo possível do custo computacional para tabelas pré-calculadas e operações bitwise simples em tempo de execução.
 
-== Operações Bitwise
+=== Peças de Passo
 
-A manipulação de bitboards depende de operações bitwise, como AND, OR, XOR, NOT e deslocamentos à esquerda e à direita. Essas operações são extremamente eficientes, pois atuam sobre 64 bits simultaneamente.
+Para cavalo e rei, os padrões de ataque dependem apenas da casa de origem; por isso, seus movimentos podem ser pré-computados para as 64 casas e depois filtrados com base na ocupação por peças da mesma cor. 
 
-Por exemplo, o avanço simples de peões brancos pode ser calculado por meio de um deslocamento de 8 bits à esquerda, seguido da interseção com as casas vazias:
+Um cuidado importante nessa etapa é evitar o problema de _wrap-around_, no qual deslocamentos de bits podem produzir ataques inválidos entre bordas opostas do tabuleiro. Esse efeito é evitado mediante máscaras de arquivo aplicadas antes ou depois dos deslocamentos, conforme o padrão de movimento.
 
-*#raw(
-  "avancos_possiveis = (peoes_brancos << 8) & casas_vazias",
-  lang: "python",
-)*
+No caso dos peões, a geração é mais particular, pois envolve avanço simples, avanço duplo, capturas diagonais, promoção e _en passant_. 
 
-Nesse caso, o deslocamento representa o avanço de uma fileira no tabuleiro, enquanto a operação AND filtra apenas os destinos realmente disponíveis.
+O avanço simples pode ser modelado por deslocamento vertical e filtragem pelas casas vazias; o avanço duplo exige, adicionalmente, que a peça esteja na fileira inicial e que não haja bloqueio intermediário. As capturas diagonais também são expressas com deslocamentos bitwise, combinados com máscaras para impedir _wrap-around_. Já promoções e _en passant_ dependem de informação adicional de estado, exigindo tratamento específico na lógica de aplicação e validação dos lances.
 
-== Geração de Lances para Peças de Passo:
+=== Peças Deslizantes
 
-As peças de passo são aquelas cujo deslocamento segue padrões fixos e relativamente simples de calcular. Nesse grupo estão o peão, o cavalo e o rei.
-
-Essas peças apresentam menor complexidade de geração em comparação com as peças deslizantes, pois seus movimentos podem ser pré-calculados ou obtidos por meio de operações bitwise diretas.
-
-=== Geração de Lances para Cavalo e Rei
-
-Os movimentos do cavalo e do rei dependem apenas da casa de origem e da ocupação da casa de destino. Por esse motivo, é possível pré-calcular os ataques válidos para cada uma das 64 casas e armazená-los em tabelas de consulta.
-
-Em tempo de execução, a geração de lances consiste em acessar a tabela correspondente e aplicar uma máscara para remover casas ocupadas por peças da mesma cor.
-
-Um desafio na pré-computação desses movimentos é o pro-blema do "wrap-around", onde um deslocamento de bits pode fazer uma peça "saltar" de uma borda do tabuleiro para a outra (_e.g._, um cavalo em h1, ao se mover duas casas para cima e uma para a esquerda, poderia erroneamente pousar em a3). Isso é evitado usando máscaras de arquivo. Por exemplo, para um movimento que se desloca para a direita, o bitboard da peça é primeiro combinado com uma máscara que zera os bits do arquivo 'h' antes do deslocamento, garantindo que nenhuma peça no arquivo 'h' possa "envolver" o tabuleiro.
-
-=== Geração de lances para o Peão
-
-Os peões possuem regras de movimentação mais particulares, envolvendo avanço simples, avanço duplo, capturas diagonais, promoção e en passant.
-
-O avanço simples é obtido por deslocamento de 8 bits e filtragem pelas casas vazias. O avanço duplo é permitido apenas a partir da posição inicial do peão e exige que ambas as casas intermediárias estejam desocupadas.
-
-As capturas diagonais são calculadas por deslocamentos de 7 e 9 bits, também combinados com máscaras para evitar wrap-around. Já a promoção ocorre quando o peão alcança a última fileira do adversário, gerando lances distintos para as peças de promoção possíveis.
-
-Por fim, a captura _en passant_ requer que o estado do jogo armazene informações sobre o último lance do oponente. Especificamente, se o último lance foi um avanço duplo de peão, a casa de destino é registrada como uma casa de _en passant_ potencial. A geração de lances de captura en passant envolve verificar se um peão próprio ataca essa casa especial. Se um lance de captura en passant é feito, a lógica de atualização do tabuleiro deve remover manualmente o peão capturado, que está em uma casa adjacente à casa de destino do peão que captura. 
-
-== Geração de Lances para Peças Deslizantes:
-
-A geração de lances para peças deslizantes (torres, bispos e damas) representa o desafio mais significativo na implementação de um gerador de lances com bitboard. O movimento dessas peças não é fixo; ele se estende ao longo de raios (fileiras, colunas e diagonais) até encontrar a borda do tabuleiro ou outra peça. A determinação desses movimentos depende, portanto, da configuração de "bloqueadores" em seus caminhos.
-
-Uma abordagem ingênua de iterar ao longo de cada raio para cada peça seria extremamente lenta. Para resolver este problema, a comunidade de programação de xadrez desenvolveu várias técnicas sofisticadas, entre elas, os Magic Bitboards, que receberão uma atenção especial a seguir.
+Para torres, bispos e damas, entretanto, a geração de lances é substancialmente mais complexa. O conjunto de ataques dessas peças depende da configuração dos bloqueadores presentes ao longo de raios horizontais, verticais ou diagonais. Uma abordagem ingênua, baseada em varrer cada direção em tempo de execução para cada peça, produz custo elevado. Por isso, a ChessLib adota a técnica de _magic bitboards_, que substitui esse processo por indexação em tabelas pré-calculadas @kannan2007magic @fiekas2018magic @magicbitboards.
 
 == Magic Bitboards
 
-O problema central consiste em mapear cada configuração possível de bloqueadores para o conjunto correspondente de ataques válidos. Como o número de configurações possíveis é grande, mas o número de ataques distintos é bem menor, essa relação pode ser compactada por meio de tabelas pré-computadas.
+O objetivo central dos _magic bitboards_ é transformar o problema da geração de ataques de peças deslizantes em um problema de consulta eficiente. Para uma peça deslizante em uma determinada casa, os lances possíveis dependem apenas dos bloqueadores relevantes presentes nos seus raios de ação. Em vez de recalcular esses ataques dinamicamente a cada consulta, a técnica associa cada configuração relevante de bloqueadores a um índice compacto em uma tabela de ataques pré-computada @kannan2007magic @fiekas2018magic.
 
-A técnica de magic bitboards utiliza uma função de hash do tipo multiplicação e deslocamento:
+A indexação é feita por uma função de hash baseada em multiplicação e deslocamento:
 
 *#raw(
-  "index = (blocker_board * magic_number) ≫ shift_amount",
+  "index = ((occupancy & mask) * magic) >> shift",
   lang: "python",
 )*
 
-Onde:
+Nessa expressão, "occupancy" representa a ocupação atual do tabuleiro, "mask" seleciona apenas os bloqueadores relevantes para a peça e a casa em questão, "magic" é uma constante de 64 bits escolhida especificamente para essa configuração, e "shift" reduz o resultado a um índice compacto. 
 
-  - Blocker Board é um bitboard contendo apenas os bloqueadores relevantes da peça.
-
-  - Magic Number é uma constante de 64 bits cuidadosamente escolhida, cujos bits estão dispostos de tal forma que, quando multiplicada por qualquer permutação válida do Blocker Board, os bits de ordem superior do resultado de 64 bits são determinados de forma única pela permutação.
-
-  - Shift Amount vai isolar esses bits de ordem superior, descartando os bits inferiores e menos úteis do resultado da multiplicação. O resultado é um índice compacto para uma tabela de consulta.
-
-Essa abordagem permite armazenar apenas os ataques distintos em tabelas de consulta, reduzindo custo de tempo em tempo de execução.
-
-=== Arquitetura dos Magic Bitboards
+O valor produzido é então utilizado para acessar uma tabela cujo conteúdo é um bitboard contendo os ataques válidos correspondentes.
 
 A implementação depende de três elementos principais:
 
-==== Máscara de bloqueadores 
+=== Máscara de bloqueadores 
 
-A máscara de bloqueadores é a primeira componente essencial. Para uma dada peça numa dada casa, é um bitboard com bits definidos para cada casa nos raios de ataque da peça, excluindo a própria casa da peça e as casas na extremidade do tabuleiro. O número de bits definidos nesta máscara determina o tamanho da tabela de consulta para essa casa, que será de $2^"bits"$ entradas.
+Esse elemento define quais casas realmente influenciam os ataques de uma peça deslizante em determinada casa. Essas casas correspondem aos raios de movimento da peça, excluindo a própria casa de origem, bem como as casas de borda. Essa exclusão é uma otimização importante, pois o estado da casa terminal de um raio é redundante para distinguir conjuntos de ataque, permitindo reduzir o número de combinações relevantes e, consequentemente, o tamanho das tabelas.
 
-Uma otimização importante é a "exclusão de borda", onde as casas na extremidade de cada raio são excluídas da máscara, pois um ataque à casa final só é possível se a casa penúltima estiver vazia. Portanto, o estado da casa final é redundante para determinar o conjunto de ataques.
-
-==== Número Mágico: 
+=== Número Mágico: 
 
 O número mágico é uma constante de 64 bits, única para cada casa e tipo de peça (torre/bispo), que foi descoberta através de uma busca por força bruta para satisfazer a propriedade de hashing perfeito para a máscara de bloqueadores dessa casa. 
 
-Estes números não são derivados de uma fórmula matemática, mas são encontrados através de um processo de tentativa e erro. A comunidade de programação de xadrez mantém listas dos "melhores mágicos até agora", que são números que não só funcionam, mas também permitem tabelas de ataque mais compactas. 
+Estes números não são derivados de uma fórmula matemática, mas são encontrados através de um processo de tentativa e erro. A comunidade de programação de xadrez mantém listas dos "melhores mágicos até agora", que são números que não só funcionam, mas também permitem tabelas de ataque mais compactas @kannan2007magic @fiekas2018magic. 
 
 Cada uma das 128 combinações (64 para torres, 64 para bispos) tem o seu próprio número mágico único.
 
-==== Tabela de Ataques: 
+=== Tabela de Ataques: 
 
-É um grande array (ou múltiplos arrays) que armazena os conjuntos de ataques pré-calculados. O índice para esta tabela é o valor gerado pela fórmula mágica. O valor nesse índice é um bitboard de 64 bits que representa todos os movimentos possíveis para a configuração de bloqueadores dada.
+Por fim, a tabela de ataques armazena, para cada índice válido, o bitboard correspondente ao conjunto de movimentos possíveis. Depois de inicializada, a consulta em tempo de execução torna-se extremamente barata: basta isolar os bloqueadores relevantes, calcular o índice mágico e recuperar o bitboard de ataques armazenado.
 
-=== Busca pelos Magic Numbers
-
-A etapa de inicialização consiste em encontrar números mágicos válidos para cada casa e cada tipo de peça deslizante. Esse processo é realizado uma única vez, durante a inicialização ou previamente ao uso da biblioteca.
-
-O processo de geração pode ser conceptualizado como uma série de ciclos aninhados: para cada uma das 64 casas, e para cada tipo de peça deslizante (torre e bispo), a engine deve encontrar um número mágico funcional. O algoritmo para encontrar um único número mágico é o disposto na @lofa.
+A etapa de inicialização consiste justamente em construir essas tabelas e validar números mágicos adequados para bispos e torres em cada uma das 64 casas. Embora essa fase seja relativamente trabalhosa, ela é executada apenas uma vez, deslocando o custo computacional para fora do caminho crítico da geração de lances. O processo de busca de um número mágico pode ser resumido pelo fluxo apresentado na @lofa.
 
 #figure(
-  image("./assets/lofa.drawio.svg", width: 100%),
-  caption: "Geração e Validação de um Número Mágico",
+  image("./assets/lofa.drawio.svg", width: 85%),
+  caption: "Geração e validação de um número mágico",
 )<lofa>
 
 Uma vez inicializado, o processo de geração de movimentos em tempo de execução é extremamente eficiente, consistindo em uma sequência linear de operações apresentadas na @talofa.
 
 #figure(
   image("./assets/talofa.drawio.svg", width: 40%),
-  caption: "Geração e Validação de um Número Mágico",
+  caption: "Consulta de ataques em tempo de execução com magic bitboards",
 )<talofa>
+
+Essa estratégia permite combinar pré-computação, compacidade e eficiência, tornando os magic bitboards o padrão ouro para geração de lances de peças deslizantes em programas de xadrez baseados em bitboards @kannan2007magic.
 
 = Avaliação Experimental
 
-== Teste de Desempenho (Perft)
+A avaliação experimental foi estruturada para analisar a ChessLib em duas dimensões complementares: 
 
-O teste Perft é uma técnica amplamente utilizada para validação de engines de xadrez. Ele percorre a árvore de lances até uma profundidade especificada e contabiliza o número total de nós gerados.
+    +   Corretude funcional da geração de lances; 
+    +   Desempenho computacional da biblioteca em cenários representativos. 
 
-Além de medir desempenho, o Perft também é útil para verificar a corretude da geração de lances, já que contagens conhecidas podem ser comparadas com os valores produzidos pela implementação.
+Para isso, adotou-se o teste _Perft_ (_performance test_), amplamente utilizado em computação enxadrística como procedimento de validação da geração de lances e como base para comparação de desempenho entre implementações @perft @perftresults.
 
-== Especificações do Sistema e do Software
+== Objetivos da Avaliação
 
-Os resultados de desempenho são dependentes do hardware em que são executados. A Tabela I documenta o ambiente utilizado nos testes:
+O primeiro objetivo é verificar se a ChessLib gera exatamente o conjunto de lances esperado para diferentes posições e profundidades. O segundo é medir o custo computacional da geração de lances em uma carga padronizada. 
+
+Embora o _Perft_ não substitua a avaliação de uma _engine_ completa, ele constitui um critério adequado para comparar bibliotecas cuja principal responsabilidade é representar o estado do jogo e enumerar movimentos de forma eficiente.
+
+== Ambiente Experimental
+
+A @system documenta o hardware e o sistema operacional utilizados nos experimentos.
 
 #figure(
   table(
     columns: (auto, 1fr),
     align: horizon,
     table.header([Componente], [Especificação]),
-    [CPU], [Intel Core i7-12800H \@ 4.70GHz], 
-    [Núcleos/Threads], [14 Cores / 20 Threads],
-    [RAM], [32 GB],
-    [OS], [Arch Linux x86_64 6.12.42-1-lts],
+    [CPU],                 [Intel Core i7-12800H @ 4.70GHz],
+    [Núcleos/Threads],     [14 Cores / 20 Threads],
+    [RAM],                 [32 GB],
+    [Sistema Operacional], [Arch Linux x86_64 6.12.42-1-lts],
   ),
-  caption: [Especificações do sistema],
+  caption: [Ambiente computacional utilizado nos experimentos],
 ) <system>
 
-== Bibliotecas sob teste
-
-As versões específicas das bibliotecas utilizadas neste estudo estão dispostas na Tabela II:
+A @libs registra as versões das bibliotecas comparadas, uma vez que alterações de implementação entre versões podem impactar diretamente o desempenho.
 
 #figure(
   table(
     columns: (1fr, auto),
     align: horizon,
-    table.header([Lib], [Versão]),
-    [ChessLib], [-], 
-    [Python-Chess], [-],
-    [Chess], [-],
+    table.header([Biblioteca], [Versão]),
+    [ChessLib],     [-],
+    [python-chess], [-],
+    [chess],        [-],
   ),
-  caption: [Especificações das bibliotecas],
+  caption: [Versões das bibliotecas avaliadas],
 ) <libs>
 
-== Testes utilizados e Procedimento
+A ChessLib foi comparada com duas bibliotecas de referência:
 
-Foi utilizado um conjunto curado de posições de teste, representadas na Notação Forsyth-Edwards (FEN), para garantir uma avaliação abrangente que testa diferentes aspetos da lógica de geração de lances:
+    -   "python-chess", uma lib de xadrez em Python @pythonchess;
+    -   "chess", uma lib feita em Rust @bray2024chess, cujo projeto inspirou a ChessLib.
+
+Desse modo, a avaliação busca situar a ChessLib tanto em relação a uma biblioteca popular quanto em relação a uma alternativa de alto desempenho no ecossistema Rust.
+
+== Conjunto de Posições de Teste
+
+Os experimentos foram definidos a partir de um conjunto de posições em notação Forsyth-Edwards (FEN), formato amplamente empregado para representar estados completos de uma partida de xadrez @pgnspec. A seleção das posições teve como objetivo variar a carga de processamento e cobrir aspectos específicos da lógica de geração de lances.
 
 === Posição Inicial 
 
-Linha de base padrão para testes Perft.
+A posição inicial foi adotada como referência básica por possuir resultados canônicos amplamente canônicos para diferentes profundidades de _Perft_ @perftresults.
 
 `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
 
@@ -255,11 +225,11 @@ Uma posição projetada especificamente para testar a lógica de promoção de p
 
 `n1n5/PPPk4/8/8/8/8/4Kppp/5N1N w - - 0 1`
 
-Cada biblioteca executou um teste Perft em cada uma das quatro posições, começando na profundidade 1 e continuando até uma profundidade computacionalmente significativa (Profundidade 6 para a Posição Inicial, Profundidade 5 para as outras).
+Cada biblioteca executou um teste Perft em cada uma das três posições, começando na profundidade 1 e continuando até uma profundidade computacionalmente significativa (Profundidade 6 para a Posição Inicial, Profundidade 5 para as outras).
 
 = Resultados
 
-O primeiro passo é estabelecer que os sistemas sob teste estão a produzir resultados funcionalmente corretos. A @canon compara a contagem de nós gerada por cada biblioteca para a posição inicial com os valores canónicos estabelecidos, amplamente aceitos pela comunidade de programação de xadrez.
+A @canon apresenta a validação funcional da ChessLib na posição inicial por meio da comparação entre as contagens obtidas e os valores canônicos de _Perft_. Essa tabela permite verificar a aderência da implementação às contagens de referência e, consequentemente, a consistência da geração de lances legais.
 
 #figure(
   table(
@@ -272,12 +242,10 @@ O primeiro passo é estabelecer que os sistemas sob teste estão a produzir resu
     [4], [197281],  [-], [-], [-], [-], 
     [5], [4865609], [-], [-], [-], [-], 
   ),
-  caption: [Validação da Correção do Perft (Posição Inicial)],
+  caption: [Validação da Correção do _Perft_ (Posição Inicial)],
 ) <canon>
 
-A análise confirma que todas as três bibliotecas geram o número correto de nós folha até uma profundidade de 5. Este resultado estabelece um alto grau de confiança na correção das suas respetivas implementações de geração de lances.
-
-Com a correção validada, a análise foca-se na eficiência computacional. A @benchmark apresenta os resultados de desempenho para a posição inicial, mostrando o tempo de execução e a métrica de desempenho Nós Por Segundo (NPS).
+A @benchmark reúne os resultados de desempenho para a posição inicial, reportando número de nós, tempo de execução e nós por segundo (NPS). Em conjunto, esses indicadores permitem situar a ChessLib em relação às bibliotecas de referência sob uma carga padronizada.
 
 #figure(
   table(
@@ -294,23 +262,29 @@ Com a correção validada, a análise foca-se na eficiência computacional. A @b
   caption: [Benchmark de Desempenho (Posição Inicial)],
 ) <benchmark>
 
-Para garantir que as características de desempenho observadas não são um artefacto da posição inicial, os testes foram repetidos em posições mais complexas e variadas. A @posicoes resume o desempenho (em NPS) para cada biblioteca na profundidade 5 para as posições de teste "Kiwipete", "Teste de Promoção" e "Muitas Capturas".
+Para complementar a análise, a @posicoes resume o desempenho das bibliotecas nas posições Kiwipete e Teste de Promoção, ambas avaliadas na profundidade 5. Essa comparação permite observar o comportamento das implementações em cenários mais sensíveis a detalhes específicos da geração de lances.
 
 #figure(
   table(
     columns: (auto, auto, auto, auto),
     align: horizon,
-    table.header([Posição de teste], [NPS \ (Python-Chess)], [NPS (ChessLib)], [NPS (Chess)]),
-    [Kiwipete],           [-], [-], [-],
-    [Teste de promoção],  [-], [-], [-],
-    [Muitas Capturas],    [-], [-], [-],
+    table.header([Posição de teste], [NPS (python-chess)], [NPS (ChessLib)], [NPS (chess)]),
+    [Kiwipete],          [-], [-], [-],
+    [Teste de promoção], [-], [-], [-],
   ),
-  caption: [Benchmark de Desempenho, Profundidade 5 \ (Posições Complexas)],
+  caption: [Benchmark de Desempenho em Posições Específicas (Profundidade 5)],
 ) <posicoes>
 
 = Discussão
 
+Os resultados devem ser analisados em duas perspectivas complementares. A primeira é a corretude funcional, verificada pela coincidência entre as contagens obtidas e os valores canônicos de _Perft_. A segunda é a eficiência computacional, observada a partir do tempo de execução e da métrica NPS nas posições avaliadas.
 
+Na interpretação dos benchmarks, três fatores são particularmente relevantes: o custo da representação interna do estado do jogo, a eficiência da geração de lances de peças deslizantes e o ambiente de execução de cada biblioteca. Nesse sentido, diferenças entre uma implementação em linguagem interpretada e implementações em Rust devem ser consideradas juntamente com decisões de projeto, como organização de dados, pré-cálculo de ataques e tratamento de casos especiais.
+
+A comparação com a biblioteca `chess` é especialmente útil por situar a ChessLib frente a uma referência de alto desempenho no mesmo ecossistema. Já a comparação com a `python-chess` amplia a discussão ao incluir uma biblioteca consolidada e amplamente utilizada em prototipagem, ensino e integração com pipelines de análise.
 
 = Conclusão  
 
+Este artigo apresentou a ChessLib, uma biblioteca de xadrez em Rust voltada à representação eficiente do tabuleiro e à geração de lances com base em bitboards e _magic bitboards_. A descrição da arquitetura evidenciou escolhas orientadas a desempenho, segurança de memória e modularidade, características importantes para bibliotecas que servem de base a sistemas maiores.
+
+Além da arquitetura proposta, o trabalho definiu um protocolo experimental centrado em testes _Perft_ e em comparação com bibliotecas de referência, permitindo avaliar a ChessLib em termos de corretude funcional e desempenho computacional. Como desdobramentos naturais, a biblioteca pode ser estendida com mecanismos de busca, funções de avaliação e integração com agentes de inteligência artificial.
