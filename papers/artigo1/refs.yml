@@ -256,15 +256,19 @@ gofish2024:
 matsakis2014rustsafe:
   type: Article
   author:
-    - Matsakis, N. D.
-    - Klock II, F. S.
-  title: "Rust: Safe Systems Programming for the 21st Century"
-  journal: Communications of the ACM
-  volume: 57
-  issue: 2
-  page-range: 44-56
+    - Matsakis, Nicholas D.
+    - Klock II, Felix S.
+  title: "The Rust Language"
+  journal: ACM SIGAda Ada Letters
+  volume: 34
+  issue: 3
+  page-range: 103-104
   date: 2014
   publisher: ACM
+  url:
+    value: https://doi.org/10.1145/2663171.2663188
+    date: 2026-04-10
+  note: "Também apresentado em HILT '14"
 
 yamamoto2010shogi:
   type: Article
@@ -274,9 +278,7 @@ yamamoto2010shogi:
     - Kaneko, Tomoyuki
     - Tanaka, Tetsuro
   title: "Proposal and Implementation of Magic Bitboards in Shogi"
-  journal: "Game Programming Workshop 2010"
-  volume: 2010
-  issue: 12
+  journal: "Proceedings of the 15th Game Programming Workshop 2010"
   page-range: 42-48
   date: 2010
   publisher: Information Processing Society of Japan (IPSJ)

@@ -64,7 +64,7 @@ No ecossistema Python, a biblioteca "python-chess" tornou-se uma referência amp
 
 No ecossistema Rust, a biblioteca "chess" oferece uma referência importante de implementação eficiente para representação do tabuleiro e geração de lances, demonstrando a viabilidade de soluções de alto desempenho nesse ambiente @bray2024chess.
 
-Nesse contexto, Rust oferece características particularmente relevantes para bibliotecas centrais de xadrez, como desempenho próximo ao de linguagens de sistema, controle explícito de memória e ausência de coletor de lixo, com garantias estáticas de segurança fundamentadas tanto em sua documentação oficial quanto em literatura acadêmica da ACM dedicada ao modelo de segurança da linguagem @rustbook @matsakis2014rustsafe.
+Nesse contexto, Rust oferece características particularmente relevantes para bibliotecas centrais de xadrez, como desempenho próximo ao de linguagens de sistema, controle explícito de memória e ausência de coletor de lixo, com garantias estáticas de segurança documentadas tanto em sua documentação oficial quanto em literatura acadêmica da ACM sobre a linguagem e seu uso em sistemas @rustbook @matsakis2014rustsafe.
 
 A ChessLib insere-se nesse cenário como uma biblioteca de xadrez em Rust voltada à construção de uma base modular e eficiente para representação do jogo e geração de lances. Sua proposta não é competir diretamente com _engines_ completos, mas oferecer uma infraestrutura reutilizável, com ênfase em corretude funcional, desempenho e extensibilidade.
 
@@ -122,7 +122,7 @@ A implementação depende de três elementos principais:
 
 Esse elemento define quais casas realmente influenciam os ataques de uma peça deslizante em determinada casa. Essas casas correspondem aos raios de movimento da peça, excluindo a própria casa de origem, bem como as casas de borda. Essa exclusão é uma otimização importante, pois o estado da casa terminal de um raio é redundante para distinguir conjuntos de ataque, permitindo reduzir o número de combinações relevantes e, consequentemente, o tamanho das tabelas.
 
-=== Número Mágico: 
+=== Número Mágico
 
 O número mágico é uma constante de 64 bits, única para cada casa e tipo de peça (torre/bispo), que foi descoberta através de uma busca por força bruta para satisfazer a propriedade de hashing perfeito para a máscara de bloqueadores dessa casa. 
 
@@ -130,25 +130,25 @@ Estes números não são derivados de uma fórmula matemática, mas são encontr
 
 Cada uma das 128 combinações (64 para torres, 64 para bispos) tem o seu próprio número mágico único.
 
-=== Tabela de Ataques: 
+=== Tabela de Ataques
 
 Por fim, a tabela de ataques armazena, para cada índice válido, o bitboard correspondente ao conjunto de movimentos possíveis. Depois de inicializada, a consulta em tempo de execução torna-se extremamente barata: basta isolar os bloqueadores relevantes, calcular o índice mágico e recuperar o bitboard de ataques armazenado.
 
 A etapa de inicialização consiste justamente em construir essas tabelas e validar números mágicos adequados para bispos e torres em cada uma das 64 casas. Embora essa fase seja relativamente trabalhosa, ela é executada apenas uma vez, deslocando o custo computacional para fora do caminho crítico da geração de lances. O processo de busca de um número mágico pode ser resumido pelo fluxo apresentado na @lofa.
 
 #figure(
-  image("./assets/lofa.drawio.svg", width: 86%),
+  image("./assets/lofa.drawio.svg", width: 84%),
   caption: "Geração e validação de um número mágico",
 )<lofa>
 
 Uma vez inicializado, o processo de geração de movimentos em tempo de execução é extremamente eficiente, consistindo em uma sequência linear de operações apresentadas na @talofa.
 
 #figure(
-  image("./assets/talofa.drawio.svg", width: 45%),
+  image("./assets/talofa.drawio.svg", width: 35%),
   caption: "Consulta de ataques em tempo de execução com magic bitboards",
 )<talofa>
 
-Essa estratégia permite combinar pré-computação, compacidade e eficiência, tornando os magic bitboards o padrão ouro para geração de lances de peças deslizantes em programas de xadrez baseados em bitboards @kannan2007magic.
+Essa estratégia permite combinar pré-computação, compacidade e eficiência, tornando os magic bitboards a referência consolidada para geração de lances de peças deslizantes em programas de xadrez baseados em bitboards @kannan2007magic.
 
 = Avaliação Experimental
 
@@ -198,8 +198,8 @@ A @libs registra as versões das bibliotecas comparadas, uma vez que alteraçõe
 
 A ChessLib foi comparada com duas bibliotecas de referência:
 
-    -   "python-chess", uma lib de xadrez em Python @pythonchess;
-    -   "chess", uma lib feita em Rust @bray2024chess, cujo projeto inspirou a ChessLib.
+    -   "python-chess", uma biblioteca de xadrez em Python @pythonchess;
+    -   "chess", uma biblioteca feita em Rust @bray2024chess, cujo projeto inspirou a ChessLib.
 
 Desse modo, a avaliação busca situar a ChessLib tanto em relação a uma biblioteca popular quanto em relação a uma alternativa de alto desempenho no ecossistema Rust.
 
@@ -209,9 +209,9 @@ Os experimentos foram definidos a partir de um conjunto de posições em notaç�
 
 === Posição Inicial 
 
-A posição inicial foi adotada como referência básica por possuir resultados canônicos amplamente canônicos para diferentes profundidades de _Perft_ @perftresults.
+A posição inicial foi adotada como referência básica por possuir resultados canônicos para diferentes profundidades de _Perft_ @perftresults.
 
-`rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1`
+`rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1` 
 
 === "Kiwipete"
 
@@ -252,8 +252,8 @@ A @benchmark reúne os resultados de desempenho para a posição inicial, report
     columns: (auto, auto, auto, auto, auto, 1fr),
     align: horizon,
     table.header(
-        [Lib], 
-        [Lang], 
+        [Biblioteca], 
+        [Linguagem], 
         [Profundidade], 
         [Nós], 
         [Tempo [s]], 
