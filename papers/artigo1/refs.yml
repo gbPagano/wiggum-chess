@@ -234,3 +234,52 @@ pgnspec:
     date: 2026-04-09
   date: 1994
   note: "Especificação PGN/FEN; acessado em 9 de abril de 2026"
+
+
+gofish2024:
+  type: Article
+  author:
+    - Jubair, Fahed
+    - Abu Salem, Ahmad
+    - Assaf, Yazan
+    - Darabkh, Khalid A.
+  title: "GoFish: A customizable open-source chess engine in Go"
+  journal: Expert Systems with Applications
+  volume: 250
+  page-range: 123855
+  date: 2024
+  publisher: Elsevier
+  url:
+    value: https://doi.org/10.1016/j.eswa.2024.123855
+    date: 2026-04-10
+
+matsakis2014rustsafe:
+  type: Article
+  author:
+    - Matsakis, N. D.
+    - Klock II, F. S.
+  title: "Rust: Safe Systems Programming for the 21st Century"
+  journal: Communications of the ACM
+  volume: 57
+  issue: 2
+  page-range: 44-56
+  date: 2014
+  publisher: ACM
+
+yamamoto2010shogi:
+  type: Article
+  author:
+    - Yamamoto, Issei
+    - Takeuchi, Shogo
+    - Kaneko, Tomoyuki
+    - Tanaka, Tetsuro
+  title: "Proposal and Implementation of Magic Bitboards in Shogi"
+  journal: "Game Programming Workshop 2010"
+  volume: 2010
+  issue: 12
+  page-range: 42-48
+  date: 2010
+  publisher: Information Processing Society of Japan (IPSJ)
+  url:
+    value: https://ipsj.ixsq.nii.ac.jp/record/71312/files/IPSJ-GPWS2010007.pdf
+    date: 2026-04-10

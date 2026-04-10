@@ -54,7 +54,7 @@ O desenvolvimento de software para xadrez pode ser analisado, de forma geral, em
 
 == Engines de Xadrez de Alta Performance
 
-Entre as _engines_ open-source contemporâneas, o Stockfish destaca-se como uma das principais referências de desempenho, combinando busca baseada em poda alfa-beta com heurísticas avançadas e avaliação por redes neurais eficientes no formato NNUE @stockfishdocs @stockfishsite. Em paralelo, o Leela Chess Zero (Lc0) representa a abordagem baseada em redes neurais profundas e autojogo, inspirada pela linha introduzida pelo AlphaZero @silver2017alphazero @lc0overview. Esses dois projetos ilustram paradigmas centrais da computação enxadrística atual e reforçam a importância da geração eficiente de lances como componente estrutural de sistemas competitivos.
+Entre as _engines_ open-source contemporâneas, o Stockfish destaca-se como uma das principais referências de desempenho, combinando busca baseada em poda alfa-beta com heurísticas avançadas e avaliação por redes neurais eficientes no formato NNUE @stockfishdocs @stockfishsite. Em paralelo, o Leela Chess Zero (Lc0) representa a abordagem baseada em redes neurais profundas e autojogo, inspirada pela linha introduzida pelo AlphaZero @silver2017alphazero @lc0overview. Esses dois projetos ilustram paradigmas centrais da computação enxadrística atual e reforçam a importância da geração eficiente de lances como componente estrutural de sistemas competitivos. Além disso, a exploração de linguagens modernas para o desenvolvimento de _engines_ de alto desempenho não se restringe a implementações em C++ nem a fluxos de experimentação apoiados em Python: trabalhos recentes também investigam a linguagem Go como base para arquiteturas enxadrísticas modulares e competitivas, como exemplifica a _engine_ GoFish @gofish2024.
 
 == Bibliotecas de Lógica de Xadrez
 
@@ -64,7 +64,7 @@ No ecossistema Python, a biblioteca "python-chess" tornou-se uma referência amp
 
 No ecossistema Rust, a biblioteca "chess" oferece uma referência importante de implementação eficiente para representação do tabuleiro e geração de lances, demonstrando a viabilidade de soluções de alto desempenho nesse ambiente @bray2024chess.
 
-Nesse contexto, Rust oferece características particularmente relevantes para bibliotecas centrais de xadrez, como desempenho próximo ao de linguagens de sistema, controle explícito de memória e ausência de coletor de lixo, com garantias estáticas de segurança @rustbook.
+Nesse contexto, Rust oferece características particularmente relevantes para bibliotecas centrais de xadrez, como desempenho próximo ao de linguagens de sistema, controle explícito de memória e ausência de coletor de lixo, com garantias estáticas de segurança fundamentadas tanto em sua documentação oficial quanto em literatura acadêmica da ACM dedicada ao modelo de segurança da linguagem @rustbook @matsakis2014rustsafe.
 
 A ChessLib insere-se nesse cenário como uma biblioteca de xadrez em Rust voltada à construção de uma base modular e eficiente para representação do jogo e geração de lances. Sua proposta não é competir diretamente com _engines_ completos, mas oferecer uma infraestrutura reutilizável, com ênfase em corretude funcional, desempenho e extensibilidade.
 
@@ -76,12 +76,12 @@ A ChessLib foi projetada como uma biblioteca modular para representação de pos
 
 A biblioteca adota bitboards como estrutura principal de representação. Nessa abordagem, o tabuleiro é modelado por inteiros de 64 bits, nos quais cada bit corresponde a uma casa. Em vez de estruturas bidimensionais tradicionais, essa modelagem permite representar conjuntos de casas de forma compacta e manipulá-los por meio de operações bitwise executadas diretamente pela CPU @bitboards.
 
+Na convenção utilizada, baseada em _Little-Endian File Mapping_, a casa "a1" corresponde ao bit menos significativo e "h8" ao mais significativo. A partir dessa organização, a posição pode ser descrita por múltiplos bitboards, tipicamente separados por tipo de peça e cor, além de estruturas agregadas para ocupação total, peças brancas e peças pretas. Essa organização, evidenciada na @Fig1, simplifica consultas de ocupação, detecção de ataques e aplicação de máscaras sobre regiões específicas do tabuleiro @bitboards.
+
 #figure(
   image("./assets/grid.png", width: 70%),
   caption: [Little-Endian File Mapping],
 )<Fig1>
-
-Na convenção utilizada, baseada em _Little-Endian File Mapping_, a casa "a1" corresponde ao bit menos significativo e "h8" ao mais significativo. A partir dessa organização, a posição pode ser descrita por múltiplos bitboards, tipicamente separados por tipo de peça e cor, além de estruturas agregadas para ocupação total, peças brancas e peças pretas. Essa organização, evidenciada na @Fig1, simplifica consultas de ocupação, detecção de ataques e aplicação de máscaras sobre regiões específicas do tabuleiro @bitboards.
 
 == Geração de Lances
 
@@ -126,7 +126,7 @@ Esse elemento define quais casas realmente influenciam os ataques de uma peça d
 
 O número mágico é uma constante de 64 bits, única para cada casa e tipo de peça (torre/bispo), que foi descoberta através de uma busca por força bruta para satisfazer a propriedade de hashing perfeito para a máscara de bloqueadores dessa casa. 
 
-Estes números não são derivados de uma fórmula matemática, mas são encontrados através de um processo de tentativa e erro. A comunidade de programação de xadrez mantém listas dos "melhores mágicos até agora", que são números que não só funcionam, mas também permitem tabelas de ataque mais compactas @kannan2007magic @fiekas2018magic. 
+Estes números não são derivados de uma fórmula matemática, mas são encontrados através de um processo de tentativa e erro. Embora esse procedimento seja empírico, a técnica possui validação e lastro na literatura científica de jogos de tabuleiro, tendo sido formalmente proposta e implementada também no contexto do Shogi @yamamoto2010shogi. A comunidade de programação de xadrez mantém listas dos "melhores mágicos até agora", que são números que não só funcionam, mas também permitem tabelas de ataque mais compactas @kannan2007magic @fiekas2018magic. 
 
 Cada uma das 128 combinações (64 para torres, 64 para bispos) tem o seu próprio número mágico único.
 
@@ -137,7 +137,7 @@ Por fim, a tabela de ataques armazena, para cada índice válido, o bitboard cor
 A etapa de inicialização consiste justamente em construir essas tabelas e validar números mágicos adequados para bispos e torres em cada uma das 64 casas. Embora essa fase seja relativamente trabalhosa, ela é executada apenas uma vez, deslocando o custo computacional para fora do caminho crítico da geração de lances. O processo de busca de um número mágico pode ser resumido pelo fluxo apresentado na @lofa.
 
 #figure(
-  image("./assets/lofa.drawio.svg", width: 95%),
+  image("./assets/lofa.drawio.svg", width: 86%),
   caption: "Geração e validação de um número mágico",
 )<lofa>
 
