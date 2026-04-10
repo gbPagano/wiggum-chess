@@ -189,19 +189,23 @@ A @libs registra as versões das bibliotecas comparadas, uma vez que alteraçõe
     columns: (1fr, auto),
     align: horizon,
     table.header([Biblioteca], [Versão]),
-    [ChessLib],     [-],
-    [python-chess], [-],
-    [chess],        [-],
+    [ChessLib],             [-],
+    [chess],              [-],
+    [shakmaty],           [-],
+    [Stockfish via UCI],    [-],
+    [python-chess],       [-],
   ),
-  caption: [Versões das bibliotecas avaliadas],
+  caption: [Implementações avaliadas nos experimentos],
 ) <libs>
 
-A ChessLib foi comparada com duas bibliotecas de referência:
+A ChessLib foi comparada com quatro implementações de referência:
 
-    -   "python-chess", uma biblioteca de xadrez em Python @pythonchess;
-    -   "chess", uma biblioteca feita em Rust @bray2024chess, cujo projeto inspirou a ChessLib.
+    -   "python-chess", uma biblioteca de xadrez consolidada em Python @pythonchess;
+    -   "chess", uma crate em Rust orientada a alto desempenho @bray2024chess;
+    -   "shakmaty", uma biblioteca geral de xadrez em Rust @shakmatyreadme;
+    -   "Stockfish", avaliado por meio de chamadas externas via protocolo UCI @stockfishdocs @stockfishsite.
 
-Desse modo, a avaliação busca situar a ChessLib tanto em relação a uma biblioteca popular quanto em relação a uma alternativa de alto desempenho no ecossistema Rust.
+Desse modo, a avaliação busca situar a ChessLib tanto em relação a bibliotecas embutidas no mesmo processo quanto, de forma complementar, em relação ao custo prático de integração com uma _engine_ externa.
 
 == Conjunto de Posições de Teste
 
@@ -213,6 +217,12 @@ A posição inicial foi adotada como referência básica por possuir resultados 
 
 `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1` 
 
+=== Teste de capturas
+
+Uma posição clássica de _perft_ com alta incidência de capturas e tática imediata, útil para estressar verificações de legalidade e a enumeração de respostas forçadas.
+
+`rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8`
+
 === "Kiwipete"
 
 Uma posição complexa de meio-jogo com muitas possibilidades táticas, incluindo roques, capturas e lances de peão. Testa o desempenho num cenário mais realista e computacionalmente denso.
@@ -223,79 +233,190 @@ Uma posição complexa de meio-jogo com muitas possibilidades táticas, incluind
 
 Uma posição projetada especificamente para testar a lógica de promoção de peões, que pode ser uma fonte de bugs e ineficiências.
 
-`n1n5/PPPk4/8/8/8/8/4Kppp/5N1N w - - 0 1`
+`n1n5/PPPk4/8/8/8/8/4Kppp/5N1N b - - 0 1`
 
-Cada biblioteca executou um teste Perft em cada uma das três posições, começando na profundidade 1 e continuando até uma profundidade computacionalmente significativa (Profundidade 6 para a Posição Inicial, Profundidade 5 para as outras).
+Na posição inicial, os benchmarks principais foram executados nas profundidades 4 a 7. Nos presets específicos, foram avaliadas as posições `captures` na profundidade 5, `promotions` na profundidade 6 e `kiwipete` na profundidade 5. As implementações `chesslib-simple` e `python-chess` foram incluídas apenas na rodada de profundidade 4 da posição inicial, em caráter complementar.
 
 = Resultados
 
-A @canon apresenta a validação funcional da ChessLib na posição inicial por meio da comparação entre as contagens obtidas e os valores canônicos de _Perft_. Essa tabela permite verificar a aderência da implementação às contagens de referência e, consequentemente, a consistência da geração de lances legais.
+== Observações Metodológicas
+
+A medição do Stockfish não é diretamente comparável com as crates Rust em processo único. No script atual, cada execução do benchmark do Stockfish vários processos que adicionam overhead fixo relevante, especialmente nas profundidades menores.
+
+ChessLib-Simple e Python-Chess só foram incluídos na rodada da profundidade 4 da posição inicial.
+
+== Posição Inicial
+
+=== Profundidade $d=4$
 
 #figure(
   table(
-    columns: (auto, auto, auto, auto, auto, auto),
-    align: horizon,
-    table.header([Profundidade], [Contagem Canônica de Nós], [ChessLib], [Python-Chess], [Chess], [Resultado]),
-    [1], [20],      [-], [-], [-], [-], 
-    [2], [400],     [-], [-], [-], [-], 
-    [3], [8902],    [-], [-], [-], [-], 
-    [4], [197281],  [-], [-], [-], [-], 
-    [5], [4865609], [-], [-], [-], [-], 
-  ),
-  caption: [Validação da Correção do _Perft_ (Posição Inicial)],
-) <canon>
-
-A @benchmark reúne os resultados de desempenho para a posição inicial, reportando número de nós, tempo de execução e nós por segundo (NPS). Em conjunto, esses indicadores permitem situar a ChessLib em relação às bibliotecas de referência sob uma carga padronizada.
-
-#figure(
-  table(
-    columns: (auto, auto, auto, auto, auto, 1fr),
+    columns: (1fr, 1fr),
     align: horizon,
     table.header(
-        [Biblioteca], 
-        [Linguagem], 
+        [Engine], 
+        [Tempo médio (ms)], 
+    ),
+    [Chess],             [1.2],
+    [ChesLib],           [1.5],
+    [Shakmaty],          [1.6],
+    [Stockfish via UCI], [161.4],
+    [ChessLib-Simple],   [23.3],
+    [Python-Chess],      [235.0],
+  ),
+  caption: [Benchmark de desempenho na posição inicial para $d=4$],
+) <benchmark1>
+
+==== NOTA
+Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo de 5 ms.
+
+=== Profundidade $d=5$
+
+#figure(
+  table(
+    columns: (1fr, 1fr),
+    align: horizon,
+    table.header(
+        [Engine], 
+        [Tempo médio (ms)], 
+    ),
+    [Chess],             [11.9],
+    [ChesLib],           [14.4],
+    [Shakmaty],          [15.8],
+    [Stockfish via UCI], [173.8],
+  ),
+  caption: [Benchmark de desempenho na posição inicial para $d=5$],
+) <benchmark2>
+
+=== Profundidade $d=6$
+
+#figure(
+  table(
+    columns: (1fr, 1fr),
+    align: horizon,
+    table.header(
+        [Engine], 
+        [Tempo médio (ms)], 
+    ),
+    [Chess],             [241.9],
+    [ChesLib],           [259.5],
+    [Shakmaty],          [350.2],
+    [Stockfish via UCI], [500.9],
+  ),
+  caption: [Benchmark de desempenho na posição inicial para $d=6$],
+) <benchmark3>
+
+=== Profundidade $d=7$
+
+#figure(
+  table(
+    columns: (1fr, 1fr),
+    align: horizon,
+    table.header(
+        [Engine], 
+        [Tempo médio (s)], 
+    ),
+    [Chess],             [6.251],
+    [ChesLib],           [7.467],
+    [Shakmaty],          [9.318],
+    [Stockfish via UCI], [9.974],
+  ),
+  caption: [Benchmark de desempenho na posição inicial para $d=7$],
+) <benchmark4>
+
+== Posição de capturas
+
+=== Profundidade $d=5$
+
+#figure(
+  table(
+    columns: (1fr, 1fr),
+    align: horizon,
+    table.header(
+        [Engine], 
+        [Tempo médio (ms)], 
+    ),
+    [Chess],             [128.1],
+    [ChesLib],           [142.5],
+    [Shakmaty],          [249.0],
+    [Stockfish via UCI], [445.1],
+  ),
+  caption: [Benchmark de desempenho na posição de capturas para $d=5$],
+) <benchmark5>
+
+== Posição de promoções
+
+=== Profundidade $d=6$
+
+#figure(
+  table(
+    columns: (1fr, 1fr),
+    align: horizon,
+    table.header(
+        [Engine], 
+        [Tempo médio (ms)], 
+    ),
+    [Chess],             [177.2],
+    [ChesLib],           [195.4],
+    [Shakmaty],          [298.0],
+    [Stockfish via UCI], [570.0],
+  ),
+  caption: [Benchmark de desempenho na posição de promoções para $d=6$],
+) <benchmark6>
+
+== Posição "Kiwipete"
+
+=== Profundidade $d=5$
+
+#figure(
+  table(
+    columns: (1fr, 1fr),
+    align: horizon,
+    table.header(
+        [Engine], 
+        [Tempo médio (ms)], 
+    ),
+    [Chess],             [261.5],
+    [ChesLib],           [282.9],
+    [Shakmaty],          [537.3],
+    [Stockfish via UCI], [731.7],
+  ),
+  caption: [Benchmark de desempenho na posição "Kiwipete" para $d=5$],
+) <benchmark7>
+
+Para complementar a análise, a @posicoes resume os tempos médios obtidos nos presets `captures`, `promotions` e `kiwipete`, escolhidos por enfatizarem diferentes aspectos da geração de lances, como sequências de captura, promoções e posições ricas em casos especiais.
+
+#figure(
+  table(
+    columns: (1.2fr, 1fr, 1fr, 1fr, 1fr, 1fr),
+    align: horizon,
+    table.header(
+        [Posição de teste], 
         [Profundidade], 
-        [Nós], 
-        [Tempo [s]], 
-        [NPS]
-    ),
-    table.cell(rowspan: 3)[Python-Chess], table.cell(rowspan: 3)[Python], [3], [-], [-], [-], [4], [-], [-], [-], [5], [-], [-], [-],
-    table.cell(rowspan: 3)[Chess],        table.cell(rowspan: 3)[Rust],   [3], [-], [-], [-], [4], [-], [-], [-], [5], [-], [-], [-],
-    table.cell(rowspan: 3)[ChessLib],     table.cell(rowspan: 3)[Rust],   [3], [-], [-], [-], [4], [-], [-], [-], [5], [-], [-], [-],
-  ),
-  caption: [Benchmark de Desempenho (Posição Inicial)],
-) <benchmark>
-
-Para complementar a análise, a @posicoes resume o desempenho das bibliotecas nas posições Kiwipete e Teste de Promoção, ambas avaliadas na profundidade 5. Essa comparação permite observar o comportamento das implementações em cenários mais sensíveis a detalhes específicos da geração de lances.
-
-#figure(
-  table(
-    columns: (1fr, auto, auto, auto, auto),
-    align: horizon,
-    table.header(
-        table.cell(rowspan: 2)[Posição de teste], 
-        table.cell(rowspan: 2)[Profundidade], 
-        table.cell(colspan: 3)[NPS], 
-        [Python-Chess], 
         [Chess], 
-        [ChessLib]
+        [ChessLib], 
+        [Shakmaty], 
+        [Stockfish via UCI]
     ),
-    table.cell(rowspan: 2)[Kiwipete],          [4], [-], [-], [-], [5], [-], [-], [-], 
-    table.cell(rowspan: 2)[Teste de promoção], [4], [-], [-], [-], [5], [-], [-], [-],
+    [Captures],   [5], [128.1 ms], [142.5 ms], [249.0 ms], [445.1 ms],
+    [Promotions], [6], [177.2 ms], [195.4 ms], [298.0 ms], [570.0 ms],
+    [Kiwipete],   [5], [261.5 ms], [282.9 ms], [537.3 ms], [731.7 ms],
   ),
-  caption: [Benchmark de Desempenho em Posições Específicas],
+  caption: [Tempos médios em posições específicas de teste],
 ) <posicoes>
 
 = Discussão
 
-Os resultados devem ser analisados em duas perspectivas complementares. A primeira é a corretude funcional, verificada pela coincidência entre as contagens obtidas e os valores canônicos de _Perft_. A segunda é a eficiência computacional, observada a partir do tempo de execução e da métrica NPS nas posições avaliadas.
+Nos cenários avaliados, a crate "chess" apresentou o melhor desempenho bruto, enquanto a ChessLib permaneceu consistentemente em segundo lugar, à frente da "shakmaty". A diferença para a "chess" foi moderada na maior parte dos testes, variando de cerca de 7% a 11% nos casos centrais e de 19% a 21% nos menos favoráveis da posição inicial. Isso indica que a implementação proposta alcançou desempenho competitivo no ecossistema Rust, ainda que sem superar a principal referência adotada.
 
-Na interpretação dos benchmarks, três fatores são particularmente relevantes: o custo da representação interna do estado do jogo, a eficiência da geração de lances de peças deslizantes e o ambiente de execução de cada biblioteca. Nesse sentido, diferenças entre uma implementação em linguagem interpretada e implementações em Rust devem ser consideradas juntamente com decisões de projeto, como organização de dados, pré-cálculo de ataques e tratamento de casos especiais.
+Esse resultado é relevante porque a ChessLib não se limita à geração mínima de lances: ela também mantém informações incrementais de estado, como _Zobrist hash_, contagem de _half-moves_ e compatibilidade com fluxos associados ao protocolo UCI. Assim, parte do custo medido decorre de responsabilidades adicionais no caminho crítico de execução.
 
-A comparação com a biblioteca `chess` é especialmente útil por situar a ChessLib frente a uma referência de alto desempenho no mesmo ecossistema. Já a comparação com a `python-chess` amplia a discussão ao incluir uma biblioteca consolidada e amplamente utilizada em prototipagem, ensino e integração com pipelines de análise.
+Já a comparação com o Stockfish deve ser interpretada com cautela. No arranjo experimental utilizado, os tempos medem o custo de acionar uma _engine_ externa via shell e UCI, e não apenas sua rotina interna de _perft_. Ainda assim, sua inclusão é útil para reforçar que sistemas completos de xadrez assumem responsabilidades adicionais além da simples enumeração de lances, como se observa na implementação de "Position" do próprio Stockfish.
 
 = Conclusão  
 
-Este artigo apresentou a ChessLib, uma biblioteca de xadrez em Rust voltada à representação eficiente do tabuleiro e à geração de lances com base em bitboards e _magic bitboards_. A descrição da arquitetura evidenciou escolhas orientadas a desempenho, segurança de memória e modularidade, características importantes para bibliotecas que servem de base a sistemas maiores.
+Este artigo apresentou a ChessLib, uma biblioteca de xadrez em Rust voltada à representação eficiente do tabuleiro e à geração de lances com base em bitboards e _magic bitboards_.
 
-Além da arquitetura proposta, o trabalho definiu um protocolo experimental centrado em testes _Perft_ e em comparação com bibliotecas de referência, permitindo avaliar a ChessLib em termos de corretude funcional e desempenho computacional. Como desdobramentos naturais, a biblioteca pode ser estendida com mecanismos de busca, funções de avaliação e integração com agentes de inteligência artificial.
+No plano experimental, os resultados mostraram que a crate "chess" obteve o melhor desempenho bruto nos cenários avaliados. Ainda assim, a ChessLib manteve-se consistentemente como a segunda implementação mais rápida entre as alternativas comparadas no mesmo processo, frequentemente com diferença moderada em relação à líder e com vantagem clara sobre abordagens mais gerais. Esse resultado é significativo porque a proposta da ChessLib não se restringe ao núcleo mínimo de geração de lances, incluindo também a manutenção incremental de informações de estado relevantes para uso prático da biblioteca.
+
+Desse modo, o trabalho não demonstra a superação da principal referência de desempenho em Rust, mas mostra que é possível alcançar uma implementação competitiva e tecnicamente robusta mesmo conciliando geração eficiente de lances com responsabilidades adicionais de estado e integração. Como desdobramento, a biblioteca pode ser estendida com a implementação de uma inteligência artificial que utilize a infraestrutura de geração de lances para avaliar posições e selecionar os melhores movimentos, o que constitui um passo natural para explorar o potencial da ChessLib em cenários de jogo autônomo.

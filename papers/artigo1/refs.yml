@@ -285,3 +285,23 @@ yamamoto2010shogi:
   url:
     value: https://ipsj.ixsq.nii.ac.jp/record/71312/files/IPSJ-GPWS2010007.pdf
     date: 2026-04-10
+
+shakmatyreadme:
+  type: Web
+  author: "Fiekas, Niklas"
+  title: "shakmaty README"
+  url:
+    value: https://docs.rs/crate/shakmaty/latest/source/README.md
+    date: 2026-04-10
+  date: 2026
+  note: "Acessado em 10 de abril de 2026"
+
+stockfishsource:
+  type: Web
+  author: "The Stockfish Team"
+  title: "Stockfish source: position.cpp"
+  url:
+    value: https://github.com/official-stockfish/Stockfish/blob/master/src/position.cpp
+    date: 2026-04-10
+  date: 2026
+  note: "Código-fonte oficial; acessado em 10 de abril de 2026"
