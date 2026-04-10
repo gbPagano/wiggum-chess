@@ -190,10 +190,10 @@ A @libs registra as versões das bibliotecas comparadas, uma vez que alteraçõe
     align: horizon,
     table.header([Biblioteca], [Versão]),
     [ChessLib],             [-],
-    [chess],              [-],
-    [shakmaty],           [-],
+    [chess],                [-],
+    [shakmaty],             [-],
     [Stockfish via UCI],    [-],
-    [python-chess],       [-],
+    [python-chess],         [-],
   ),
   caption: [Implementações avaliadas nos experimentos],
 ) <libs>
@@ -399,11 +399,11 @@ Para complementar a análise, a @medias resume os tempos médios obtidos nos pre
 
 = Discussão
 
-Nos cenários avaliados, a crate "chess" apresentou o melhor desempenho bruto, enquanto a ChessLib permaneceu consistentemente em segundo lugar, à frente da "shakmaty". A diferença para a "chess" foi moderada na maior parte dos testes, variando de cerca de 7% a 11% nos casos centrais e de 19% a 21% nos menos favoráveis da posição inicial. Isso indica que a implementação proposta alcançou desempenho competitivo no ecossistema Rust, ainda que sem superar a principal referência adotada.
+Nos cenários avaliados, a crate "chess" apresentou o melhor desempenho bruto, enquanto a ChessLib permaneceu consistentemente em segundo lugar, à frente de "shakmaty". Mais do que a diferença para a "chess", porém, o contraste com a variante "chesslib-simple" ajuda a evidenciar o peso da representação interna adotada. Sem o mesmo aproveitamento de _bitboards_ no caminho crítico, ela permaneceu em um patamar próximo ao de "python-chess".
 
-Esse resultado é relevante porque a ChessLib não se limita à geração mínima de lances: ela também mantém informações incrementais de estado, como _Zobrist hash_, contagem de _half-moves_ e compatibilidade com fluxos associados ao protocolo UCI. Assim, parte do custo medido decorre de responsabilidades adicionais no caminho crítico de execução.
+Além disso, os resultados são relevantes porque a ChessLib não se limita à geração mínima de lances: ela também mantém informações incrementais de estado, como _Zobrist hash_, contagem de _half-moves_ e compatibilidade com fluxos associados ao protocolo UCI. Assim, parte do custo medido decorre de responsabilidades adicionais no caminho crítico de execução, sem eliminar o ganho estrutural proporcionado pela representação escolhida.
 
-Já a comparação com o Stockfish deve ser interpretada com cautela. No arranjo experimental utilizado, os tempos medem o custo de acionar uma _engine_ externa via shell e UCI, e não apenas sua rotina interna de _perft_. Ainda assim, sua inclusão é útil para reforçar que sistemas completos de xadrez assumem responsabilidades adicionais além da simples enumeração de lances, como se observa na implementação de "Position" do próprio Stockfish.
+Já a comparação com o Stockfish deve ser interpretada com cautela. No arranjo experimental utilizado, os tempos medem o custo de acionar uma _engine_ externa via _shell_ e UCI, e não apenas sua rotina interna de _perft_. Ainda assim, sua inclusão é útil para reforçar que sistemas completos de xadrez assumem responsabilidades adicionais além da simples enumeração de lances.
 
 = Conclusão  
 
