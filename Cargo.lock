@@ -838,6 +838,7 @@ dependencies = [
  "chesslib",
  "chesslib-simple",
  "clap",
+ "failure",
  "shakmaty",
 ]
 

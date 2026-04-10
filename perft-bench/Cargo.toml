@@ -13,3 +13,4 @@ chesslib-simple = { path = "../chesslib-simple" }
 chess = "3.2.0"
 shakmaty = "0.30.0"
 clap = { version = "4", features = ["derive"] }
+failure = "0.1.8"
