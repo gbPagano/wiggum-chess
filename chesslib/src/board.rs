@@ -13,7 +13,7 @@ use anyhow::{Error, bail};
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct Board {
     pieces_bitboards: [BitBoard; 6],
     colors_bitboards: [BitBoard; 2],
@@ -253,7 +253,7 @@ impl Board {
 
     #[inline(always)]
     pub fn make_move(&self, m: ChessMove) -> Board {
-        let mut result = self.clone();
+        let mut result = *self;
         result.en_passant = None;
         result.checkers_bitboard = BitBoard(0);
         result.pinned_bitboard = BitBoard(0);
