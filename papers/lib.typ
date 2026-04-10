@@ -218,7 +218,7 @@
         #h(0em) _Resumo_ --- #h(weak: true, .5em) #abstract
 
         #if index-terms != () [
-            _Palavras chave_:#h(weak: true, 0.5em) #index-terms.join(", ")
+            _Palavras-chave_:#h(weak: true, 0.5em) #index-terms.join(", ")
         ]
         #v(2pt)
     ]

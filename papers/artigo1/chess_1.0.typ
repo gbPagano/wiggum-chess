@@ -38,15 +38,13 @@
 
 = Introdução
 
-O xadrez ocupa, há décadas, um papel de destaque na pesquisa em inteligência artificial, servindo como ambiente de teste para técnicas de busca, avaliação heurística e, mais recentemente, aprendizado por reforço. A relevância desse domínio decorre do fato de que o desempenho de um sistema enxadrístico depende tanto da qualidade de sua estratégia de decisão quanto da eficiência com que o estado do jogo é representado e manipulado.
-
 O xadrez ocupa, há décadas, um papel central na pesquisa em inteligência artificial, servindo como ambiente de teste para técnicas de busca, avaliação heurística e, mais recentemente, aprendizado por reforço @campbell2002deepblue. Nesse domínio, o desempenho do sistema depende não apenas da qualidade da estratégia de decisão, mas também da eficiência com que o estado do jogo é representado e manipulado.
 
 Marcos históricos como o Deep Blue evidenciaram a força de abordagens baseadas em busca altamente otimizada e conhecimento especializado de domínio @campbell2002deepblue. Em seguida, sistemas como o AlphaZero e projetos abertos como o Leela Chess Zero reforçaram a relevância de arquiteturas apoiadas em autojogo e redes neurais profundas @silver2017alphazero @lc0overview. Apesar dessas diferenças na camada de decisão, todos esses sistemas dependem de uma infraestrutura de geração de lances correta e eficiente.
 
 Nesse contexto, este trabalho apresenta o desenvolvimento da ChessLib, uma biblioteca de xadrez implementada em Rust, com foco em eficiência, segurança de memória e organização modular. A biblioteca adota bitboards como estrutura principal de representação do tabuleiro e emprega magic bitboards para otimizar a geração de lances de peças deslizantes, explorando operações bitwise e acesso pré-computado a tabelas de ataque @bitboards @kannan2007magic.
 
-A proposta insere-se no contexto de bibliotecas de base para _engines_ de xadrez e ferramentas correlatas, priorizando uma infraestrutura reutilizável para futuras extensões, como mecanismos de busca, funções de avaliação e integração com agentes de inteligência artificial. Assim, a contribuição principal deste artigo está na descrição da arquitetura da ChessLib, das decisões de implementação adotadas e da metodologia experimental proposta para avaliar sua corretude funcional e seu desempenho computacional.
+A proposta insere-se no contexto de bibliotecas de base para _engines_ de xadrez e ferramentas correlatas, priorizando uma infraestrutura reutilizável para futuras extensões, como mecanismos de busca, funções de avaliação e integração com agentes de inteligência artificial. Mais especificamente, o trabalho contribui com: a) a descrição da arquitetura da ChessLib e das decisões de implementação adotadas para representação do estado e geração de lances; b) a sistematização do uso de _bitboards_ e _magic bitboards_ em uma biblioteca escrita em Rust com foco em extensibilidade; e c) uma avaliação experimental baseada em _Perft_ e em comparação com implementações de referência, de modo a situar a ChessLib quanto ao custo computacional da geração de lances.
 
 = Trabalhos Relacionados
 
@@ -66,7 +64,7 @@ No ecossistema Rust, a biblioteca "chess" oferece uma referência importante de 
 
 Nesse contexto, Rust oferece características particularmente relevantes para bibliotecas centrais de xadrez, como desempenho próximo ao de linguagens de sistema, controle explícito de memória e ausência de coletor de lixo, com garantias estáticas de segurança documentadas tanto em sua documentação oficial quanto em literatura acadêmica da ACM sobre a linguagem e seu uso em sistemas @rustbook @matsakis2014rustsafe.
 
-A ChessLib insere-se nesse cenário como uma biblioteca de xadrez em Rust voltada à construção de uma base modular e eficiente para representação do jogo e geração de lances. Sua proposta não é competir diretamente com _engines_ completos, mas oferecer uma infraestrutura reutilizável, com ênfase em corretude funcional, desempenho e extensibilidade.
+A ChessLib insere-se nesse cenário como uma biblioteca de xadrez em Rust voltada à construção de uma base modular e eficiente para representação do jogo e geração de lances. Sua proposta não é competir diretamente com _engines_ completos, mas oferecer uma infraestrutura reutilizável, com ênfase em desempenho e extensibilidade.
 
 = Arquitetura
 
@@ -144,7 +142,7 @@ A etapa de inicialização consiste justamente em construir essas tabelas e vali
 Uma vez inicializado, o processo de geração de movimentos em tempo de execução é extremamente eficiente, consistindo em uma sequência linear de operações apresentadas na @talofa.
 
 #figure(
-  image("./assets/talofa.drawio.svg", width: 35%),
+  image("./assets/talofa.drawio.svg", width: 45%),
   caption: "Consulta de ataques em tempo de execução com magic bitboards",
 )<talofa>
 
@@ -152,18 +150,11 @@ Essa estratégia permite combinar pré-computação, compacidade e eficiência, 
 
 = Avaliação Experimental
 
-A avaliação experimental foi estruturada para analisar a ChessLib em duas dimensões complementares: 
-
-    +   Corretude funcional da geração de lances; 
-    +   Desempenho computacional da biblioteca em cenários representativos. 
-
-Para isso, adotou-se o teste _Perft_ (_performance test_), amplamente utilizado em computação enxadrística como procedimento de validação da geração de lances e como base para comparação de desempenho entre implementações @perft.
+A avaliação experimental foi estruturada para analisar o desempenho computacional da ChessLib em cenários representativos. Para isso, adotou-se o teste _Perft_ (_performance test_), amplamente utilizado em computação enxadrística como base para comparação de desempenho entre implementações @perft.
 
 == Objetivos da Avaliação
 
-O primeiro objetivo é verificar se a ChessLib gera exatamente o conjunto de lances esperado para diferentes posições e profundidades. O segundo é medir o custo computacional da geração de lances em uma carga padronizada. 
-
-Embora o _Perft_ não substitua a avaliação de uma _engine_ completa, ele constitui um critério adequado para comparar bibliotecas cuja principal responsabilidade é representar o estado do jogo e enumerar movimentos de forma eficiente.
+O objetivo desta avaliação é medir o custo computacional da geração de lances em uma carga padronizada. Embora o _Perft_ não substitua a avaliação de uma _engine_ completa, ele constitui um critério adequado para comparar bibliotecas cuja principal responsabilidade é representar o estado do jogo e enumerar movimentos de forma eficiente.
 
 == Ambiente Experimental
 
@@ -189,11 +180,11 @@ A @libs registra as versões das bibliotecas comparadas, uma vez que alteraçõe
     columns: (1fr, auto),
     align: horizon,
     table.header([Biblioteca], [Versão]),
-    [ChessLib],             [-],
-    [chess],                [-],
-    [shakmaty],             [-],
-    [Stockfish via UCI],    [-],
-    [python-chess],         [-],
+    [ChessLib],          [1.0],
+    [chess],             [3.2.0],
+    [shakmaty],          [0.30.0],
+    [Stockfish via UCI], [17],
+    [python-chess],      [1.11.2],
   ),
   caption: [Implementações avaliadas nos experimentos],
 ) <libs>
@@ -213,7 +204,7 @@ Os experimentos foram definidos a partir de um conjunto de posições em notaç�
 
 === Posição Inicial 
 
-A posição inicial foi adotada como referência básica por possuir resultados canônicos para diferentes profundidades de _Perft_ @perftresults.
+A posição inicial foi adotada como referência básica por ser um caso clássico de benchmark em testes _Perft_.
 
 `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1` 
 
@@ -243,7 +234,7 @@ Na posição inicial, os benchmarks principais foram executados nas profundidade
 
 A execução do Stockfish ocorreu por meio de um processo externo acionado via UCI, de modo que seus tempos incluem inicialização do processo, _handshake_ do protocolo e comunicação por _stdin/stdout_; assim, eles não são diretamente comparáveis ao custo _in-process_ das crates Rust.
 
-ChessLib-Simple é uma implementação alternativa da ChessLib, que não utiliza, propositalmente, a técnica de bitboards.
+ChessLib-Simple é uma implementação alternativa da ChessLib, que não utiliza, propositalmente, a técnica de _bitboards_.
 
 ChessLib-Simple e Python-Chess só foram incluídos na rodada da profundidade 4 da posição inicial.
 
@@ -259,7 +250,7 @@ ChessLib-Simple e Python-Chess só foram incluídos na rodada da profundidade 4 
         [Tempo médio (ms)], 
     ),
     [Chess],             [1.2],
-    [ChesLib],           [1.5],
+    [ChessLib],          [1.5],
     [Shakmaty],          [1.6],
     [Stockfish via UCI], [161.4],
     [ChessLib-Simple],   [23.3],
@@ -281,7 +272,7 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
         [Tempo médio (ms)], 
     ),
     [Chess],             [11.9],
-    [ChesLib],           [14.4],
+    [ChessLib],           [14.4],
     [Shakmaty],          [15.8],
     [Stockfish via UCI], [173.8],
   ),
@@ -298,7 +289,7 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
         [Tempo médio (ms)], 
     ),
     [Chess],             [241.9],
-    [ChesLib],           [259.5],
+    [ChessLib],           [259.5],
     [Shakmaty],          [350.2],
     [Stockfish via UCI], [500.9],
   ),
@@ -315,7 +306,7 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
         [Tempo médio (s)], 
     ),
     [Chess],             [6.251],
-    [ChesLib],           [7.467],
+    [ChessLib],           [7.467],
     [Shakmaty],          [9.318],
     [Stockfish via UCI], [9.974],
   ),
@@ -333,7 +324,7 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
         [Tempo médio (ms)], 
     ),
     [Chess],             [128.1],
-    [ChesLib],           [142.5],
+    [ChessLib],           [142.5],
     [Shakmaty],          [249.0],
     [Stockfish via UCI], [445.1],
   ),
@@ -351,7 +342,7 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
         [Tempo médio (ms)], 
     ),
     [Chess],             [177.2],
-    [ChesLib],           [195.4],
+    [ChessLib],           [195.4],
     [Shakmaty],          [298.0],
     [Stockfish via UCI], [570.0],
   ),
@@ -369,7 +360,7 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
         [Tempo médio (ms)], 
     ),
     [Chess],             [261.5],
-    [ChesLib],           [282.9],
+    [ChessLib],           [282.9],
     [Shakmaty],          [537.3],
     [Stockfish via UCI], [731.7],
   ),
@@ -399,7 +390,7 @@ Para complementar a análise, a @medias resume os tempos médios obtidos nos pre
 
 = Discussão
 
-Nos cenários avaliados, a crate "chess" apresentou o melhor desempenho bruto, enquanto a ChessLib permaneceu consistentemente em segundo lugar, à frente de "shakmaty". Mais do que a diferença para a "chess", porém, o contraste com a variante "chesslib-simple" ajuda a evidenciar o peso da representação interna adotada. Sem o mesmo aproveitamento de _bitboards_ no caminho crítico, ela permaneceu em um patamar próximo ao de "python-chess".
+Nos cenários avaliados, a crate "chess" apresentou o melhor desempenho bruto, enquanto a ChessLib permaneceu consistentemente em segundo lugar, à frente de "shakmaty". Mais do que a diferença para a "chess", porém, o contraste com a variante "ChessLib-Simple" ajuda a evidenciar o peso da representação interna adotada. Sem o mesmo aproveitamento de _bitboards_ no caminho crítico, ela permaneceu em um patamar próximo ao de "python-chess".
 
 Além disso, os resultados são relevantes porque a ChessLib não se limita à geração mínima de lances: ela também mantém informações incrementais de estado, como _Zobrist hash_, contagem de _half-moves_ e compatibilidade com fluxos associados ao protocolo UCI. Assim, parte do custo medido decorre de responsabilidades adicionais no caminho crítico de execução, sem eliminar o ganho estrutural proporcionado pela representação escolhida.
 
@@ -411,4 +402,4 @@ Este artigo apresentou a ChessLib, uma biblioteca de xadrez em Rust voltada à r
 
 No plano experimental, os resultados mostraram que a crate "chess" obteve o melhor desempenho bruto nos cenários avaliados. Ainda assim, a ChessLib manteve-se consistentemente como a segunda implementação mais rápida entre as alternativas comparadas no mesmo processo, frequentemente com diferença moderada em relação à líder e com vantagem clara sobre abordagens mais gerais. Esse resultado é significativo porque a proposta da ChessLib não se restringe ao núcleo mínimo de geração de lances, incluindo também a manutenção incremental de informações de estado relevantes para uso prático da biblioteca.
 
-Desse modo, o trabalho não demonstra a superação da principal referência de desempenho em Rust, mas mostra que é possível alcançar uma implementação competitiva e tecnicamente robusta mesmo conciliando geração eficiente de lances com responsabilidades adicionais de estado e integração. Como desdobramento, a biblioteca pode ser estendida com a implementação de uma inteligência artificial que utilize a infraestrutura de geração de lances para avaliar posições e selecionar os melhores movimentos, o que constitui um passo natural para explorar o potencial da ChessLib em cenários de jogo autônomo.
+Desse modo, o trabalho não demonstra a superação da principal referência de desempenho em Rust, mas mostra que é possível alcançar uma implementação competitiva e tecnicamente robusta mesmo conciliando geração eficiente de lances com responsabilidades adicionais de estado e integração. Em conjunto com os cenários experimentais avaliados, esses resultados sustentam a ChessLib como uma base promissora para extensões futuras. Como desdobramento, a biblioteca pode ser estendida com a implementação de uma inteligência artificial que utilize a infraestrutura de geração de lances para avaliar posições e selecionar os melhores movimentos, o que constitui um passo natural para explorar o potencial da ChessLib em cenários de jogo autônomo.
