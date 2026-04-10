@@ -76,12 +76,12 @@ A ChessLib foi projetada como uma biblioteca modular para representação de pos
 
 A biblioteca adota bitboards como estrutura principal de representação. Nessa abordagem, o tabuleiro é modelado por inteiros de 64 bits, nos quais cada bit corresponde a uma casa. Em vez de estruturas bidimensionais tradicionais, essa modelagem permite representar conjuntos de casas de forma compacta e manipulá-los por meio de operações bitwise executadas diretamente pela CPU @bitboards.
 
-Na convenção utilizada, baseada em _Little-Endian File Mapping_, a casa "a1" corresponde ao bit menos significativo e "h8" ao mais significativo. A partir dessa organização, a posição pode ser descrita por múltiplos bitboards, tipicamente separados por tipo de peça e cor, além de estruturas agregadas para ocupação total, peças brancas e peças pretas. Essa organização, evidenciada na @Fig1, simplifica consultas de ocupação, detecção de ataques e aplicação de máscaras sobre regiões específicas do tabuleiro @bitboards.
-
 #figure(
-  image("./assets/grid.png", width: 65%),
+  image("./assets/grid.png", width: 70%),
   caption: [Little-Endian File Mapping],
 )<Fig1>
+
+Na convenção utilizada, baseada em _Little-Endian File Mapping_, a casa "a1" corresponde ao bit menos significativo e "h8" ao mais significativo. A partir dessa organização, a posição pode ser descrita por múltiplos bitboards, tipicamente separados por tipo de peça e cor, além de estruturas agregadas para ocupação total, peças brancas e peças pretas. Essa organização, evidenciada na @Fig1, simplifica consultas de ocupação, detecção de ataques e aplicação de máscaras sobre regiões específicas do tabuleiro @bitboards.
 
 == Geração de Lances
 
@@ -137,14 +137,14 @@ Por fim, a tabela de ataques armazena, para cada índice válido, o bitboard cor
 A etapa de inicialização consiste justamente em construir essas tabelas e validar números mágicos adequados para bispos e torres em cada uma das 64 casas. Embora essa fase seja relativamente trabalhosa, ela é executada apenas uma vez, deslocando o custo computacional para fora do caminho crítico da geração de lances. O processo de busca de um número mágico pode ser resumido pelo fluxo apresentado na @lofa.
 
 #figure(
-  image("./assets/lofa.drawio.svg", width: 85%),
+  image("./assets/lofa.drawio.svg", width: 95%),
   caption: "Geração e validação de um número mágico",
 )<lofa>
 
 Uma vez inicializado, o processo de geração de movimentos em tempo de execução é extremamente eficiente, consistindo em uma sequência linear de operações apresentadas na @talofa.
 
 #figure(
-  image("./assets/talofa.drawio.svg", width: 40%),
+  image("./assets/talofa.drawio.svg", width: 45%),
   caption: "Consulta de ataques em tempo de execução com magic bitboards",
 )<talofa>
 
@@ -249,15 +249,19 @@ A @benchmark reúne os resultados de desempenho para a posição inicial, report
 
 #figure(
   table(
-    columns: (auto, auto, auto, auto, auto, auto),
+    columns: (auto, auto, auto, auto, auto, 1fr),
     align: horizon,
-    table.header([Lib], [Lang], [Profundidade], [Nós], [Tempo [s]], [NPS]),
-    [Python-Chess], [Python], [5], [-], [-], [-], 
-    [Python-Chess], [Python], [6], [-], [-], [-], 
-    [ChessLib],     [Rust],   [5], [-], [-], [-], 
-    [ChessLib],     [Rust],   [6], [-], [-], [-], 
-    [Chess],        [Rust],   [5], [-], [-], [-], 
-    [Chess],        [Rust],   [6], [-], [-], [-], 
+    table.header(
+        [Lib], 
+        [Lang], 
+        [Profundidade], 
+        [Nós], 
+        [Tempo [s]], 
+        [NPS]
+    ),
+    table.cell(rowspan: 3)[Python-Chess], table.cell(rowspan: 3)[Python], [3], [-], [-], [-], [4], [-], [-], [-], [5], [-], [-], [-],
+    table.cell(rowspan: 3)[Chess],        table.cell(rowspan: 3)[Rust],   [3], [-], [-], [-], [4], [-], [-], [-], [5], [-], [-], [-],
+    table.cell(rowspan: 3)[ChessLib],     table.cell(rowspan: 3)[Rust],   [3], [-], [-], [-], [4], [-], [-], [-], [5], [-], [-], [-],
   ),
   caption: [Benchmark de Desempenho (Posição Inicial)],
 ) <benchmark>
@@ -266,13 +270,20 @@ Para complementar a análise, a @posicoes resume o desempenho das bibliotecas na
 
 #figure(
   table(
-    columns: (auto, auto, auto, auto),
+    columns: (1fr, auto, auto, auto, auto),
     align: horizon,
-    table.header([Posição de teste], [NPS (python-chess)], [NPS (ChessLib)], [NPS (chess)]),
-    [Kiwipete],          [-], [-], [-],
-    [Teste de promoção], [-], [-], [-],
+    table.header(
+        table.cell(rowspan: 2)[Posição de teste], 
+        table.cell(rowspan: 2)[Profundidade], 
+        table.cell(colspan: 3)[NPS], 
+        [Python-Chess], 
+        [Chess], 
+        [ChessLib]
+    ),
+    table.cell(rowspan: 2)[Kiwipete],          [4], [-], [-], [-], [5], [-], [-], [-], 
+    table.cell(rowspan: 2)[Teste de promoção], [4], [-], [-], [-], [5], [-], [-], [-],
   ),
-  caption: [Benchmark de Desempenho em Posições Específicas (Profundidade 5)],
+  caption: [Benchmark de Desempenho em Posições Específicas],
 ) <posicoes>
 
 = Discussão
