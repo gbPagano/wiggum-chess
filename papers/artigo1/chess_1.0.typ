@@ -38,13 +38,13 @@
 
 = Introdução
 
-O xadrez ocupa, há décadas, um papel de destaque na pesquisa em inteligência artificial, servindo como ambiente de teste para técnicas de busca, avaliação heurística e, mais recentemente, aprendizado por reforço. A relevância desse domínio decorre do fato de que o desempenho de um sistema enxadrístico depende tanto da qualidade de sua estratégia de decisão quanto da eficiência com que o estado do jogo é representado e manipulado @campbell2002deepblue.
+O xadrez ocupa, há décadas, um papel de destaque na pesquisa em inteligência artificial, servindo como ambiente de teste para técnicas de busca, avaliação heurística e, mais recentemente, aprendizado por reforço. A relevância desse domínio decorre do fato de que o desempenho de um sistema enxadrístico depende tanto da qualidade de sua estratégia de decisão quanto da eficiência com que o estado do jogo é representado e manipulado.
 
 O xadrez ocupa, há décadas, um papel central na pesquisa em inteligência artificial, servindo como ambiente de teste para técnicas de busca, avaliação heurística e, mais recentemente, aprendizado por reforço @campbell2002deepblue. Nesse domínio, o desempenho do sistema depende não apenas da qualidade da estratégia de decisão, mas também da eficiência com que o estado do jogo é representado e manipulado.
 
 Marcos históricos como o Deep Blue evidenciaram a força de abordagens baseadas em busca altamente otimizada e conhecimento especializado de domínio @campbell2002deepblue. Em seguida, sistemas como o AlphaZero e projetos abertos como o Leela Chess Zero reforçaram a relevância de arquiteturas apoiadas em autojogo e redes neurais profundas @silver2017alphazero @lc0overview. Apesar dessas diferenças na camada de decisão, todos esses sistemas dependem de uma infraestrutura de geração de lances correta e eficiente.
 
-Nesse contexto, este trabalho apresenta o desenvolvimento da ChessLib, uma biblioteca de xadrez implementada em Rust, com foco em eficiência, segurança de memória e organização modular. A biblioteca adota bitboards como estrutura principal de representação do tabuleiro e emprega magic bitboards para otimizar a geração de lances de peças deslizantes, explorando operações bitwise e acesso pré-computado a tabelas de ataque @rustbook @bitboards @kannan2007magic @fiekas2018magic.
+Nesse contexto, este trabalho apresenta o desenvolvimento da ChessLib, uma biblioteca de xadrez implementada em Rust, com foco em eficiência, segurança de memória e organização modular. A biblioteca adota bitboards como estrutura principal de representação do tabuleiro e emprega magic bitboards para otimizar a geração de lances de peças deslizantes, explorando operações bitwise e acesso pré-computado a tabelas de ataque @bitboards @kannan2007magic.
 
 A proposta insere-se no contexto de bibliotecas de base para _engines_ de xadrez e ferramentas correlatas, priorizando uma infraestrutura reutilizável para futuras extensões, como mecanismos de busca, funções de avaliação e integração com agentes de inteligência artificial. Assim, a contribuição principal deste artigo está na descrição da arquitetura da ChessLib, das decisões de implementação adotadas e da metodologia experimental proposta para avaliar sua corretude funcional e seu desempenho computacional.
 
@@ -54,7 +54,7 @@ O desenvolvimento de software para xadrez pode ser analisado, de forma geral, em
 
 == Engines de Xadrez de Alta Performance
 
-Entre as _engines_ open-source contemporâneas, o Stockfish destaca-se como uma das principais referências de desempenho, combinando busca baseada em poda alfa-beta com heurísticas avançadas e avaliação por redes neurais eficientes no formato NNUE @stockfishdocs @stockfishsite. Em paralelo, o Leela Chess Zero (Lc0) representa a abordagem baseada em redes neurais profundas e autojogo, inspirada pela linha introduzida pelo AlphaZero @silver2017alphazero @lc0overview. Esses dois projetos ilustram paradigmas centrais da computação enxadrística atual e reforçam a importância da geração eficiente de lances como componente estrutural de sistemas competitivos. Além disso, a exploração de linguagens modernas para o desenvolvimento de _engines_ de alto desempenho não se restringe a implementações em C++ nem a fluxos de experimentação apoiados em Python: trabalhos recentes também investigam a linguagem Go como base para arquiteturas enxadrísticas modulares e competitivas, como exemplifica a _engine_ GoFish @gofish2024.
+Entre as _engines_ open-source contemporâneas, o Stockfish destaca-se como uma das principais referências de desempenho, combinando busca baseada em poda alfa-beta com heurísticas avançadas e avaliação por redes neurais eficientes no formato NNUE @stockfishdocs. Em paralelo, o Leela Chess Zero (Lc0) representa a abordagem baseada em redes neurais profundas e autojogo, inspirada pela linha introduzida pelo AlphaZero @silver2017alphazero @lc0overview. Esses dois projetos ilustram paradigmas centrais da computação enxadrística atual e reforçam a importância da geração eficiente de lances como componente estrutural de sistemas competitivos. Além disso, a exploração de linguagens modernas para o desenvolvimento de _engines_ de alto desempenho não se restringe a implementações em C++ nem a fluxos de experimentação apoiados em Python: trabalhos recentes também investigam a linguagem Go como base para arquiteturas enxadrísticas modulares e competitivas, como exemplifica a _engine_ GoFish @gofish2024.
 
 == Bibliotecas de Lógica de Xadrez
 
@@ -70,13 +70,13 @@ A ChessLib insere-se nesse cenário como uma biblioteca de xadrez em Rust voltad
 
 = Arquitetura
 
-A ChessLib foi projetada como uma biblioteca modular para representação de posições e geração eficiente de lances em Rust. Sua implementação inspira-se em bibliotecas enxadrísticas de alto desempenho, com ênfase em estrutura compacta de dados, baixo custo de acesso à memória e separação clara entre representação do estado, pré-cálculo de ataques e geração de movimentos @bray2024chess @rustbook.
+A ChessLib foi projetada como uma biblioteca modular para representação de posições e geração eficiente de lances em Rust. Sua implementação inspira-se em bibliotecas enxadrísticas de alto desempenho, com ênfase em estrutura compacta de dados, baixo custo de acesso à memória e separação clara entre representação do estado, pré-cálculo de ataques e geração de movimentos @bray2024chess.
 
 == Representação do Tabuleiro
 
 A biblioteca adota bitboards como estrutura principal de representação. Nessa abordagem, o tabuleiro é modelado por inteiros de 64 bits, nos quais cada bit corresponde a uma casa. Em vez de estruturas bidimensionais tradicionais, essa modelagem permite representar conjuntos de casas de forma compacta e manipulá-los por meio de operações bitwise executadas diretamente pela CPU @bitboards.
 
-Na convenção utilizada, baseada em _Little-Endian File Mapping_, a casa "a1" corresponde ao bit menos significativo e "h8" ao mais significativo. A partir dessa organização, a posição pode ser descrita por múltiplos bitboards, tipicamente separados por tipo de peça e cor, além de estruturas agregadas para ocupação total, peças brancas e peças pretas. Essa organização, evidenciada na @Fig1, simplifica consultas de ocupação, detecção de ataques e aplicação de máscaras sobre regiões específicas do tabuleiro @bitboards.
+Na convenção utilizada, baseada em _Little-Endian File Mapping_, a casa "a1" corresponde ao bit menos significativo e "h8" ao mais significativo. A partir dessa organização, a posição pode ser descrita por múltiplos bitboards, tipicamente separados por tipo de peça e cor, além de estruturas agregadas para ocupação total, peças brancas e peças pretas. Essa organização, evidenciada na @Fig1, simplifica consultas de ocupação, detecção de ataques e aplicação de máscaras sobre regiões específicas do tabuleiro.
 
 #figure(
   image("./assets/grid.png", width: 70%),
@@ -99,11 +99,11 @@ O avanço simples pode ser modelado por deslocamento vertical e filtragem pelas 
 
 === Peças Deslizantes
 
-Para torres, bispos e damas, entretanto, a geração de lances é substancialmente mais complexa. O conjunto de ataques dessas peças depende da configuração dos bloqueadores presentes ao longo de raios horizontais, verticais ou diagonais. Uma abordagem ingênua, baseada em varrer cada direção em tempo de execução para cada peça, produz custo elevado. Por isso, a ChessLib adota a técnica de _magic bitboards_, que substitui esse processo por indexação em tabelas pré-calculadas @kannan2007magic @fiekas2018magic @magicbitboards.
+Para torres, bispos e damas, entretanto, a geração de lances é substancialmente mais complexa. O conjunto de ataques dessas peças depende da configuração dos bloqueadores presentes ao longo de raios horizontais, verticais ou diagonais. Uma abordagem ingênua, baseada em varrer cada direção em tempo de execução para cada peça, produz custo elevado. Por isso, a ChessLib adota a técnica de _magic bitboards_, que substitui esse processo por indexação em tabelas pré-calculadas @kannan2007magic @magicbitboards.
 
 == Magic Bitboards
 
-O objetivo central dos _magic bitboards_ é transformar o problema da geração de ataques de peças deslizantes em um problema de consulta eficiente. Para uma peça deslizante em uma determinada casa, os lances possíveis dependem apenas dos bloqueadores relevantes presentes nos seus raios de ação. Em vez de recalcular esses ataques dinamicamente a cada consulta, a técnica associa cada configuração relevante de bloqueadores a um índice compacto em uma tabela de ataques pré-computada @kannan2007magic @fiekas2018magic.
+O objetivo central dos _magic bitboards_ é transformar o problema da geração de ataques de peças deslizantes em um problema de consulta eficiente. Para uma peça deslizante em uma determinada casa, os lances possíveis dependem apenas dos bloqueadores relevantes presentes nos seus raios de ação. Em vez de recalcular esses ataques dinamicamente a cada consulta, a técnica associa cada configuração relevante de bloqueadores a um índice compacto em uma tabela de ataques pré-computada.
 
 A indexação é feita por uma função de hash baseada em multiplicação e deslocamento:
 
@@ -126,7 +126,7 @@ Esse elemento define quais casas realmente influenciam os ataques de uma peça d
 
 O número mágico é uma constante de 64 bits, única para cada casa e tipo de peça (torre/bispo), que foi descoberta através de uma busca por força bruta para satisfazer a propriedade de hashing perfeito para a máscara de bloqueadores dessa casa. 
 
-Estes números não são derivados de uma fórmula matemática, mas são encontrados através de um processo de tentativa e erro. Embora esse procedimento seja empírico, a técnica possui validação e lastro na literatura científica de jogos de tabuleiro, tendo sido formalmente proposta e implementada também no contexto do Shogi @yamamoto2010shogi. A comunidade de programação de xadrez mantém listas dos "melhores mágicos até agora", que são números que não só funcionam, mas também permitem tabelas de ataque mais compactas @kannan2007magic @fiekas2018magic. 
+Estes números não são derivados de uma fórmula matemática, mas são encontrados através de um processo de tentativa e erro. Embora esse procedimento seja empírico, a técnica possui validação e lastro na literatura científica de jogos de tabuleiro, tendo sido formalmente proposta e implementada também no contexto do Shogi @yamamoto2010shogi. A comunidade de programação de xadrez mantém listas dos "melhores mágicos até agora", que são números que não só funcionam, mas também permitem tabelas de ataque mais compactas @fiekas2018magic. 
 
 Cada uma das 128 combinações (64 para torres, 64 para bispos) tem o seu próprio número mágico único.
 
@@ -157,7 +157,7 @@ A avaliação experimental foi estruturada para analisar a ChessLib em duas dime
     +   Corretude funcional da geração de lances; 
     +   Desempenho computacional da biblioteca em cenários representativos. 
 
-Para isso, adotou-se o teste _Perft_ (_performance test_), amplamente utilizado em computação enxadrística como procedimento de validação da geração de lances e como base para comparação de desempenho entre implementações @perft @perftresults.
+Para isso, adotou-se o teste _Perft_ (_performance test_), amplamente utilizado em computação enxadrística como procedimento de validação da geração de lances e como base para comparação de desempenho entre implementações @perft.
 
 == Objetivos da Avaliação
 
@@ -203,7 +203,7 @@ A ChessLib foi comparada com quatro implementações de referência:
     -   "python-chess", uma biblioteca de xadrez consolidada em Python @pythonchess;
     -   "chess", uma crate em Rust orientada a alto desempenho @bray2024chess;
     -   "shakmaty", uma biblioteca geral de xadrez em Rust @shakmatyreadme;
-    -   "Stockfish", avaliado por meio de chamadas externas via protocolo UCI @stockfishdocs @stockfishsite.
+    -   "Stockfish", avaliado por meio de chamadas externas via protocolo UCI @stockfishdocs.
 
 Desse modo, a avaliação busca situar a ChessLib tanto em relação a bibliotecas embutidas no mesmo processo quanto, de forma complementar, em relação ao custo prático de integração com uma _engine_ externa.
 
@@ -242,6 +242,8 @@ Na posição inicial, os benchmarks principais foram executados nas profundidade
 == Observações Metodológicas
 
 A execução do Stockfish ocorreu por meio de um processo externo acionado via UCI, de modo que seus tempos incluem inicialização do processo, _handshake_ do protocolo e comunicação por _stdin/stdout_; assim, eles não são diretamente comparáveis ao custo _in-process_ das crates Rust.
+
+ChessLib-Simple é uma implementação alternativa da ChessLib, que não utiliza, propositalmente, a técnica de bitboards.
 
 ChessLib-Simple e Python-Chess só foram incluídos na rodada da profundidade 4 da posição inicial.
 

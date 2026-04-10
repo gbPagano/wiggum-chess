@@ -1,249 +1,157 @@
 campbell2002deepblue:
   type: Article
   author:
-    - Campbell, Murray
-    - Hoane, A. Joseph Jr.
-    - Hsu, Feng-hsiung
-  title: "Deep Blue"
+  - Campbell, Murray
+  - Hoane, A. Joseph Jr.
+  - Hsu, Feng-hsiung
+  title: Deep Blue
   journal: Artificial Intelligence
   volume: 134
   issue: 1-2
   page-range: 57-83
   date: 2002
   publisher: Elsevier
-
 silver2017alphazero:
   type: Article
   author:
-    - Silver, David
-    - Hubert, Thomas
-    - Schrittwieser, Julian
-    - Antonoglou, Ioannis
-    - Lai, Matthew
-    - Guez, Arthur
-    - Lanctot, Marc
-    - Sifre, Laurent
-    - Kumaran, Dharshan
-    - Graepel, Thore
-    - Lillicrap, Timothy
-    - Simonyan, Karen
-    - Hassabis, Demis
-  title: "Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning Algorithm"
+  - Silver, David
+  - Hubert, Thomas
+  - Schrittwieser, Julian
+  - Antonoglou, Ioannis
+  - Lai, Matthew
+  - Guez, Arthur
+  - Lanctot, Marc
+  - Sifre, Laurent
+  - Kumaran, Dharshan
+  - Graepel, Thore
+  - Lillicrap, Timothy
+  - Simonyan, Karen
+  - Hassabis, Demis
+  title: Mastering Chess and Shogi by Self-Play with a General Reinforcement Learning
+    Algorithm
   journal: arXiv preprint arXiv:1712.01815
   date: 2017
   url:
     value: https://arxiv.org/abs/1712.01815
     date: 2026-04-09
-
-silver2017alphagozero:
-  type: Article
-  author:
-    - Silver, David
-    - Schrittwieser, Julian
-    - Simonyan, Karen
-    - Antonoglou, Ioannis
-    - Huang, Aja
-    - Guez, Arthur
-    - Hubert, Thomas
-    - Baker, Lucas
-    - Lai, Matthew
-    - Bolton, Adrian
-    - Chen, Yutian
-    - Lillicrap, Timothy
-    - Hui, Fan
-    - Sifre, Laurent
-    - van den Driessche, George
-    - Graepel, Thore
-    - Hassabis, Demis
-  title: "Mastering the Game of Go without Human Knowledge"
-  journal: Nature
-  volume: 550
-  issue: 7676
-  page-range: 354-359
-  date: 2017
-  publisher: Nature Publishing Group
-
-stockfishsite:
-  type: Web
-  author: "The Stockfish Team"
-  title: "Stockfish Chess Engine"
-  url:
-    value: https://stockfishchess.org
-    date: 2026-04-09
-  date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
 stockfishdocs:
   type: Web
-  author: "The Stockfish Team"
-  title: "Stockfish Docs"
+  author: The Stockfish Team
+  title: Stockfish Docs
   url:
     value: https://official-stockfish.github.io/docs/stockfish-wiki/Stockfish-FAQ.html
     date: 2026-04-09
   date: 2025
-  note: "Documentação oficial do Stockfish; acessado em 9 de abril de 2026"
-
-lc0site:
-  type: Web
-  author: "The Leela Chess Zero Team"
-  title: "Leela Chess Zero"
-  url:
-    value: https://lczero.org
-    date: 2026-04-09
-  date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
+  note: Documentação oficial do Stockfish; acessado em 9 de abril de 2026
 lc0overview:
   type: Web
-  author: "The Leela Chess Zero Team"
-  title: "Overview"
+  author: The Leela Chess Zero Team
+  title: Overview
   url:
     value: https://lczero.org/dev/overview/
     date: 2026-04-09
   date: 2026
-  note: "Documentação oficial do Lc0; acessado em 9 de abril de 2026"
-
-lc0technical:
-  type: Web
-  author: "The Leela Chess Zero Team"
-  title: "Technical Explanation of Leela Chess Zero"
-  url:
-    value: https://lczero.org/dev/wiki/technical-explanation-of-leela-chess-zero/
-    date: 2026-04-09
-  date: 2021
-  note: "Acessado em 9 de abril de 2026"
-
+  note: Documentação oficial do Lc0; acessado em 9 de abril de 2026
 pythonchess:
   type: Web
-  author: "Fiekas, Niklas"
-  title: "python-chess Documentation"
+  author: Fiekas, Niklas
+  title: python-chess Documentation
   url:
     value: https://python-chess.readthedocs.io/
     date: 2026-04-09
   date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
+  note: Acessado em 9 de abril de 2026
 rustbook:
   type: Book
   author:
-    - Klabnik, Steve
-    - Nichols, Carol
-  title: "The Rust Programming Language"
+  - Klabnik, Steve
+  - Nichols, Carol
+  title: The Rust Programming Language
   publisher: No Starch Press
   date: 2023
   url:
     value: https://doc.rust-lang.org/book/
     date: 2026-04-09
-
 bray2024chess:
   type: Web
-  author: "Bray, Jordan"
-  title: "chess"
+  author: Bray, Jordan
+  title: chess
   url:
     value: https://docs.rs/chess/latest/chess/
     date: 2026-04-09
   date: 2026
-  note: "Crate documentation; acessado em 9 de abril de 2026"
-
+  note: Crate documentation; acessado em 9 de abril de 2026
 bitboards:
   type: Web
-  author: "Chessprogramming Wiki"
-  title: "Bitboards"
+  author: Chessprogramming Wiki
+  title: Bitboards
   url:
     value: https://www.chessprogramming.org/Bitboards
     date: 2026-04-09
   date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
-bitboardmapping:
-  type: Web
-  author: "Chessprogramming Wiki"
-  title: "Bitboard Board-Definition"
-  url:
-    value: https://www.chessprogramming.org/Bitboard_Board-Definition
-    date: 2026-04-09
-  date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
+  note: Acessado em 9 de abril de 2026
 kannan2007magic:
   type: Report
   author:
-    - Kannan, Pradyumna
-  title: "Magic Move-Bitboard Generation in Computer Chess"
+  - Kannan, Pradyumna
+  title: Magic Move-Bitboard Generation in Computer Chess
   date: 2007
   url:
     value: https://pradu.us/old/Nov27_2008/Buzz/research/magic/Bitboards.pdf
     date: 2026-04-09
-
 fiekas2018magic:
   type: Report
   author:
-    - Fiekas, Niklas
-  title: "Finding Hash Functions for Bitboard Based Move Generation"
+  - Fiekas, Niklas
+  title: Finding Hash Functions for Bitboard Based Move Generation
   date: 2018
   url:
     value: https://backscattering.de/magics2.pdf
     date: 2026-04-09
-
 magicbitboards:
   type: Web
-  author: "Chessprogramming Wiki"
-  title: "Magic Bitboards"
+  author: Chessprogramming Wiki
+  title: Magic Bitboards
   url:
     value: https://www.chessprogramming.org/Magic_Bitboards
     date: 2026-04-09
   date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
-lookingformagics:
-  type: Web
-  author: "Chessprogramming Wiki"
-  title: "Looking for Magics"
-  url:
-    value: https://www.chessprogramming.org/Looking_for_Magics
-    date: 2026-04-09
-  date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
+  note: Acessado em 9 de abril de 2026
 perft:
   type: Web
-  author: "Chessprogramming Wiki"
-  title: "Perft"
+  author: Chessprogramming Wiki
+  title: Perft
   url:
     value: https://www.chessprogramming.org/Perft
     date: 2026-04-09
   date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
+  note: Acessado em 9 de abril de 2026
 perftresults:
   type: Web
-  author: "Chessprogramming Wiki"
-  title: "Perft Results"
+  author: Chessprogramming Wiki
+  title: Perft Results
   url:
     value: https://www.chessprogramming.org/Perft_Results
     date: 2026-04-09
   date: 2026
-  note: "Acessado em 9 de abril de 2026"
-
+  note: Acessado em 9 de abril de 2026
 pgnspec:
   type: Web
-  author: "Edwards, Steven J."
-  title: "Portable Game Notation Specification and Implementation Guide"
+  author: Edwards, Steven J.
+  title: Portable Game Notation Specification and Implementation Guide
   url:
     value: https://www.saremba.de/chessgml/standards/pgn/pgn-complete.htm
     date: 2026-04-09
   date: 1994
-  note: "Especificação PGN/FEN; acessado em 9 de abril de 2026"
-
-
+  note: Especificação PGN/FEN; acessado em 9 de abril de 2026
 gofish2024:
   type: Article
   author:
-    - Jubair, Fahed
-    - Abu Salem, Ahmad
-    - Assaf, Yazan
-    - Darabkh, Khalid A.
-  title: "GoFish: A customizable open-source chess engine in Go"
+  - Jubair, Fahed
+  - Abu Salem, Ahmad
+  - Assaf, Yazan
+  - Darabkh, Khalid A.
+  title: 'GoFish: A customizable open-source chess engine in Go'
   journal: Expert Systems with Applications
   volume: 250
   page-range: 123855
@@ -252,13 +160,12 @@ gofish2024:
   url:
     value: https://doi.org/10.1016/j.eswa.2024.123855
     date: 2026-04-10
-
 matsakis2014rustsafe:
   type: Article
   author:
-    - Matsakis, Nicholas D.
-    - Klock II, Felix S.
-  title: "The Rust Language"
+  - Matsakis, Nicholas D.
+  - Klock II, Felix S.
+  title: The Rust Language
   journal: ACM SIGAda Ada Letters
   volume: 34
   issue: 3
@@ -268,40 +175,28 @@ matsakis2014rustsafe:
   url:
     value: https://doi.org/10.1145/2663171.2663188
     date: 2026-04-10
-  note: "Também apresentado em HILT '14"
-
+  note: Também apresentado em HILT '14
 yamamoto2010shogi:
   type: Article
   author:
-    - Yamamoto, Issei
-    - Takeuchi, Shogo
-    - Kaneko, Tomoyuki
-    - Tanaka, Tetsuro
-  title: "Proposal and Implementation of Magic Bitboards in Shogi"
-  journal: "Proceedings of the 15th Game Programming Workshop 2010"
+  - Yamamoto, Issei
+  - Takeuchi, Shogo
+  - Kaneko, Tomoyuki
+  - Tanaka, Tetsuro
+  title: Proposal and Implementation of Magic Bitboards in Shogi
+  journal: Proceedings of the 15th Game Programming Workshop 2010
   page-range: 42-48
   date: 2010
   publisher: Information Processing Society of Japan (IPSJ)
   url:
     value: https://ipsj.ixsq.nii.ac.jp/record/71312/files/IPSJ-GPWS2010007.pdf
     date: 2026-04-10
-
 shakmatyreadme:
   type: Web
-  author: "Fiekas, Niklas"
-  title: "shakmaty README"
+  author: Fiekas, Niklas
+  title: shakmaty README
   url:
     value: https://docs.rs/crate/shakmaty/latest/source/README.md
     date: 2026-04-10
   date: 2026
-  note: "Acessado em 10 de abril de 2026"
-
-stockfishsource:
-  type: Web
-  author: "The Stockfish Team"
-  title: "Stockfish source: position.cpp"
-  url:
-    value: https://github.com/official-stockfish/Stockfish/blob/master/src/position.cpp
-    date: 2026-04-10
-  date: 2026
-  note: "Código-fonte oficial; acessado em 10 de abril de 2026"
+  note: Acessado em 10 de abril de 2026
