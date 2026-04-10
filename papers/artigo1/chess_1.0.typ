@@ -241,13 +241,12 @@ Na posição inicial, os benchmarks principais foram executados nas profundidade
 
 == Observações Metodológicas
 
-A medição do Stockfish não é diretamente comparável com as crates Rust em processo único. No script atual, cada execução do benchmark do Stockfish vários processos que adicionam overhead fixo relevante, especialmente nas profundidades menores.
+A execução do Stockfish ocorreu por meio de um processo externo acionado via UCI, de modo que seus tempos incluem inicialização do processo, _handshake_ do protocolo e comunicação por _stdin/stdout_; assim, eles não são diretamente comparáveis ao custo _in-process_ das crates Rust.
 
 ChessLib-Simple e Python-Chess só foram incluídos na rodada da profundidade 4 da posição inicial.
 
 == Posição Inicial
 
-=== Profundidade $d=4$
 
 #figure(
   table(
@@ -264,13 +263,12 @@ ChessLib-Simple e Python-Chess só foram incluídos na rodada da profundidade 4 
     [ChessLib-Simple],   [23.3],
     [Python-Chess],      [235.0],
   ),
-  caption: [Benchmark de desempenho na posição inicial para $d=4$],
+  caption: [Benchmark na posição inicial para $d=4$],
 ) <benchmark1>
 
 ==== NOTA
 Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo de 5 ms.
 
-=== Profundidade $d=5$
 
 #figure(
   table(
@@ -285,10 +283,9 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
     [Shakmaty],          [15.8],
     [Stockfish via UCI], [173.8],
   ),
-  caption: [Benchmark de desempenho na posição inicial para $d=5$],
+  caption: [Benchmark na posição inicial para $d=5$],
 ) <benchmark2>
 
-=== Profundidade $d=6$
 
 #figure(
   table(
@@ -303,10 +300,9 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
     [Shakmaty],          [350.2],
     [Stockfish via UCI], [500.9],
   ),
-  caption: [Benchmark de desempenho na posição inicial para $d=6$],
+  caption: [Benchmark na posição inicial para $d=6$],
 ) <benchmark3>
 
-=== Profundidade $d=7$
 
 #figure(
   table(
@@ -321,12 +317,10 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
     [Shakmaty],          [9.318],
     [Stockfish via UCI], [9.974],
   ),
-  caption: [Benchmark de desempenho na posição inicial para $d=7$],
+  caption: [Benchmark na posição inicial para $d=7$],
 ) <benchmark4>
 
-== Posição de capturas
-
-=== Profundidade $d=5$
+== Posição de capturas ($d=5$)
 
 #figure(
   table(
@@ -341,12 +335,10 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
     [Shakmaty],          [249.0],
     [Stockfish via UCI], [445.1],
   ),
-  caption: [Benchmark de desempenho na posição de capturas para $d=5$],
+  caption: [Benchmark na posição de capturas para $d=5$],
 ) <benchmark5>
 
-== Posição de promoções
-
-=== Profundidade $d=6$
+== Posição de promoções ($d=6$)
 
 #figure(
   table(
@@ -361,12 +353,10 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
     [Shakmaty],          [298.0],
     [Stockfish via UCI], [570.0],
   ),
-  caption: [Benchmark de desempenho na posição de promoções para $d=6$],
+  caption: [Benchmark na posição de promoções para $d=6$],
 ) <benchmark6>
 
-== Posição "Kiwipete"
-
-=== Profundidade $d=5$
+== Posição "Kiwipete" ($d=5$)
 
 #figure(
   table(
@@ -381,10 +371,10 @@ Esta rodada tem baixa confiabilidade para os binários de Rust por estar abaixo 
     [Shakmaty],          [537.3],
     [Stockfish via UCI], [731.7],
   ),
-  caption: [Benchmark de desempenho na posição "Kiwipete" para $d=5$],
+  caption: [Benchmark na posição "Kiwipete" para $d=5$],
 ) <benchmark7>
 
-Para complementar a análise, a @posicoes resume os tempos médios obtidos nos presets `captures`, `promotions` e `kiwipete`, escolhidos por enfatizarem diferentes aspectos da geração de lances, como sequências de captura, promoções e posições ricas em casos especiais.
+Para complementar a análise, a @medias resume os tempos médios obtidos nos presets "captures", "promotions" e "kiwipete".
 
 #figure(
   table(
@@ -403,7 +393,7 @@ Para complementar a análise, a @posicoes resume os tempos médios obtidos nos p
     [Kiwipete],   [5], [261.5 ms], [282.9 ms], [537.3 ms], [731.7 ms],
   ),
   caption: [Tempos médios em posições específicas de teste],
-) <posicoes>
+) <medias>
 
 = Discussão
 
