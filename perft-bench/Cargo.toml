@@ -1,0 +1,15 @@
+[package]
+name = "perft-bench"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "perft-bench"
+path = "src/main.rs"
+
+[dependencies]
+chesslib = { path = "../chesslib" }
+chesslib-simple = { path = "../chesslib-simple" }
+chess = "3.2.0"
+shakmaty = "0.30.0"
+clap = { version = "4", features = ["derive"] }
