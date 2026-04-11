@@ -1,0 +1,135 @@
+{
+  "project": "Wiggum Chess",
+  "branchName": "ralph/iterative-deepening-timed-search",
+  "description": "Add iterative deepening timed search so the engine searches progressively deeper using movetime or clock-plus-increment UCI limits and always returns the best legal move found before the deadline.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Parse timed UCI go parameters",
+      "description": "As a developer, I want the engine to parse `go movetime`, `wtime`, `btime`, `winc`, and `binc` so timed search can use either a fixed move limit or the active side's remaining clock.",
+      "acceptanceCriteria": [
+        "Accept `go movetime <ms>` in the UCI command parser",
+        "Accept `go wtime <ms> btime <ms> winc <ms> binc <ms>` in the UCI command parser",
+        "Select the active side's clock and increment from the parsed command based on side to move",
+        "When timed parameters are absent or unsupported, preserve the existing non-timed search behavior",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Compute search deadline from time controls",
+      "description": "As a developer, I want parsed timing inputs converted into a search budget so the engine can decide how long iterative deepening may continue.",
+      "acceptanceCriteria": [
+        "Implement fixed movetime budgeting for `go movetime <ms>`",
+        "Implement clock-based budgeting using `remaining_time / 20 + increment / 2` before applying a safety cap",
+        "Cap the final budget below the remaining clock with a safety margin",
+        "Document the budgeting heuristic near the time-management code",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Add search context for timed search",
+      "description": "As a developer, I want a dedicated timed-search context so deadline, max depth, and current search state can be passed through the engine cleanly.",
+      "acceptanceCriteria": [
+        "Introduce a search context or equivalent structure carrying the computed deadline and timed-search configuration",
+        "Include the explicit 64-ply maximum depth guard in the timed-search configuration",
+        "Thread the new context through the search entry points without changing existing non-timed behavior",
+        "Document the purpose of the new search context near the search entry point",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Add iterative deepening loop",
+      "description": "As a chess engine, I want search to run depth 1, then 2, then 3 and so on until the deadline or depth guard is reached so I can use available time dynamically.",
+      "acceptanceCriteria": [
+        "Wrap the existing negamax search in an iterative deepening loop starting at depth 1",
+        "Increase search depth by exactly 1 ply per completed iteration",
+        "Store the best move and score from each completed depth",
+        "Stop deepening when the internal deadline is reached or the 64-ply maximum depth guard is hit",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Add legal fallback move handling",
+      "description": "As a chess engine, I want a legal fallback move available during timed search so the engine can always return a legal move even if time expires early.",
+      "acceptanceCriteria": [
+        "Capture and retain a legal fallback move before timed deepening begins",
+        "Maintain the fallback move in timed search state so it remains available if no full iteration completes",
+        "If time expires before any full iteration completes, return the fallback legal move from the current position",
+        "Keep fallback handling isolated so existing non-timed search behavior is unchanged",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Add recursive timeout checks and safe unwind",
+      "description": "As a chess engine, I want timeout checks during recursive search so the engine can stop promptly and unwind without corrupting search state.",
+      "acceptanceCriteria": [
+        "Add timeout checks during recursive exploration, not only between iterations",
+        "When timeout is detected, unwind recursive search without corrupting best-move or evaluation state",
+        "Ensure the timeout path integrates cleanly with the timed search context introduced earlier",
+        "Preserve existing non-timed search behavior when no deadline is active",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Implement timeout best-move selection policy",
+      "description": "As a developer, I want a deterministic timeout policy so the engine returns the strongest known move when search stops mid-depth.",
+      "acceptanceCriteria": [
+        "Default timeout behavior returns the best move from the last fully completed depth",
+        "Allow a partially explored deeper root move to replace the completed-depth move only if that root move finished evaluation before timeout and beats the completed-depth best by at least 30 centipawns",
+        "Do not apply any additional deeper-analysis bonus beyond the 30 centipawn override threshold in the initial implementation",
+        "Document the timeout policy near the search entry point or search context code",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Add timed search validation tests",
+      "description": "As a maintainer, I want automated coverage for timed search parsing and timeout behavior so iterative deepening remains safe to change.",
+      "acceptanceCriteria": [
+        "Add tests covering fixed movetime search returning a legal move",
+        "Add tests covering clock-and-increment search returning a legal move",
+        "Add tests covering timeout during iterative deepening returning the configured best-so-far move",
+        "Run `cargo test --workspace -- --skip gen_files::magics::name` successfully",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
