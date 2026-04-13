@@ -393,8 +393,6 @@ Sob outra perspectiva, a proximidade entre a ChessLib e a crate "chess" é parti
 
 Esse resultado torna-se mais expressivo porque a ChessLib não se limita a uma rotina mínima de geração de lances. A biblioteca também mantém informações incrementais de estado, como _Zobrist hash_, contagem de _half-moves_ e estruturas úteis para integração com fluxos associados ao protocolo UCI.
 
-Por fim, a comparação com o Stockfish deve ser interpretada com cautela. No arranjo experimental adotado, os tempos medem o custo de acionar uma _engine_ externa via _shell_ e UCI, incluindo inicialização de processo e comunicação por _stdin/stdout_, e não apenas sua rotina interna de _perft_. Ainda assim, sua inclusão é útil por delimitar a diferença entre o custo _in-process_ de bibliotecas e o custo prático de integração com um sistema externo completo.
-
 = Conclusão
 
 Este artigo apresentou a ChessLib, uma biblioteca de xadrez em Rust voltada à representação eficiente do tabuleiro e à geração de lances por meio de _bitboards_ e _magic bitboards_.
