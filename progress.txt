@@ -4,6 +4,8 @@
 - Castling detection in apply_move: king moves exactly 2 files → castling; pawn diagonal capture to empty square → en passant
 - Perft reference values: always verify against chesslib using `cargo test -p chesslib get_depth4_perft_refs -- --ignored --nocapture` rather than hardcoding guesses
 - `cargo test --workspace -- --skip gen_files::magics::name` is the correct full workspace test command; analysis spawn test may fail in environments without compiled engine binaries (pre-existing, not introduced by this work)
+- Timeout-aware recursion in chess-engine: use `Result<T, Timeout>` with `?` propagation so deadline checks unwind cleanly; non-timed `alpha_beta` stays separate so it is never affected by timed-search changes
+- Root-level manual loop in `search_timed`: iterate root moves one by one (not via recursive alpha_beta) to track which root moves fully evaluated before timeout, enabling the partial-depth override policy
 
 ---
 
@@ -29,4 +31,22 @@
   - The `analysis::tests::test_analyze_fen_with_cp_score` test failure is environment-dependent (needs compiled chess-engine binary); it's pre-existing, not caused by chesslib-simple changes
   - US-003 and US-004 are deeply intertwined: legal move generation requires apply_move to work correctly (for check-filtering), so both were implemented together in a single commit
   - All acceptance criteria for US-003, US-004, US-005, US-006 are satisfied by this single implementation commit
+---
+
+## 2026-04-09 - US-005, US-006
+
+- What was implemented:
+  - Added `Timeout` sentinel error type and `alpha_beta_with_ctx` — a timeout-aware negamax variant that checks `ctx.is_expired()` at each interior node and propagates `Err(Timeout)` cleanly up the call stack
+  - Rewrote `search_timed` to iterate root moves manually, tracking `depth_best_move`/`depth_best_score` among root moves that fully evaluated in a partial depth
+  - Implemented the 30 centipawn partial-depth override policy: partial result replaces completed-depth best only when `depth_best_score >= completed_best_score + 30`; documented in `search_timed` doc-comment and via `PARTIAL_OVERRIDE_THRESHOLD_CP` constant
+  - Added fallback to first legal move when no depth completes (expired context on entry)
+  - Added 6 new tests: movetime search, clock/increment search, expired-context fallback (two positions), timeout-policy smoke test, forced-move timed search
+
+- Files changed:
+  - `chess-engine/src/search.rs` — added `Timeout`, `alpha_beta_with_ctx`, policy constant; rewrote `search_timed`; 6 new tests
+
+- **Learnings for future iterations:**
+  - Keep the non-timed `alpha_beta` and timed `alpha_beta_with_ctx` as separate functions; sharing via `Option<&SearchContext>` would muddy both paths and risk performance regression on the non-timed hot path
+  - For the 30 cp override test to be deterministic without wall-clock mocks, use a forced-move position (exactly one legal move) or an expired context; avoid `thread::sleep` in tests as advised by the PRD
+  - `break 'outer` in the root loop is the cleanest way to exit both the move loop and the depth loop simultaneously without extra flags
 ---

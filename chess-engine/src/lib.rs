@@ -1,6 +1,7 @@
 pub mod engine;
 pub mod eval;
 pub mod search;
+pub mod uci;
 
 pub fn current_version_tag() -> String {
     let version = env!("CARGO_PKG_VERSION");

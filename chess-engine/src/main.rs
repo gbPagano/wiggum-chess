@@ -1,4 +1,5 @@
-use chess_engine::search::search;
+use chess_engine::search::{search, search_timed, SearchContext};
+use chess_engine::uci::{parse_go, GoParams};
 use chess_engine::uci_engine_name;
 use chesslib::board::Board;
 use chesslib::chess_move::ChessMove;
@@ -41,9 +42,21 @@ fn main() {
         } else if line.starts_with("position") {
             current_board = parse_position(&line);
         } else if line.starts_with("go") {
-            // Parse time controls (wtime, btime, winc, binc) — ignored for depth-based search
+            let go_params: GoParams = parse_go(&line);
             if let Some(ref board) = current_board {
-                let (mv, _) = search(board, depth);
+                let mv = if let Some(budget_ms) =
+                    go_params.compute_budget_ms(board.side_to_move())
+                {
+                    // Timed search: build a context from the computed budget and
+                    // dispatch through the iterative deepening entry point.
+                    // Timeout checks inside recursive nodes (US-006) will further
+                    // refine early termination within a depth iteration.
+                    let ctx = SearchContext::from_budget_ms(budget_ms);
+                    search_timed(board, &ctx).0
+                } else {
+                    // Depth-based search: existing non-timed behavior unchanged.
+                    search(board, depth).0
+                };
                 let best = mv
                     .or_else(|| MoveGen::new_legal(board).next())
                     .map(|m| m.to_uci())
